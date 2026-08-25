@@ -230,9 +230,10 @@ let REPORTS = [
   { id:801, authorId:1, authorName:'陈屿', reviewerId:2, reviewerName:'苏禾', reportDate:'2026-08-24',
     title:'完成客户详情页信息复核', summary:'核对九区信息和技术2分析字段。', resultUrl:'', blockers:'',
     needHelp:'请复核 AI 分析区的业务文案', feedback:'结构清楚，补一个空态说明即可。', status:'已反馈', fileCount:1 },
-  { id:802, authorId:1, authorName:'陈屿', reviewerId:3, reviewerName:'叶昭', reportDate:'2026-08-23',
-    title:'整理本周高频用户需求', summary:'从私信和评论中归并出 12 个高频问题。', resultUrl:'', blockers:'',
-    needHelp:'需要内容组确认优先级', feedback:'', status:'待审核', fileCount:0 },
+  { id:802, authorId:3, authorName:'李华', reviewerId:1, reviewerName:'陈屿', reportDate:'2026-08-25',
+    title:'情感赛道', summary:'完成五张内容卡片，整理了开场钩子、护子痛点与节奏总结。',
+    resultUrl:'https://example.com/result/802', blockers:'部分标题需要进一步压缩字数。',
+    needHelp:'请确认内容节奏和视觉层级是否适合发布。', feedback:'', status:'待审核', fileCount:5 },
 ];
 
 const PEOPLE = [
@@ -387,7 +388,16 @@ export async function handle(method, path, body) {
     };
   }
 
-  if (/^\/api\/(clients|reports)\/\d+\/files$/.test(p) && method === 'GET') return { items: [] };
+  if (/^\/api\/(clients|reports)\/\d+\/files$/.test(p) && method === 'GET') {
+    const isReviewDemo = p === '/api/reports/802/files';
+    if (!isReviewDemo) return { items: [] };
+    const names = ['01_封面.png', '02_护子痛点.png', '03_明天找你.png', '04_整理夜眼神.png', '05_节奏总结.png'];
+    return { items: names.map((name, i) => {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480"><rect width="720" height="480" rx="24" fill="#fbefe2"/><rect x="28" y="28" width="664" height="76" rx="16" fill="#f6cfc2"/><text x="52" y="77" font-family="sans-serif" font-size="30" font-weight="700" fill="#c75e55">审核材料 ${String(i + 1).padStart(2, '0')}</text><rect x="42" y="134" width="636" height="304" rx="18" fill="#fffaf3"/><text x="68" y="205" font-family="sans-serif" font-size="24" fill="#695e59">${name}</text><path d="M68 250h500M68 292h430M68 334h470" stroke="#d9c8bd" stroke-width="14" stroke-linecap="round"/></svg>`;
+      return { id: 820 + i, name, size: 940000 + i * 42000, mime: 'image/svg+xml',
+        url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), uploaderName: '李华', side: 'submit' };
+    }) };
+  }
 
   if (p === '/api/funnel' && method === 'GET') {
     return {

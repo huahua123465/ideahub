@@ -330,6 +330,57 @@ tr:hover .bd-del{color:var(--crit)}
 .bdgrid .field:has(textarea){grid-column:1 / -1}
 .bdgrid textarea.inp{height:72px}
 
+/* 通用台账弹窗：头尾固定，中间统一滚动。字段和附件不能各滚各的，
+   否则长表单会把标题、关闭入口或保存按钮推到视口外。 */
+.bd-modal{display:flex;flex-direction:column;max-height:min(88dvh,820px);overflow:hidden}
+.bd-modal>header,.bd-modal>footer{flex:none}
+.bd-modal>header{padding-bottom:16px;border-bottom:1px solid var(--line-soft)}
+.bd-modal>.form{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
+  padding:17px 22px 12px}
+.bd-modal>.form>.bdgrid{max-height:none;overflow:visible;padding-right:0}
+.bd-modal>footer{margin-top:0}
+
+/* 工作审核不是“替别人改表单”，而是查看证据并给反馈。桌面双栏，
+   左边是提交内容，右边是附件；附件再多也只滚中间区域。 */
+#bdModal.report-review-modal{width:min(960px,calc(100vw - 32px));max-height:min(90dvh,860px)}
+.report-review-modal>.form{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);
+  align-items:start;gap:22px;padding:20px 22px}
+.report-review-modal .bdgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.report-fact{min-width:0;padding:12px 13px;border:1px solid var(--line-soft);border-radius:11px;
+  background:var(--surface-2)}
+.report-fact-title,.report-fact-summary,.report-fact-resultUrl,.report-fact-blockers,
+.report-fact-needHelp,.report-feedback-field{grid-column:1/-1}
+.report-fact-label{display:block;margin-bottom:5px;color:var(--muted);font-size:11px;font-weight:680;
+  letter-spacing:.025em}
+.report-fact-value{color:var(--ink2);font-size:13.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.report-fact-title{background:linear-gradient(130deg,var(--violet-bg),var(--surface))}
+.report-fact-title .report-fact-value{color:var(--ink);font-size:17px;font-weight:720;line-height:1.45}
+.report-result-link{font-weight:650}
+.report-feedback-field{margin-top:3px;padding:15px;border:1px solid var(--violet-line);border-radius:13px;
+  background:var(--violet-bg)}
+.report-feedback-field label{color:var(--violet)}
+.report-feedback-field textarea.inp{height:116px;background:var(--surface)}
+.report-review-modal .report-evidence-files{margin:0;padding:0 0 0 22px;border-top:0;
+  border-left:1px solid var(--line-soft);position:sticky;top:0}
+.report-review-modal .report-evidence-files .sec-title{margin:0 0 10px}
+.report-review-modal .report-evidence-files .imggrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.report-review-modal .report-evidence-files .imgcard figcaption{padding:7px 8px;font-size:11px}
+.report-review-modal .report-evidence-files .filelist{max-height:none}
+
+@media (max-width:820px){
+  .report-review-modal>.form{grid-template-columns:1fr;padding:17px 18px;gap:18px}
+  .report-review-modal .report-evidence-files{grid-column:1;margin:0;padding:17px 0 0;
+    border-left:0;border-top:1px solid var(--line-soft);position:static}
+}
+@media (max-width:560px){
+  .bd-modal{max-height:calc(100dvh - 16px)}
+  .bd-modal>.form{padding:15px 16px 10px}
+  .report-review-modal .bdgrid{grid-template-columns:1fr}
+  .report-fact,.report-fact-title,.report-fact-summary,.report-fact-resultUrl,
+  .report-fact-blockers,.report-fact-needHelp,.report-feedback-field{grid-column:1}
+  .report-review-modal .report-evidence-files .imggrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 /* 客户阶段徽章。颜色跟着漏斗深浅走：越靠后越深，扫一眼就知道谁走得远 */
 .stagepill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;
   background:var(--line-soft);color:var(--ink2);white-space:nowrap}

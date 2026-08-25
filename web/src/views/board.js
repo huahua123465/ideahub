@@ -660,7 +660,14 @@ function openEdit(key, id) {
   const s = stateOf(key);
   const fields = fieldsOf(key);
   const row = id ? s.items.find(i => i.id === id) : null;
-  editing = { key, id };
+  // 审核人看的是别人提交的证据，只能写反馈；不应把提交内容继续画成可编辑表单。
+  // 管理员打开别人的提交时也走审核视图，打开自己的仍走普通编辑视图。
+  const reviewMode = key === 'reports' && row && Number(row.authorId) !== Number(me.id)
+    && (me.role === 'admin' || Number(row.reviewerId) === Number(me.id));
+  editing = { key, id, reviewMode };
+
+  const modal = $('#bdModal');
+  modal.classList.toggle('report-review-modal', !!reviewMode);
 
   // 新增时把当前小板块对应的字段预填上：在「S 级」标签下点新增，等级就该默认是 S。
   // 不预填的话新建出来的东西不匹配当前筛选，存完直接从眼前消失 ——
@@ -676,7 +683,11 @@ function openEdit(key, id) {
     for (const f of fields) if (f.type === 'date') preset[f.key] = ymd;
   }
 
-  $('#bdTitle').textContent = (row ? '编辑 · ' : '新增 · ') + b.title;
+  $('#bdTitle').textContent = reviewMode ? '审核工作提交' : (row ? '编辑 · ' : '新增 · ') + b.title;
+  $('#bdHint').textContent = reviewMode
+    ? `${row.authorName || '同事'} · ${row.reportDate || '未填日期'} 提交 · 反馈保存后会通知提交人`
+    : '这些台账是团队共同维护的，任何人都能录和改；删除只有管理员能做。';
+  $('#btnBdSave').textContent = reviewMode ? '提交审核反馈' : '保存';
   // 只有审核人（和管理员）才看得到「审核反馈」这一栏。
   // 不藏的话提交人会以为自己该填，填了又被后端拒掉。
   // 「审核反馈」只在编辑已有记录、且自己是审核人（或管理员）时才出现。
@@ -687,9 +698,29 @@ function openEdit(key, id) {
   $('#bdForm').innerHTML = visible.map(f => {
     const v = row ? valueOf(row, f.key) : (preset[f.key] ?? '');
     const id_ = 'bdf_' + f.key.replace(/[^\w]/g, '_');
+    const fieldClass = 'field field-' + f.key.replace(/[^\w-]/g, '-');
+
+    // 审核视图中，提交人的内容是“证据”而不是输入框。不给这些块 input id，
+    // saveEdit 就只会收集审核反馈，不会把整份提交原样回传或允许误改。
+    if (reviewMode && f.key !== 'feedback') {
+      let shown = v;
+      if (f.key === 'reviewerId') shown = row.reviewerName || '未指定';
+      const raw = String(shown ?? '').trim();
+      const content = f.key === 'resultUrl' && /^https?:\/\//i.test(raw)
+        ? `<a class="link report-result-link" href="${esc(raw)}" target="_blank" rel="noopener">打开结果链接 ↗</a>`
+        : (raw ? esc(raw) : '<span class="soft-empty">未填写</span>');
+      return `<section class="${fieldClass} report-fact report-fact-${f.key}">
+        <span class="report-fact-label">${esc(f.label.replace(/（.*?）/g, ''))}</span>
+        <div class="report-fact-value">${content}</div>
+      </section>`;
+    }
+
     let input;
     if (f.type === 'textarea') {
-      input = `<textarea class="inp" id="${id_}" rows="3">${esc(v)}</textarea>`;
+      input = `<textarea class="inp" id="${id_}" rows="3"${
+        reviewMode && f.key === 'feedback'
+          ? ' placeholder="写清楚做得好的地方、需要修改的地方，以及下一步建议"' : ''
+      }>${esc(v)}</textarea>`;
     } else if (f.type === 'select') {
       input = `<select class="inp" id="${id_}">
         <option value="">—</option>
@@ -731,12 +762,14 @@ function openEdit(key, id) {
       input = `<input class="inp" id="${id_}" type="${t}" value="${esc(v)}"${
         f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : ''}>`;
     }
-    return `<div class="field"><label for="${id_}">${esc(f.label)}${
+    return `<div class="${fieldClass}${reviewMode && f.key === 'feedback' ? ' report-feedback-field' : ''}"><label for="${id_}">${esc(
+      reviewMode && f.key === 'feedback' ? '审核反馈' : f.label)}${
       f.required ? ' <span>*</span>' : ''}</label>${input}</div>`;
   }).join('');
 
   // 附件区只在编辑已存在的记录时出现 —— 还没保存的客户没有 id，文件挂不上去
   const fbox = $('#bdFiles');
+  fbox.classList.toggle('report-evidence-files', !!reviewMode);
   pendingFiles = [];
   if (b.files) {
     fbox.dataset.scope = typeof b.files === 'string' ? b.files : 'clients';
@@ -938,6 +971,7 @@ async function loadFiles(clientId, boardKey, scope = 'clients') {
 export function closeEdit() {
   const key = editing?.key;
   $('#bdModal').classList.remove('on');
+  $('#bdModal').classList.remove('report-review-modal');
   $('#mask').classList.remove('on');
   editing = null;
   // 弹窗开着时被 refresh() 跳过的那次刷新，现在补上。
@@ -996,6 +1030,10 @@ export async function saveEdit() {
   // 每个板块的必填项不一样：作品/案例是 title，客户档案是 alias
   const req = fields.find(f => f.required);
   if (req && !payload[req.key]) return toast('info', req.label + '不能为空');
+  if (editing.reviewMode && !String(payload.feedback || '').trim()) {
+    $('#bdf_feedback')?.focus();
+    return toast('info', '请先填写审核反馈');
+  }
 
   const btn = $('#btnBdSave');
   btn.disabled = true;

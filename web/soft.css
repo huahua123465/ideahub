@@ -299,6 +299,10 @@ html[data-ui="soft"] .chatpanel,
 html[data-ui="soft"] .menupop,
 html[data-ui="soft"] .notifpop{border-color:#ded4d0;border-radius:19px;background:#fffdfa;box-shadow:var(--shadow-lg)}
 html[data-ui="soft"] .modal header,html[data-ui="soft"] .drawer .dhead{background:#f8f4f1}
+html[data-ui="soft"] .report-review-modal>header{background:linear-gradient(135deg,#f6eff2,#fbf7f4)}
+html[data-ui="soft"] .report-fact{border-color:#e6ddd8;background:#faf7f4}
+html[data-ui="soft"] .report-fact-title{background:linear-gradient(135deg,#f1e8ed,#fbf7f4)}
+html[data-ui="soft"] .report-feedback-field{border-color:#dfd0d8;background:#f4ebef}
 html[data-ui="soft"] .confirm-backdrop{background:rgba(48,41,46,.32);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 html[data-ui="soft"] .confirm-dialog{border-color:#ded4d0;border-radius:20px;background:#fffdfa;box-shadow:0 24px 70px rgba(48,39,45,.18)}
 html[data-ui="soft"] .confirm-note,html[data-ui="soft"] .confirm-actions{background:#f8f4f1}
