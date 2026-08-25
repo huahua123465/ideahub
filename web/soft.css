@@ -215,39 +215,70 @@ html[data-ui="soft"] .board-reports{grid-template-columns:repeat(2,minmax(0,1fr)
 html[data-ui="soft"] .report-card{min-height:270px;padding:22px}
 html[data-ui="soft"] .report-callout{border-radius:11px}
 
-/* ---------- 灵感池：焦点灵感 + 双列灵感画布 ---------- */
-html[data-ui="soft"] #poolGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;border:0}
+/* ---------- 灵感池：带聚光反馈的社区提案画布 ---------- */
+html[data-ui="soft"] #poolGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;border:0}
 html[data-ui="soft"] #poolGrid>.empty{grid-column:1/-1}
-html[data-ui="soft"] #poolGrid .idea-card{display:flex;min-height:302px;padding:0;border:1px solid var(--line-soft);border-radius:18px;background:rgba(255,253,250,.9);box-shadow:var(--shadow);overflow:hidden}
-html[data-ui="soft"] #poolGrid .idea-card::before{left:18px;right:18px;top:0;width:auto;height:3px;border-radius:0 0 4px 4px;background:var(--cat);opacity:.78}
-html[data-ui="soft"] #poolGrid .idea-card::after{display:none}
-html[data-ui="soft"] #poolGrid .idea-card:hover{transform:translateY(-3px);border-color:#d9cad2;background:#fffdfa;box-shadow:0 17px 36px rgba(51,42,48,.085)}
-html[data-ui="soft"] .idea-card-head{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 8px}
-html[data-ui="soft"] .idea-index{padding:5px 8px;border-radius:8px;background:#f7f1ed}
+html[data-ui="soft"] #poolGrid .idea-card{position:relative;isolation:isolate;display:flex;min-height:252px;padding:0;
+  border:1px solid rgba(91,73,84,.1);border-radius:20px;background:linear-gradient(155deg,rgba(255,253,250,.98),rgba(250,247,244,.88));
+  box-shadow:0 1px 2px rgba(48,41,47,.025),0 10px 28px rgba(48,41,47,.045);overflow:hidden;
+  opacity:0;transform:translateY(12px) scale(.992);transition:opacity .4s ease,transform .42s var(--ease),
+  border-color .22s ease,box-shadow .22s ease;background-color .22s ease;transition-delay:calc(var(--i) * 45ms)}
+html[data-ui="soft"] #poolGrid.pool-ready .idea-card{opacity:1;transform:translateY(0) scale(1)}
+html[data-ui="soft"] #poolGrid .idea-card>*{position:relative;z-index:1}
+html[data-ui="soft"] #poolGrid .idea-card::before{left:18px;right:18px;top:0;width:auto;height:2px;
+  border-radius:0 0 5px 5px;background:linear-gradient(90deg,transparent,var(--cat),transparent);opacity:.72;z-index:2}
+html[data-ui="soft"] #poolGrid .idea-card::after{content:"";display:block;position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(330px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--cat) 10%,transparent),transparent 68%);
+  opacity:0;transition:opacity .24s ease}
+html[data-ui="soft"] #poolGrid.pool-ready .idea-card:hover{transform:translateY(-4px) scale(1.004);transition-delay:0s;
+  border-color:color-mix(in srgb,var(--cat) 28%,#d8ccd3);box-shadow:0 20px 48px rgba(51,42,48,.1)}
+html[data-ui="soft"] #poolGrid .idea-card:hover::after,html[data-ui="soft"] #poolGrid .idea-card:focus-visible::after{opacity:1}
+html[data-ui="soft"] .idea-card-head{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 7px}
+html[data-ui="soft"] .idea-index{padding:5px 9px;border:1px solid rgba(111,86,100,.06);border-radius:999px;background:#f7f1ed}
 html[data-ui="soft"] .idea-card-meta{flex-direction:row;align-items:center;gap:7px}
-html[data-ui="soft"] .idea-card-copy{padding:10px 20px 0;border:0}
-html[data-ui="soft"] #poolGrid .idea-card h3{font-size:20px;line-height:1.45}
+html[data-ui="soft"] .idea-card-copy{padding:11px 20px 0;border:0}
+html[data-ui="soft"] #poolGrid .idea-card h3{font-size:21px;line-height:1.4;letter-spacing:-.03em}
 html[data-ui="soft"] #poolGrid .idea-card:hover h3{color:#654e5e}
-html[data-ui="soft"] #poolGrid .idea-card p{min-height:70px;margin-top:9px;color:#686168;line-height:1.78;-webkit-line-clamp:3}
-html[data-ui="soft"] .idea-tags{min-height:0;margin:12px 20px 17px}
-html[data-ui="soft"] .idea-tags .tag{border-radius:7px;background:#f0ece8;color:#746d72}
-html[data-ui="soft"] #poolGrid .idea-card-foot{min-height:68px;margin-top:auto;padding:13px 18px;align-items:center;border-top:1px solid var(--line-soft);background:rgba(248,245,242,.55)}
+html[data-ui="soft"] #poolGrid .idea-card p{min-height:50px;margin-top:9px;color:#686168;line-height:1.76;-webkit-line-clamp:2}
+html[data-ui="soft"] .idea-tags{min-height:0;margin:11px 20px 15px}
+html[data-ui="soft"] .idea-tags .tag{padding:4px 9px;border:1px solid rgba(98,79,90,.06);border-radius:999px;background:#f1ede9;color:#746d72}
+html[data-ui="soft"] #poolGrid .idea-card-foot{min-height:66px;margin-top:auto;padding:12px 18px;align-items:center;
+  border-top:1px solid rgba(85,68,78,.07);background:linear-gradient(90deg,rgba(248,245,242,.72),rgba(250,247,245,.52))}
 html[data-ui="soft"] .idea-author{align-self:auto}
 html[data-ui="soft"] .idea-engagement{margin-left:auto;align-self:auto}
-html[data-ui="soft"] .idea-engagement .vote{border-radius:9px;background:#fffdfa}
+html[data-ui="soft"] .idea-engagement .vote{border-radius:11px;background:#fffdfa;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+html[data-ui="soft"] .idea-engagement .vote:hover{box-shadow:0 7px 18px rgba(82,67,76,.1)}
+html[data-ui="soft"] .idea-signal{display:none}
 
 /* 第一条作为当前筛选下的焦点内容，快速建立阅读入口。 */
-html[data-ui="soft"] #poolGrid .idea-card:first-child{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 245px;grid-template-rows:auto 1fr auto;min-height:260px;background:linear-gradient(135deg,#fffdfa 0%,#fffdfa 62%,#f4edf1 100%)}
+@property --pool-beam{syntax:"<angle>";initial-value:0deg;inherits:false}
+@keyframes pool-border-beam{to{--pool-beam:360deg}}
+html[data-ui="soft"] #poolGrid .idea-card:first-child{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 265px;
+  grid-template-rows:auto 1fr auto;min-height:286px;border:1px solid transparent;
+  background:linear-gradient(135deg,#fffdfa 0%,#fffdfa 60%,#f4edf1 100%) padding-box,
+    conic-gradient(from var(--pool-beam),transparent 0 67%,color-mix(in srgb,var(--cat) 62%,#fff) 76%,#c59aac 80%,transparent 88%) border-box;
+  animation:pool-border-beam 10s linear infinite}
 html[data-ui="soft"] #poolGrid .idea-card:first-child::before{left:0;right:auto;top:22px;bottom:22px;width:4px;height:auto;border-radius:0 5px 5px 0;opacity:1}
-html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-head{grid-column:1;grid-row:1;padding:21px 24px 4px}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-head{grid-column:1;grid-row:1;padding:22px 25px 4px}
 html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-index{background:#f4e9ee;color:#8a526d}
-html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-copy{grid-column:1;grid-row:2;padding:14px 24px 0}
-html[data-ui="soft"] #poolGrid .idea-card:first-child h3{max-width:760px;font-size:27px;line-height:1.35;letter-spacing:-.035em}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-copy{grid-column:1;grid-row:2;padding:15px 25px 0}
+html[data-ui="soft"] #poolGrid .idea-card:first-child h3{max-width:760px;font-size:29px;line-height:1.32;letter-spacing:-.04em}
 html[data-ui="soft"] #poolGrid .idea-card:first-child p{max-width:850px;min-height:0;font-size:14px;-webkit-line-clamp:3}
-html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-tags{grid-column:1;grid-row:3;margin:13px 24px 21px}
-html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-foot{grid-column:2;grid-row:1/4;min-height:0;margin:0;padding:24px 20px;flex-direction:column;align-items:stretch;justify-content:space-between;border-top:0;border-left:1px solid rgba(78,61,72,.07);background:rgba(244,237,241,.54)}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-tags{grid-column:1;grid-row:3;margin:14px 25px 22px}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-foot{grid-column:2;grid-row:1/4;min-height:0;margin:0;padding:24px 21px;
+  flex-direction:column;align-items:stretch;justify-content:space-between;border-top:0;border-left:1px solid rgba(78,61,72,.08);
+  background:linear-gradient(155deg,rgba(247,239,243,.72),rgba(242,233,239,.5))}
 html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-author{align-self:flex-start}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-signal{display:flex;flex-direction:column;align-items:flex-start;margin:16px 0 auto}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-signal small{color:#9a7b8c;font-size:10.5px;font-weight:680;letter-spacing:.04em}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-signal b{margin-top:6px;color:#4f3f49;font-size:22px;line-height:1;font-weight:740;letter-spacing:-.035em}
+html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-signal em{margin-top:7px;color:#9a8c95;font-size:11px;font-style:normal}
 html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-engagement{margin:0;align-self:flex-end}
+
+@media (prefers-reduced-motion:reduce){
+  html[data-ui="soft"] #poolGrid .idea-card{opacity:1;transform:none;transition:none}
+  html[data-ui="soft"] #poolGrid .idea-card:first-child{animation:none}
+}
 
 /* ---------- 表格、统计与漏斗 ---------- */
 html[data-ui="soft"] .table{border:1px solid var(--line-soft);border-radius:16px;background:rgba(255,253,250,.8);box-shadow:var(--shadow);overflow:hidden}
@@ -409,7 +440,7 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .client-card footer{margin:0}
   html[data-ui="soft"] #poolGrid{grid-template-columns:1fr;gap:12px}
   html[data-ui="soft"] #poolGrid .idea-card,
-  html[data-ui="soft"] #poolGrid .idea-card:first-child{display:flex;min-height:0;background:rgba(255,253,250,.9)}
+  html[data-ui="soft"] #poolGrid .idea-card:first-child{display:flex;min-height:0;border-color:var(--line-soft);background:rgba(255,253,250,.9)}
   html[data-ui="soft"] #poolGrid .idea-card:first-child::before{left:16px;right:16px;top:0;bottom:auto;width:auto;height:3px;border-radius:0 0 4px 4px}
   html[data-ui="soft"] .idea-card-head{flex-direction:row;align-items:center;justify-content:space-between;padding:16px 17px 10px}
   html[data-ui="soft"] .idea-card-meta{flex-direction:row;align-items:center}
@@ -423,6 +454,7 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] #poolGrid .idea-card-foot,
   html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-foot{min-height:66px;margin-top:auto;padding:12px 17px;flex-direction:row;align-items:center;border-left:0;border-top:1px solid var(--line-soft);background:rgba(248,245,242,.55)}
   html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-author{align-self:auto}
+  html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-signal{display:none}
   html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-engagement{margin-left:auto;align-self:auto}
   html[data-ui="soft"] .idea-engagement{align-self:auto}
   html[data-ui="soft"] .case-journey{grid-template-columns:1fr}

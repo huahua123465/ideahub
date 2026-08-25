@@ -72,7 +72,8 @@ export function cardHTML(x, index = 0) {
   const ranked = filters.sort === 'hot' && filters.status === 'pool';
   const serial = String(index + 1).padStart(2, '0');
   const rankClass = ranked && index < 3 ? ' idea-card-top' : '';
-  return `<article class="card idea-card${rankClass}" data-id="${x.id}" style="--cat:${cc}" tabindex="0">
+  return `<article class="card idea-card${rankClass}" data-id="${x.id}"
+      style="--cat:${cc};--i:${Math.min(index, 8)}" tabindex="0">
     <header class="idea-card-head">
       <span class="idea-index">${ranked ? `${ICON.flame} 热榜` : 'IDEA'} <b>${serial}</b></span>
       <div class="idea-card-meta">
@@ -90,9 +91,15 @@ export function cardHTML(x, index = 0) {
         <span class="av" style="background:${avatarColor(x.author.name)}">${esc(initial(x.author.name))}</span>
         <span class="idea-author-copy"><b>${esc(x.author.name)}</b><small>${fromNow(x.createdAt)}提出</small></span>
       </span>
+      <span class="idea-signal" aria-hidden="true">
+        <small>正在形成共识</small>
+        <b><span class="signal-votes">${x.voteCount}</span> 人支持</b>
+        <em><span class="signal-comments">${x.commentCount}</span> 条讨论</em>
+      </span>
       <span class="acts idea-engagement">
         <span class="cmt" title="${x.commentCount} 条讨论">${ICON.comment}<span class="cn">${x.commentCount}</span></span>
-        <button class="vote${x.voted ? ' voted' : ''}" data-vote="${x.id}" aria-label="支持这条灵感">
+        <button class="vote${x.voted ? ' voted' : ''}" data-vote="${x.id}"
+          aria-label="支持这条灵感" aria-pressed="${x.voted ? 'true' : 'false'}">
           <span class="arrow">${ICON.up}</span><span class="vote-label">支持</span><span class="vn">${x.voteCount}</span></button>
       </span>
     </footer>
@@ -139,8 +146,11 @@ export async function render({ flashId, flashIds } = {}) {
 
   const filtered = !!(filters.q || filters.category || filters.mine
                    || filters.tagIds.length || filters.sourceType || filters.status !== 'pool');
+  grid.classList.remove('pool-ready');
   grid.innerHTML = items.length ? items.map(cardHTML).join('')
     : (filtered ? EMPTY_FILTERED : EMPTY_HTML);
+  // Motion Primitives 式的轻量错峰进入。只在整页重排时触发，后台增量 patch 不动 DOM。
+  requestAnimationFrame(() => grid.classList.add('pool-ready'));
 
   // 重排完了，攒着的新灵感已经在列表里，胶囊可以收了
   pendingNew.clear();
@@ -245,7 +255,10 @@ export function patchVote(id, voteCount, voted, { animate = true, hotScore } = {
   const btn = card.querySelector('[data-vote]');
   if (!btn) return;
   btn.classList.toggle('voted', voted);
+  btn.setAttribute('aria-pressed', voted ? 'true' : 'false');
   const n = btn.querySelector('.vn');
+  const signal = card.querySelector('.signal-votes');
+  if (signal) signal.textContent = voteCount;
   if (animate) { countTo(n, voteCount, { ms: 300 }); pulse(btn, 'bump', 420); }
   else n.textContent = voteCount;
 }
@@ -269,6 +282,8 @@ export function patchComment(id, count) {
   const n = el?.querySelector('.cn');
   if (n) n.textContent = count;
   else if (el) el.innerHTML = `${ICON.comment}<span class="cn">${count}</span>`;
+  const signal = document.querySelector(`.card[data-id="${id}"] .signal-comments`);
+  if (signal) signal.textContent = count;
 }
 
 /** 采纳后把卡片飞走再从列表移除 */
@@ -282,6 +297,26 @@ export function flyAway(id) {
 }
 
 export function bind(root) {
+  // Magic Card 式鼠标聚光：只更新当前卡片的两个 CSS 变量，不创建额外 DOM。
+  // 触屏和“减少动态效果”下完全不启用，卡片仍是普通静态内容。
+  if (matchMedia('(pointer:fine)').matches && !reduced()) {
+    let raf = 0, target = null, clientX = 0, clientY = 0;
+    root.addEventListener('pointermove', e => {
+      target = e.target.closest('.idea-card');
+      if (!target) return;
+      clientX = e.clientX; clientY = e.clientY;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        const r = target?.getBoundingClientRect();
+        if (r) {
+          target.style.setProperty('--mx', `${clientX - r.left}px`);
+          target.style.setProperty('--my', `${clientY - r.top}px`);
+        }
+        raf = 0;
+      });
+    });
+  }
+
   root.addEventListener('click', async e => {
     if (e.target.closest('[data-first]')) return document.querySelector('#btnNew').click();
     if (e.target.closest('[data-clear]')) return clearFilters();
