@@ -253,6 +253,9 @@ def 推分析(板块, 路径们):
                     更新 += 1
             去处 = "、".join(f"{条.get('board')}#{条.get('id')}" for 条 in 条目)
             print(f"  {p.name} ✓ {去处}  {结果.get('title') or ''}")
+            if 结果.get("imagesExpected"):
+                print(f"    图片：IdeaHub 服务器确认保存 "
+                      f"{结果.get('imagesStored', 0)}/{结果.get('imagesExpected')} 张")
             for 警告 in 结果.get("warnings") or []:
                 print(f"    ! {警告}")
         elif 可重试:
