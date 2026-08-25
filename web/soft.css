@@ -299,6 +299,10 @@ html[data-ui="soft"] .chatpanel,
 html[data-ui="soft"] .menupop,
 html[data-ui="soft"] .notifpop{border-color:#ded4d0;border-radius:19px;background:#fffdfa;box-shadow:var(--shadow-lg)}
 html[data-ui="soft"] .modal header,html[data-ui="soft"] .drawer .dhead{background:#f8f4f1}
+html[data-ui="soft"] .confirm-backdrop{background:rgba(48,41,46,.32);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+html[data-ui="soft"] .confirm-dialog{border-color:#ded4d0;border-radius:20px;background:#fffdfa;box-shadow:0 24px 70px rgba(48,39,45,.18)}
+html[data-ui="soft"] .confirm-note,html[data-ui="soft"] .confirm-actions{background:#f8f4f1}
+html[data-ui="soft"] .confirm-submit{background:#b96869;box-shadow:0 8px 20px rgba(185,104,105,.2)}
 html[data-ui="soft"] .smart-import-modal{border-radius:22px;background:#fffdfa}
 html[data-ui="soft"] .smart-import-modal .smart-import-head{background:linear-gradient(135deg,#f6eff2,#fbf7f4)}
 html[data-ui="soft"] .smart-import-brand{border-radius:11px;background:linear-gradient(145deg,#876f80,#6f596a);box-shadow:none}

@@ -15,6 +15,7 @@ import * as links from './links.js';
 import * as tagfilter from './tagfilter.js';
 import * as bench from './bench.js';
 import { openLightbox } from '../lightbox.js';
+import { confirmAction } from '../confirm.js';
 
 /** 每个板块各自记住当前选中的小板块和数据，切走再切回来不用重新选 */
 const st = {};
@@ -233,7 +234,13 @@ function build(key, root) {
   root.querySelector('.bd-body').addEventListener('click', e => {
     if (e.target.closest('a')) return;                 // 点链接是去打开作品，不是编辑
     const del = e.target.closest('[data-del]');
-    if (del) return removeRow(key, Number(del.dataset.del));
+    if (del) {
+      const menu = del.closest('details');
+      menu?.removeAttribute('open');
+      // 确认框取消后要回到一个仍然可见的控件，不能回到已收起菜单里的隐藏按钮。
+      menu?.querySelector('summary')?.focus();
+      return removeRow(key, Number(del.dataset.del));
+    }
     const ed = e.target.closest('[data-edit]');
     if (ed) return openEdit(key, Number(ed.dataset.edit));
     // 删除收进更多菜单，避免手机上每张卡都常驻一个红色危险操作。
@@ -995,12 +1002,22 @@ export async function saveEdit() {
 
 async function removeRow(key, id) {
   const b = BOARDS[key];
+  const row = stateOf(key).items.find(x => Number(x.id) === id);
+  const name = String(row?.title || '').trim();
   // 软删和真删要说不一样的话。对软删的记录说「找不回来了」是在吓唬人，
   // 对真删的记录说「还能找回来」则是骗人 —— 两种都会让人下次不敢按这个按钮。
-  const 问 = b.softDelete
-    ? '确定删除这一条？删除后它不再出现在列表和搜索里（记录仍保留在数据库，需要时可以找管理员恢复）。'
-    : '确定删除这一条？删了就找不回来了。';
-  if (!confirm(问)) return;
+  const ok = await confirmAction({
+    eyebrow: b.softDelete ? '可恢复删除' : '不可恢复操作',
+    title: '删除这条记录？',
+    message: name
+      ? `「${name}」将不再出现在当前列表和全局搜索中。`
+      : '这条记录将不再出现在当前列表和全局搜索中。',
+    note: b.softDelete
+      ? '记录仍保留在数据库中，需要时可由管理员恢复。'
+      : '删除后无法恢复，请确认这不是误操作。',
+    confirmLabel: '确认删除',
+  });
+  if (!ok) return;
   try {
     await api[b.api + 'Delete'](id);
     toast('ok', '已删除');

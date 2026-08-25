@@ -682,6 +682,41 @@ textarea.inp{resize:none;height:96px;line-height:1.65}
 .dupe a{color:#7a5600;text-decoration:underline;display:block;margin-top:3px}
 .modal footer{padding:14px 22px;border-top:1px solid var(--line-soft);display:flex;
   align-items:center;gap:10px;background:var(--surface-2);margin-top:14px}
+
+/* ---------- 居中确认弹窗 ---------- */
+.confirm-layer{position:fixed;inset:0;z-index:160;display:grid;place-items:center;padding:20px;
+  opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility .2s}
+.confirm-layer.on{opacity:1;visibility:visible;pointer-events:auto}
+.confirm-backdrop{position:absolute;inset:0;background:rgba(18,20,32,.38);
+  backdrop-filter:blur(4px) saturate(1.04);-webkit-backdrop-filter:blur(4px) saturate(1.04)}
+.confirm-dialog{position:relative;width:min(430px,100%);overflow:hidden;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);
+  transform:translateY(12px) scale(.97);transition:transform .24s var(--spring)}
+.confirm-layer.on .confirm-dialog{transform:translateY(0) scale(1)}
+.confirm-head{display:flex;align-items:center;gap:13px;padding:22px 22px 12px}
+.confirm-mark{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:13px;
+  background:var(--crit-bg);border:1px solid var(--crit-line);color:var(--crit)}
+.confirm-mark .ic{width:20px;height:20px;stroke-width:1.8}
+.confirm-copy{min-width:0}
+.confirm-eyebrow{display:block;margin-bottom:3px;color:var(--crit);font-size:11px;font-weight:700;
+  letter-spacing:.08em}
+.confirm-copy h2{font-size:18px;line-height:1.35;font-weight:720;letter-spacing:-.02em}
+.confirm-message{padding:0 22px;color:var(--ink2);font-size:13.5px;line-height:1.7}
+.confirm-note{margin:12px 22px 0;padding:10px 12px;border-radius:10px;background:var(--surface-2);
+  color:var(--muted);font-size:12.5px;line-height:1.6}
+.confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;padding:14px 22px;
+  border-top:1px solid var(--line-soft);background:var(--surface-2)}
+.confirm-submit{background:var(--crit);color:#fff;box-shadow:0 6px 16px rgba(185,104,105,.18)}
+.confirm-submit:hover{filter:brightness(.94);transform:translateY(-1px)}
+.confirm-submit:active{transform:translateY(0) scale(.98)}
+@media (max-width:560px){
+  .confirm-layer{padding:14px}.confirm-head{padding:19px 18px 11px}
+  .confirm-message{padding:0 18px}.confirm-note{margin:11px 18px 0}
+  .confirm-actions{padding:13px 18px}
+}
+@media (prefers-reduced-motion:reduce){
+  .confirm-layer,.confirm-dialog{transition:none}
+}
 .check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2);cursor:pointer}
 .check .box{width:16px;height:16px;border:1.5px solid var(--muted);border-radius:4px;display:grid;
   place-items:center;color:#fff;font-size:10px;transition:.15s}
