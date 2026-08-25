@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>小华微信聊天记录综合分析报告</title>
+  <style>
+    :root {
+      --bg: #f3f5f7;
+      --surface: #ffffff;
+      --surface-soft: #eef3f4;
+      --text: #182126;
+      --muted: #657078;
+      --line: #dbe1e5;
+      --teal: #0f766e;
+      --orange: #c2410c;
+      --blue: #2563eb;
+      --green-soft: #e6f4f1;
+      --amber-soft: #fff7db;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.75;
+      letter-spacing: 0;
+    }
+    a { color: var(--teal); text-decoration: none; }
+    button { font: inherit; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      background: #172126;
+      color: #fff;
+      border-bottom: 1px solid #2d393e;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+    .brand-mark {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      background: #4fb3a8;
+      color: #102a28;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .privacy { color: #b9c7cc; font-size: 12px; }
+    .print-button {
+      border: 1px solid #718087;
+      background: transparent;
+      color: #fff;
+      border-radius: 6px;
+      padding: 6px 11px;
+      cursor: pointer;
+    }
+    .print-button:hover { background: #2a363b; }
+    .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); max-width: 1500px; margin: 0 auto; }
+    .sidebar {
+      position: sticky;
+      top: 58px;
+      height: calc(100vh - 58px);
+      padding: 26px 16px;
+      border-right: 1px solid var(--line);
+      background: #f8fafb;
+      overflow-y: auto;
+    }
+    .sidebar-label { margin: 0 10px 10px; color: #8a949b; font-size: 11px; font-weight: 700; }
+    .sidebar nav { display: grid; gap: 3px; }
+    .sidebar a {
+      display: block;
+      padding: 7px 10px;
+      color: #4c5960;
+      border-left: 3px solid transparent;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .sidebar a:hover, .sidebar a.active { color: var(--teal); background: #e9f3f2; border-left-color: var(--teal); }
+    main { min-width: 0; padding: 38px clamp(22px, 4vw, 64px) 70px; }
+    .overview { max-width: 1120px; margin: 0 auto 30px; }
+    .eyebrow { margin: 0 0 8px; color: var(--teal); font-size: 12px; font-weight: 800; }
+    h1 { margin: 0; font-size: 30px; line-height: 1.3; letter-spacing: 0; }
+    .subtitle { margin: 10px 0 0; color: var(--muted); }
+    .portrait {
+      margin: 22px 0 0;
+      padding: 18px 20px;
+      border-left: 4px solid var(--orange);
+      background: var(--surface);
+      font-size: 16px;
+    }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .metric { min-width: 0; padding: 15px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+    .metric-label, .metric small { display: block; color: var(--muted); font-size: 12px; }
+    .metric strong { display: block; margin: 3px 0 1px; font-size: 22px; line-height: 1.35; overflow-wrap: anywhere; }
+    .dashboard { max-width: 1120px; margin: 0 auto 34px; }
+    .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 12px; }
+    .section-title h2 { margin: 0; font-size: 18px; }
+    .section-title span { color: var(--muted); font-size: 12px; }
+    .chart-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 14px; }
+    .chart-panel { min-width: 0; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+    .chart-panel h3 { margin: 0 0 16px; font-size: 15px; }
+    .chart-panel.wide { grid-column: 1 / -1; }
+    .bar-row + .bar-row { margin-top: 14px; }
+    .bar-meta { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 5px; font-size: 13px; }
+    .bar-meta strong { font-size: 12px; color: var(--muted); }
+    .bar-track, .term-track { overflow: hidden; background: #e8ecef; border-radius: 3px; }
+    .bar-track { height: 8px; }
+    .bar-track span, .term-track i { display: block; height: 100%; border-radius: 3px; }
+    .hour-chart { display: flex; align-items: end; gap: clamp(8px, 2vw, 22px); height: 195px; padding-top: 26px; }
+    .hour-column { position: relative; flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: end; align-items: center; min-width: 28px; }
+    .hour-bar { width: min(34px, 70%); min-height: 6px; background: var(--blue); border-radius: 3px 3px 0 0; }
+    .hour-count { position: absolute; top: -24px; color: var(--muted); font-size: 11px; opacity: 0; }
+    .hour-column:hover .hour-count { opacity: 1; }
+    .hour-label { margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .term-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+    .term-group h4 { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+    .term-row { display: grid; grid-template-columns: minmax(50px, 84px) 1fr 28px; align-items: center; gap: 8px; margin: 7px 0; font-size: 12px; }
+    .term-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .term-track { height: 6px; }
+    .term-row strong { text-align: right; color: var(--muted); }
+    .risk-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-top: 14px;
+      padding: 13px 16px;
+      background: #fff2ee;
+      border: 1px solid #f0b7a6;
+      border-radius: var(--radius);
+    }
+    .risk-strip strong { color: #9a3412; }
+    .risk-strip span { color: var(--muted); font-size: 12px; text-align: right; }
+    .report-shell { max-width: 980px; margin: 0 auto; padding: 34px clamp(20px, 4vw, 52px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+    .report-kicker { color: var(--teal); font-size: 12px; font-weight: 800; }
+    .report-shell > h2 { margin: 4px 0 28px; font-size: 22px; }
+    .report-body h2 { margin: 42px 0 14px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 20px; scroll-margin-top: 76px; }
+    .report-body h2:first-child { margin-top: 0; border-top: 0; }
+    .report-body h3 { margin: 24px 0 8px; font-size: 16px; }
+    .report-body p { margin: 10px 0; }
+    .report-body ul, .report-body ol { margin: 10px 0; padding-left: 24px; }
+    .report-body li + li { margin-top: 5px; }
+    .report-body strong { color: #29383e; }
+    code { padding: 2px 5px; background: #edf1f3; border-radius: 4px; font-family: Consolas, monospace; font-size: .9em; }
+    blockquote { margin: 16px 0; padding: 12px 16px; background: var(--surface-soft); border-left: 3px solid var(--teal); color: #3f4e54; }
+    .table-scroll { margin: 14px 0; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #edf2f3; white-space: nowrap; }
+    .evidence { max-width: 980px; margin: 20px auto 0; }
+    .evidence-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+    .evidence-head h2 { margin: 0; font-size: 18px; scroll-margin-top: 76px; }
+    .evidence-head span { color: var(--muted); font-size: 12px; }
+    .evidence-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .evidence-item { padding: 14px 15px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+    .evidence-item > div { display: flex; justify-content: space-between; gap: 12px; }
+    .evidence-item time, .evidence-item small { color: var(--muted); font-size: 11px; }
+    .evidence-item p { margin: 8px 0 6px; }
+    .empty { color: var(--muted); }
+    .disclaimer { max-width: 980px; margin: 22px auto 0; padding: 14px 16px; background: var(--amber-soft); border: 1px solid #eadb9a; border-radius: var(--radius); color: #5c5128; font-size: 12px; }
+    footer { max-width: 980px; margin: 25px auto 0; color: #7b858b; font-size: 11px; text-align: center; }
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: sticky; top: 58px; z-index: 20; height: auto; padding: 8px 14px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+      .sidebar-label { display: none; }
+      .sidebar nav { display: flex; width: max-content; }
+      .sidebar a { border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+      .sidebar a:hover, .sidebar a.active { border-left-color: transparent; border-bottom-color: var(--teal); }
+      main { padding-top: 28px; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .topbar { padding: 0 15px; }
+      .privacy { display: none; }
+      .print-button { padding: 5px 8px; font-size: 12px; }
+      main { padding: 22px 13px 50px; }
+      h1 { font-size: 24px; }
+      .portrait { font-size: 15px; padding: 15px; }
+      .metric-grid, .chart-grid, .term-columns, .evidence-list { grid-template-columns: 1fr; }
+      .metric strong { font-size: 19px; }
+      .chart-panel.wide { grid-column: auto; }
+      .hour-chart { gap: 5px; height: 165px; }
+      .hour-label { font-size: 10px; }
+      .report-shell { padding: 25px 17px; }
+      .report-body h2 { font-size: 18px; }
+      .risk-strip { align-items: flex-start; flex-direction: column; gap: 2px; }
+      .risk-strip span { text-align: left; }
+    }
+    @media print {
+      body { background: #fff; font-size: 11pt; }
+      .topbar, .sidebar, .print-button { display: none !important; }
+      .layout { display: block; max-width: none; }
+      main { padding: 0; }
+      .overview, .dashboard, .report-shell, .evidence, .disclaimer { max-width: none; }
+      .report-shell { border: 0; padding: 0; }
+      .chart-panel, .metric, .evidence-item { break-inside: avoid; }
+      .report-body h2 { break-after: avoid; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">析</span><span>微信聊天洞察报告</span></div>
+    <div class="top-actions">
+      <span class="privacy">单文件 · 本地离线 · 无外部请求</span>
+      <button class="print-button" type="button" onclick="window.print()" title="打印或另存为 PDF">打印 / PDF</button>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <p class="sidebar-label">报告目录</p>
+      <nav><a class="active" href="#overview">分析总览</a><a href="#report-section-1">数据边界与可信度</a><a href="#report-section-2">一句话人物速写</a><a href="#report-section-3">会话功能与沟通风格</a><a href="#report-section-6">需求图谱</a><a href="#report-section-9">情绪与关系判断</a><a href="#report-section-10">可切入点与服务建议</a><a href="#report-section-15">风险预警</a><a href="#report-section-20">三类受众行动建议</a><a href="#report-section-24">关键证据索引</a><a href="#report-section-25">使用声明</a><a href="#evidence">证据摘录</a></nav>
+    </aside>
+    <main>
+      <section class="overview" id="overview">
+        <p class="eyebrow">AUTHORIZED CHAT ANALYSIS · 分析对象：小华</p>
+        <h1>小华微信聊天记录综合分析报告</h1>
+        <p class="subtitle">2026-06-12 至 2026-08-20 · 以语言和互动模式为依据的非临床分析</p>
+        <p class="portrait">小华在这段会话中呈现为一名偏执行和工具导向的年轻团队协作者：习惯把链接、代码、AI 工具和具体问题直接抛入对话，希望快速拿到可操作结果；他可能同时往返学校与公司，对熟悉的年长或资深协作者有一定信任，但目前把微信当作“临时工作台”的习惯已经带来明显的信息安全代价。</p>
+        <div class="metric-grid">
+      <div class="metric">
+        <span class="metric-label">有效消息</span>
+        <strong>57</strong>
+        <small>本次解析样本</small>
+      </div>
+      <div class="metric">
+        <span class="metric-label">对话角色</span>
+        <strong>3</strong>
+        <small>已识别说话人</small>
+      </div>
+      <div class="metric">
+        <span class="metric-label">高峰时段</span>
+        <strong>09:00</strong>
+        <small>15 条消息</small>
+      </div>
+      <div class="metric">
+        <span class="metric-label">数据质量</span>
+        <strong>中等偏低</strong>
+        <small>2026-06-12 至 2026-08-20</small>
+      </div></div>
+      </section>
+
+      <section class="dashboard" aria-labelledby="dashboard-title">
+        <div class="section-title"><h2 id="dashboard-title">数据速览</h2><span>统计用于支撑判断，不等同于心理结论</span></div>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <h3>对话参与度</h3>
+            
+            <div class="bar-row">
+              <div class="bar-meta"><span>小华</span><strong>39 · 68.4%</strong></div>
+              <div class="bar-track"><span style="width:68.4%;background:#0f766e"></span></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-meta"><span>我</span><strong>16 · 28.1%</strong></div>
+              <div class="bar-track"><span style="width:28.1%;background:#c2410c"></span></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-meta"><span>系统</span><strong>2 · 3.5%</strong></div>
+              <div class="bar-track"><span style="width:3.5%;background:#2563eb"></span></div>
+            </div>
+          </div>
+          <div class="chart-panel">
+            <h3>活跃时段</h3>
+            <div class="hour-chart">
+            <div class="hour-column" title="08:00 · 6 条">
+              <span class="hour-count">6</span>
+              <div class="hour-bar" style="height:40.0%"></div>
+              <span class="hour-label">08</span>
+            </div>
+            <div class="hour-column" title="09:00 · 15 条">
+              <span class="hour-count">15</span>
+              <div class="hour-bar" style="height:100.0%"></div>
+              <span class="hour-label">09</span>
+            </div>
+            <div class="hour-column" title="10:00 · 5 条">
+              <span class="hour-count">5</span>
+              <div class="hour-bar" style="height:33.3%"></div>
+              <span class="hour-label">10</span>
+            </div>
+            <div class="hour-column" title="11:00 · 8 条">
+              <span class="hour-count">8</span>
+              <div class="hour-bar" style="height:53.3%"></div>
+              <span class="hour-label">11</span>
+            </div>
+            <div class="hour-column" title="12:00 · 6 条">
+              <span class="hour-count">6</span>
+              <div class="hour-bar" style="height:40.0%"></div>
+              <span class="hour-label">12</span>
+            </div>
+            <div class="hour-column" title="13:00 · 2 条">
+              <span class="hour-count">2</span>
+              <div class="hour-bar" style="height:13.3%"></div>
+              <span class="hour-label">13</span>
+            </div>
+            <div class="hour-column" title="14:00 · 2 条">
+              <span class="hour-count">2</span>
+              <div class="hour-bar" style="height:13.3%"></div>
+              <span class="hour-label">14</span>
+            </div>
+            <div class="hour-column" title="15:00 · 1 条">
+              <span class="hour-count">1</span>
+              <div class="hour-bar" style="height:6.7%"></div>
+              <span class="hour-label">15</span>
+            </div>
+            <div class="hour-column" title="16:00 · 9 条">
+              <span class="hour-count">9</span>
+              <div class="hour-bar" style="height:60.0%"></div>
+              <span class="hour-label">16</span>
+            </div>
+            <div class="hour-column" title="17:00 · 3 条">
+              <span class="hour-count">3</span>
+              <div class="hour-bar" style="height:20.0%"></div>
+              <span class="hour-label">17</span>
+            </div></div>
+          </div>
+          <div class="chart-panel wide">
+            <h3>高频语言信号</h3>
+            <div class="term-columns">
+              <div class="term-group"><h4>情绪表达</h4>
+            <div class="term-row">
+              <span>累</span>
+              <div class="term-track"><i style="width:100.0%;background:#c2410c"></i></div>
+              <strong>6</strong>
+            </div>
+            <div class="term-row">
+              <span>爱</span>
+              <div class="term-track"><i style="width:50.0%;background:#c2410c"></i></div>
+              <strong>3</strong>
+            </div>
+            <div class="term-row">
+              <span>平静</span>
+              <div class="term-track"><i style="width:16.7%;background:#c2410c"></i></div>
+              <strong>1</strong>
+            </div>
+            <div class="term-row">
+              <span>自杀</span>
+              <div class="term-track"><i style="width:16.7%;background:#c2410c"></i></div>
+              <strong>1</strong>
+            </div>
+            <div class="term-row">
+              <span>幸福</span>
+              <div class="term-track"><i style="width:16.7%;background:#c2410c"></i></div>
+              <strong>1</strong>
+            </div></div>
+              <div class="term-group"><h4>工作与现实议题</h4>
+            <div class="term-row">
+              <span>git</span>
+              <div class="term-track"><i style="width:100.0%;background:#0f766e"></i></div>
+              <strong>9</strong>
+            </div>
+            <div class="term-row">
+              <span>api</span>
+              <div class="term-track"><i style="width:100.0%;background:#0f766e"></i></div>
+              <strong>9</strong>
+            </div>
+            <div class="term-row">
+              <span>打印机</span>
+              <div class="term-track"><i style="width:100.0%;background:#0f766e"></i></div>
+              <strong>9</strong>
+            </div>
+            <div class="term-row">
+              <span>提示词</span>
+              <div class="term-track"><i style="width:100.0%;background:#0f766e"></i></div>
+              <strong>9</strong>
+            </div>
+            <div class="term-row">
+              <span>密钥</span>
+              <div class="term-track"><i style="width:55.6%;background:#0f766e"></i></div>
+              <strong>5</strong>
+            </div>
+            <div class="term-row">
+              <span>github</span>
+              <div class="term-track"><i style="width:33.3%;background:#0f766e"></i></div>
+              <strong>3</strong>
+            </div>
+            <div class="term-row">
+              <span>学校</span>
+              <div class="term-track"><i style="width:33.3%;background:#0f766e"></i></div>
+              <strong>3</strong>
+            </div>
+            <div class="term-row">
+              <span>密码</span>
+              <div class="term-track"><i style="width:33.3%;background:#0f766e"></i></div>
+              <strong>3</strong>
+            </div></div>
+            </div>
+          </div>
+        </div>
+        <div class="risk-strip">
+          <strong>风险筛查：发现 1 个风险词信号</strong>
+          <span>仅代表当前样本中的语言信号，不代表完整风险评估</span>
+        </div>
+      </section>
+
+      <section class="report-shell">
+        <span class="report-kicker">完整分析</span>
+        <h2>从数据事实到可执行判断</h2>
+        <article class="report-body"><blockquote><strong>隐私级别：高度敏感。</strong> 本报告已隐藏 API 密钥、账户会话、密码、授权码、门禁信息及部分身份细节。原始 PDF 仍含敏感信息，应限制访问，不宜直接转发或上传到不受控的平台。</blockquote>
+<h2 id="report-section-1">数据边界与可信度</h2>
+<ul>
+<li><strong>分析对象</strong>：小华（聊天显示名，仅作报告代称）</li>
+<li><strong>样本范围</strong>：2026-06-12 至 2026-08-20，共 57 条消息、12 页 PDF</li>
+<li><strong>参与构成</strong>：小华 39 条（68.4%）、“我”16 条（28.1%）、系统消息 2 条（3.5%）</li>
+<li><strong>时段分布</strong>：34 条发生在 06:00-11:59，23 条发生在 12:00-17:59；样本中没有晚间或深夜消息</li>
+<li><strong>内容结构</strong>：15 条含链接，11 条涉及密钥、密码、令牌或其他敏感凭据，11 条为媒体/通知/未知类型占位，3 条为 500 字以上长文本</li>
+<li><strong>输入质量评级</strong>：中等偏低。适合判断这段会话的用途、协作方式、技术兴趣与信息安全习惯；不适合据此确定年龄、完整职业、感情状态、人格类型、临床心理状态或依恋类型。</li>
+</ul>
+<p>本记录并非连续的生活对话，更像一个技术协作与资料中转窗口。大量内容是链接、代码、提示词、账号接口或完整任务说明，语言可能来自复制、整理或 AI 生成，不能全部视为小华的自然表达。以下内容严格区分<strong>观察事实、合理推断与待验证假设</strong>。</p>
+<h2 id="report-section-2">一句话人物速写</h2>
+<p>小华在这段会话中呈现为一名偏执行和工具导向的年轻团队协作者：习惯把链接、代码、AI 工具和具体问题直接抛入对话，希望快速拿到可操作结果；他可能同时往返学校与公司，对熟悉的年长或资深协作者有一定信任，但目前把微信当作“临时工作台”的习惯已经带来明显的信息安全代价。</p>
+<h2 id="report-section-3">会话功能与沟通风格</h2>
+<h3 id="report-section-4">可以较有把握地说</h3>
+<ul>
+<li><strong>会话主要服务于任务推进。</strong> Git 分支操作、API 地址、AI 视觉生成提示词、网络打印机排障和工具链接反复出现，说明这段关系至少包含稳定的技术协作或资源交换。</li>
+<li><strong>表达偏直接、低铺垫。</strong> 常见形式是一个链接、一组命令或一句明确请求；在请假和门禁场景中也直接说明情况或提问，没有复杂的情绪铺垫。</li>
+<li><strong>遇到复杂任务时偏好结构化控制。</strong> 2026-08-18 的打印机问题包含背景、限制条件、操作步骤和验证标准，反映出对“逐步排查、不要跳步、结果可验证”的强需求。该文本可能经过整理，因此更能说明任务偏好，而不必然代表稳定人格。</li>
+<li><strong>对话存在角色差。</strong> 小华使用“哥”称呼对方，并向对方沟通请假、公司到场和门禁问题。较合理的解释是双方处于熟人式的上下级、前后辈或资深/初级协作关系。</li>
+</ul>
+<h3 id="report-section-5">需要保留的判断</h3>
+<ul>
+<li><strong>生活状态</strong>：小华提到“去学校路上”和“下午来公司”，可能同时处于学习与工作场景，像学生、实习生、兼职成员或需要处理学校事务的年轻员工。置信度中等，具体身份无法确认。</li>
+<li><strong>职业方向</strong>：AI 内容生产、开发工具和技术支持相关信号较强，但无法判断其正式岗位，可能是开发、AI 漫剧/视觉内容、运营或多角色协作。</li>
+<li><strong>自我表达程度</strong>：日常消息的自我暴露较低，主要暴露任务和资源；但样本中有一篇高强度家庭叙事。若为本人原创，可称为“平时克制、在特定主题上深度表达”；若为素材或代写文本，则不能用于画像。综合置信度低。</li>
+</ul>
+<h2 id="report-section-6">需求图谱</h2>
+<h3 id="report-section-7">当前最明确的需求</h3>
+<ol>
+<li><strong>快速解决实际问题</strong>：需要能直接处理配置、代码、工具和故障的协作者，而非只给概念说明。</li>
+<li><strong>降低不确定性</strong>：长任务说明中反复要求确认 IP、端口、驱动、测试结果，显示其更信任有步骤、有判断标准的方案。</li>
+<li><strong>集中保存工作上下文</strong>：链接、分支命令、提示词和接口地址被不断丢进聊天，微信事实上承担了临时知识库与跨设备剪贴板功能。</li>
+<li><strong>维持学习与工作之间的协调</strong>：请假对话显示其需要在学校事务与公司到场之间做临时安排，并希望尽早获得明确答复。</li>
+</ol>
+<h3 id="report-section-8">隐性但高价值的需求</h3>
+<ul>
+<li><strong>安全且可检索的资料管理。</strong> 当前做法能省几分钟，却让密钥、会话令牌和密码暴露在聊天、导出文件和后续分析链路中。真正未满足的并不是“再找一个聊天工具”，而是安全的凭据库、项目知识库和可追踪的任务记录。</li>
+<li><strong>有人帮助收束复杂流程。</strong> 小华提交的信息跨度大，从代码仓库到 AI 生成再到硬件排障。适合他的支持方式是先确认目标，再把任务收束为少量步骤，每一步都有成功/失败的判断。</li>
+<li><strong>可能存在的情感理解与意义整理。</strong> 一篇第一人称家庭长文涉及贫困、家庭冲突、丧亲、内疚和童年自杀念头。只有确认该文确为小华本人经历与表达后，才可进一步讨论哀伤、愧疚或被理解的需要；目前不能把它当作营销切入点。</li>
+</ul>
+<h2 id="report-section-9">情绪与关系判断</h2>
+<p>这份样本没有形成可用的连续情绪时间序列。多数消息是资源和任务，不能据此得出“近期焦虑、压抑或稳定”的结论；唯一高情绪浓度的家庭长文也缺少作者、写作目的和发送语境确认。</p>
+<ul>
+<li><strong>日常情绪基调</strong>：在可确认的自然短对话里总体平实、合作，偶尔用“捂脸”缓和来早、问门禁等轻微尴尬。置信度中等，仅适用于这段工作关系。</li>
+<li><strong>关系质量</strong>：能讨论请假、场所进入和具体工作资源，说明双方有现实协作与一定信任；但对话深度不足以判断亲密关系质量、社交广度或是否有稳定倾诉对象。</li>
+<li><strong>依恋风格</strong>：证据不足，不做焦虑型、回避型或安全型归类。工作消息中的简短与直接不能等同于情感回避。</li>
+<li><strong>防御机制与认知偏差</strong>：样本缺少自然发生的冲突、挫折和自我评价对话，不足以识别压抑、投射、灾难化、读心术等模式。</li>
+</ul>
+<h2 id="report-section-10">可切入点与服务建议</h2>
+<h3 id="report-section-11">未来 1-2 周：先解决安全与效率</h3>
+<ul>
+<li>优先完成一次凭据清理：轮换所有在聊天中出现过的 API 密钥、密码和授权码，撤销账户会话，检查异常登录及 API 用量，并启用多因素认证。</li>
+<li>把项目链接、命令和提示词迁入按项目分类的知识库；把密钥放入密码管理器或专用密钥库，聊天中只发送用途标签。</li>
+<li>沟通采用“目标确认 → 三到五步操作 → 每步验证 → 失败时回传哪项结果”的结构。</li>
+<li>从样本看，09:00-11:00 与 16:00-17:00 是该会话较常见的联络窗口；这只能指导本关系中的初始触达，不能当作稳定作息判断。</li>
+</ul>
+<h3 id="report-section-12">未来 1-3 个月：围绕真实工作流提供价值</h3>
+<ul>
+<li>合适主题包括 Git 协作、AI 内容生产流程、提示词资产管理、API 成本与权限控制、常见 Windows/网络问题排障。</li>
+<li>产品表达应强调可见成果，例如“今天把仓库拉通并验证”“把 20 个提示词整理成可检索模板”，少用抽象的成长叙事。</li>
+<li>适合先用小项目、短周期或试用任务建立信任，再决定是否进入持续服务。样本没有消费记录，<strong>无法可靠推测价格敏感度或可接受价格</strong>。</li>
+</ul>
+<h3 id="report-section-13">半年以上：不要过早贴高价值用户标签</h3>
+<p>是否适合长期陪伴或高客单服务，取决于任务频率、实际付费、复用率和交付反馈，当前 57 条消息不足以判断。长期留存更可能来自“能记住项目上下文并持续解决问题”，而不是制造情绪依赖。</p>
+<h3 id="report-section-14">推荐话术</h3>
+<ul>
+<li><strong>更容易接受</strong>：“先确认打印机 IP 和当前端口。我给你 4 步，每一步都有成功判断，失败就把对应结果发我。”</li>
+<li><strong>更容易接受</strong>：“这个密钥已经出现在聊天记录里，先撤销。我再帮你改成环境变量和密钥库。”</li>
+<li><strong>应避免</strong>：只有鼓励没有操作、一次抛出大段理论、在未经确认时解读其家庭创伤、利用愧疚或孤独推动购买、以“我最懂你”制造排他依赖。</li>
+</ul>
+<h2 id="report-section-15">风险预警</h2>
+<h3 id="report-section-16">1. 信息安全风险：高优先级、证据充分</h3>
+<p>样本中有 11 条消息涉及 API 密钥、账户会话、账号密码组合、授权码或门禁信息，个别内容可直接造成账户接管、费用损失或现实场所安全风险。报告已经脱敏，但原始 PDF 和微信记录仍包含原值。</p>
+<p><strong>建议立即执行</strong>：撤销并重新生成相关密钥；强制退出全部账户会话；重置复用密码；启用多因素认证；检查 API 账单、登录记录和仓库访问；限制原始导出文件权限。今后不要把任何会话 JSON、验证码、Cookie、访问令牌或完整密码交给聊天分析系统。</p>
+<h3 id="report-section-17">2. 隐私与合规风险：高优先级</h3>
+<p>家庭长文包含可识别的姓名、出生日期、地区、残障、家庭暴力和死亡经历，属于高度敏感的个人及第三方信息。用于产品测试、咨询或营销前，应取得明确授权、去标识化、限定用途和保存期限，并允许数据主体撤回或删除。报告不得用于招聘、授信、差别定价或其他对个人权益有重大影响的自动化决策。</p>
+<h3 id="report-section-18">3. 心理危机信号：历史信号待核验，未见明确当前危机</h3>
+<p>家庭长文中出现一次童年“产生自杀念头”的回忆，并伴随丧亲与愧疚内容。当前样本没有出现近期计划、时间、方式、告别或反复求死表达，因此<strong>不能据此判断存在当前紧急危机，也不能保证没有风险</strong>。应先确认文章是否为本人经历、念头发生时间及当前是否仍有类似想法；若本人正有自伤/自杀想法、计划或无法保证自身安全，应立即联系可信任的人、当地急救或专业危机支持，并避免独处。</p>
+<h3 id="report-section-19">4. 关系依赖与商业伦理：需主动设防</h3>
+<p>现有样本没有显示对陪聊或 AI 的过度依赖。未来产品应提供服务边界、人工转介和退出机制，不以“只有我理解你”建立排他关系，也不把未经核验的创伤内容用于精准营销。</p>
+<h2 id="report-section-20">三类受众行动建议</h2>
+<h3 id="report-section-21">给小华自己</h3>
+<p>你呈现出的优势是愿意找工具、能把复杂问题说清楚，也会主动协调现实安排。最值得立即改善的不是能力，而是信息的放置方式：把聊天当临时工作台可以，但密钥、密码和会话令牌必须离开聊天。若家庭长文是你的真实经历，允许自己把“爱、遗憾和责任”分开整理；经历过失去并不意味着要永远用亏欠证明爱。</p>
+<h3 id="report-section-22">给陪伴者、咨询师或管理者</h3>
+<p>先从具体事务建立可靠感，回应要短、明确、可验证。讨论家庭叙事前先问“这段文字是你的真实经历、创作素材，还是代别人整理”，不要直接做创伤解释。若确认是本人经历，再温和追问当前影响、支持网络与安全状态，而不是急于给类型标签。</p>
+<h3 id="report-section-23">给产品、运营或营销人员</h3>
+<p>优先提供安全凭据管理、项目知识库、AI 内容工作流和技术排障类价值。转化依据应是任务完成率、复用频次和明确付费意愿，而不是心理脆弱性。触达文案宜展示步骤、产出和验证方式；价格策略在没有消费证据前保持透明、低承诺、可退出。</p>
+<h2 id="report-section-24">关键证据索引</h2>
+<div class="table-scroll"><table><thead><tr>
+<th>时间</th>
+<th>观察事实</th>
+<th>支持的判断</th>
+<th>置信度</th>
+</tr></thead><tbody>
+<tr>
+<td>2026-08-18 09:07:45</td>
+<td>提交完整网络打印机排障任务，包含限制与验证要求</td>
+<td>偏好结构化、可验证的任务支持</td>
+<td>高（对本会话）</td>
+</tr>
+<tr>
+<td>2026-07-29、08-05</td>
+<td>多次发送 Git 分支命令与仓库链接</td>
+<td>存在开发或技术协作场景</td>
+<td>高</td>
+</tr>
+<tr>
+<td>2026-07-22 16:24:03</td>
+<td>出现完整 AI 视觉生成分镜和参数</td>
+<td>涉及 AI 内容生产工作流</td>
+<td>中高</td>
+</tr>
+<tr>
+<td>2026-06-26 09:39:26</td>
+<td>同时提到去学校和下午到公司</td>
+<td>可能兼有学习与工作身份</td>
+<td>中</td>
+</tr>
+<tr>
+<td>2026-06-17 08:16:06</td>
+<td>以“哥”称呼并询问门禁</td>
+<td>熟人式角色差与现实协作</td>
+<td>中</td>
+</tr>
+<tr>
+<td>多个日期</td>
+<td>反复发送密钥、密码和账户会话</td>
+<td>凭据管理习惯存在显著风险</td>
+<td>高</td>
+</tr>
+<tr>
+<td>2026-08-06 10:34:10</td>
+<td>一篇第一人称家庭与丧亲长文</td>
+<td>可能有哀伤、内疚和意义整理需要</td>
+<td>低，须先核验作者与用途</td>
+</tr>
+<tr>
+<td>全样本</td>
+<td>消息均在 08:00-17:59</td>
+<td>该会话以白天工作/协作时段为主</td>
+<td>高；不能外推整体作息</td>
+</tr>
+</tbody></table></div>
+<h2 id="report-section-25">使用声明</h2>
+<p>本报告是基于有限聊天样本的语言与互动模式分析，不构成心理诊断、医疗建议、法律意见或对人格的定论。任何影响个人权益的决定都应由具备资质的专业人员结合本人陈述、持续评估和现实背景作出。</p></article>
+      </section>
+
+      <section class="evidence" id="evidence">
+        <div class="evidence-head"><h2>关键证据摘录</h2><span>默认展示前 10 条结构化信号</span></div>
+        <div class="evidence-list">
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-08-18 14:04:43</time></div>
+              <p>[API 密钥，已脱敏]</p>
+              <small>关联信号：敏感凭据、安全风险</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-08-18 09:07:45</time></div>
+              <p>请帮我诊断并配置 Windows 网络打印机，并按步骤验证配置结果。</p>
+              <small>关联信号：任务拆解、验证导向</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-08-06 10:34:10</time></div>
+              <p>[第一人称家庭叙事长文：涉及母亲经历、贫困、家庭冲突、丧亲、内疚及童年自杀念头；作者与真实性待核验]</p>
+              <small>关联信号：家庭叙事、丧亲、历史风险信号</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-08-05 09:13:57</time></div>
+              <p>git fetch origin git switch custom/jt-vite-merge git pull --ff-only origin custom/jt-vite-merge</p>
+              <small>关联信号：代码协作、流程指令</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-08-03 10:14:25</time></div>
+              <p>[明文账号、密码与令牌组合，已脱敏]</p>
+              <small>关联信号：敏感凭据、安全风险</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-07-29 11:41:49</time></div>
+              <p>git fetch origin git switch custom/jt-vite-merge git pull origin custom/jt-vite-merge</p>
+              <small>关联信号：代码协作、流程指令</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-07-28 09:38:33</time></div>
+              <p>[API 密钥，已脱敏]</p>
+              <small>关联信号：敏感凭据、安全风险</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>小华</strong><time>2026-07-28 09:38:28</time></div>
+              <p>[API 密钥，已脱敏]</p>
+              <small>关联信号：敏感凭据、安全风险</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>我</strong><time>2026-07-27 11:13:21</time></div>
+              <p>[敏感账户会话数据，已脱敏]</p>
+              <small>关联信号：敏感凭据、安全风险</small>
+            </article>
+            <article class="evidence-item">
+              <div><strong>我</strong><time>2026-07-22 16:24:03</time></div>
+              <p>[AI 视觉生成提示词：包含分镜、参数与反向提示]</p>
+              <small>关联信号：AI 内容生产、参数化</small>
+            </article></div>
+      </section>
+
+      <aside class="disclaimer">本报告基于有限聊天文本分析语言与互动模式，不构成心理诊断、法律意见或医疗建议。涉及自伤、暴力、胁迫或严重心理危机时，应优先寻求专业与现实支持。</aside>
+      <footer>生成方式：离线单文件 HTML · 源数据不会因打开本报告而上传</footer>
+    </main>
+  </div>
+  <script>
+    const navLinks = [...document.querySelectorAll('.sidebar a')];
+    const targets = navLinks.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      navLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === '#' + visible.target.id));
+    }, { rootMargin: '-20% 0px -70% 0px', threshold: [0, 0.1, 0.5] });
+    targets.forEach(target => observer.observe(target));
+  </script>
+</body>
+</html>
