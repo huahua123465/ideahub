@@ -1,0 +1,44 @@
+# 这一层只监听容器内的 :80，不管 TLS。
+#
+# 对外的 HTTPS 入口不在这里 —— 在 /opt/ai-stack/new-api/Caddyfile.canvas-media，
+# 由 canvas-media-https 那个 Caddy 提供（https://xm.xingxingqule.com:9443）。
+# 之所以这么分：签 Let's Encrypt 证书要 80 端口，而 80 在那个 Caddy 手里。
+#
+# ⚠️ 那份配置同时扛着 infinite-canvas 和 new-api，改它会波及另外两个项目。
+#    动之前先看 CLAUDE.md 的「危险区」一节。
+#
+# ⚠️ 本项目对外端口 18080 在两个地方硬编码：.env 的 HTTP_PORT，
+#    以及上面那份 Caddyfile 里的 reverse_proxy 172.17.0.1:18080。改端口要两边一起改。
+#
+# 后端的 cookie Secure 标志看 X-Forwarded-Proto 自动判断，走 HTTPS 时会自动打开。
+
+:80 {
+	# 维护端点只要求登录、不校验角色，任何注册用户都能触发超期归档，所以不对外开放。
+	# 热度重算和超期归档由后端进程内置的调度器负责（server/src/index.mjs startScheduler），
+	# 不需要外部调用这两个接口。
+	handle /api/maintenance/* {
+		respond "Not Found" 404
+	}
+
+	# 服务端推送（页面热更新）。这条必须绕开 encode ——
+	# 压缩中间件会把 text/event-stream 攒成块再吐，事件就不是实时的了。
+	# flush_interval -1 是显式声明「一个字节都不缓冲」。
+	handle /api/events {
+		reverse_proxy api:3000 {
+			flush_interval -1
+		}
+	}
+
+	# 静态资源和接口都在同一个后端进程上，直接全量反代
+	handle {
+		encode gzip zstd
+		reverse_proxy api:3000
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

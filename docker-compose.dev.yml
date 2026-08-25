@@ -1,0 +1,18 @@
+# 本地开发只需要一个数据库：docker compose -f docker-compose.dev.yml up -d
+# 应用本身直接用 npm run dev 跑在宿主机上，改代码不用重建镜像。
+
+name: ideahub-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ideahub
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ideahub
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    # 宿主机端口可用 .env 里的 DB_PORT 覆盖（5432 常被别的项目占用）
+    ports: ["${DB_PORT:-5432}:5432"]
+    volumes:
+      - ./data/pg-dev:/var/lib/postgresql/data

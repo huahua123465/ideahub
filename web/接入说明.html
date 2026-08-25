@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>IdeaHub 接入说明</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --ground:#FAFAFB;
+    --surface:#FFFFFF;
+    --surface-2:#F2F4F6;
+    --ink:#14181F;
+    --ink-2:#3D4753;
+    --muted:#697585;
+    --line:#DFE4E9;
+    --line-soft:#EDF0F3;
+    --accent:#0F6E63;
+    --accent-soft:#E3F1EE;
+    --accent-line:#B9DCD5;
+    --warn:#9A5610;
+    --warn-soft:#FBF0E2;
+    --warn-line:#EBD3AE;
+    --crit:#9F2F35;
+    --code-bg:#12161C;
+    --code-ink:#DDE3EA;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0E1216;
+      --surface:#151A20;
+      --surface-2:#1B222A;
+      --ink:#E8ECF1;
+      --ink-2:#BCC6D1;
+      --muted:#8B98A6;
+      --line:#28313B;
+      --line-soft:#1E262E;
+      --accent:#49BFAE;
+      --accent-soft:#12302D;
+      --accent-line:#1F4B45;
+      --warn:#D8A25C;
+      --warn-soft:#2C2317;
+      --warn-line:#4A3A22;
+      --crit:#E2777C;
+      --code-bg:#0A0D11;
+      --code-ink:#D6DEE7;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0E1216;
+    --surface:#151A20;
+    --surface-2:#1B222A;
+    --ink:#E8ECF1;
+    --ink-2:#BCC6D1;
+    --muted:#8B98A6;
+    --line:#28313B;
+    --line-soft:#1E262E;
+    --accent:#49BFAE;
+    --accent-soft:#12302D;
+    --accent-line:#1F4B45;
+    --warn:#D8A25C;
+    --warn-soft:#2C2317;
+    --warn-line:#4A3A22;
+    --crit:#E2777C;
+    --code-bg:#0A0D11;
+    --code-ink:#D6DEE7;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
+      "Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif;
+    font-size:15.5px;
+    line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  code,kbd,pre,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  .page{max-width:1180px;margin:0 auto;padding:0 28px 96px}
+
+  /* ---------- 页头 ---------- */
+  header.hd{padding:56px 0 30px;border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 14px
+  }
+  h1{
+    font-size:clamp(30px,4.4vw,42px);line-height:1.2;margin:0 0 12px;
+    letter-spacing:-.015em;text-wrap:balance;font-weight:700
+  }
+  .lede{font-size:17px;color:var(--ink-2);margin:0;max-width:62ch}
+  .meta{
+    display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:22px;
+    font-size:13px;color:var(--muted)
+  }
+  .meta b{color:var(--ink);font-weight:600}
+  .meta .mono{font-size:12.5px}
+
+  /* ---------- 两栏 ---------- */
+  .cols{display:grid;grid-template-columns:200px minmax(0,1fr);gap:52px;margin-top:44px}
+  @media (max-width:920px){.cols{grid-template-columns:1fr;gap:28px}}
+
+  nav.rail{position:sticky;top:24px;align-self:start;font-size:13.5px}
+  @media (max-width:920px){
+    nav.rail{position:static;border:1px solid var(--line);border-radius:10px;
+      padding:14px 16px;background:var(--surface)}
+  }
+  .rail-t{
+    font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:12px
+  }
+  .rail a{
+    display:block;padding:5px 0;color:var(--ink-2);text-decoration:none;
+    border-left:2px solid transparent;padding-left:12px;margin-left:-12px
+  }
+  .rail a:hover{color:var(--accent);border-left-color:var(--accent-line)}
+  .rail a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+  .rail .sub{padding-left:26px;font-size:12.5px;color:var(--muted)}
+
+  main{min-width:0}
+  section{scroll-margin-top:24px}
+  section + section{margin-top:52px}
+  h2{
+    font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0 0 6px;
+    display:flex;align-items:baseline;gap:12px;text-wrap:balance
+  }
+  h2 .who{
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);font-weight:500
+  }
+  .sect-sub{color:var(--muted);font-size:14.5px;margin:0 0 22px;max-width:64ch}
+  h3{font-size:16px;font-weight:650;margin:30px 0 10px}
+  p{margin:0 0 14px;max-width:66ch}
+  a{color:var(--accent)}
+
+  /* ---------- 接口卡 ---------- */
+  .ep{
+    border:1px solid var(--line);border-radius:12px;background:var(--surface);
+    overflow:hidden;margin:22px 0 26px
+  }
+  .ep-hd{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:14px 18px;border-bottom:1px solid var(--line-soft);background:var(--surface-2)
+  }
+  .verb{
+    font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:700;
+    letter-spacing:.08em;padding:3px 9px;border-radius:5px;
+    background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line)
+  }
+  .path{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:500;word-break:break-all}
+  .ep-note{color:var(--muted);font-size:13px;margin-left:auto}
+  .ep-body{padding:18px 18px 6px}
+  .ep-body > p:first-child{margin-top:0}
+
+  /* ---------- 代码 ---------- */
+  pre{
+    background:var(--code-bg);color:var(--code-ink);border-radius:10px;
+    padding:16px 18px;overflow-x:auto;font-size:13px;line-height:1.65;margin:0 0 18px
+  }
+  pre .k{color:#7FD1C4}
+  pre .s{color:#E4B978}
+  pre .c{color:#6C7A88}
+  :not(pre) > code{
+    background:var(--surface-2);border:1px solid var(--line-soft);border-radius:5px;
+    padding:1.5px 6px;font-size:.88em;color:var(--ink)
+  }
+
+  /* ---------- 表 ---------- */
+  .tw{overflow-x:auto;margin:0 0 20px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+  th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  thead th{
+    font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface-2);
+    border-bottom:1px solid var(--line)
+  }
+  tbody tr:last-child td{border-bottom:none}
+  td:first-child{white-space:nowrap}
+  td code{white-space:nowrap}
+
+  /* ---------- 提示块 ---------- */
+  .note{
+    border-left:3px solid var(--accent);background:var(--accent-soft);
+    padding:13px 18px;border-radius:0 9px 9px 0;margin:0 0 20px;font-size:14.5px
+  }
+  .note.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+  .note p{margin:0;max-width:none}
+  .note p + p{margin-top:8px}
+  .note b{font-weight:650}
+
+  /* ---------- 三条提醒 ---------- */
+  .rules{display:grid;gap:14px;margin-top:6px}
+  .rule{
+    display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;
+    border:1px solid var(--line);border-radius:11px;padding:16px 18px;background:var(--surface)
+  }
+  .rule .n{
+    font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;color:var(--accent);
+    border:1px solid var(--accent-line);background:var(--accent-soft);
+    width:26px;height:26px;border-radius:50%;display:grid;place-items:center
+  }
+  .rule b{display:block;margin-bottom:3px}
+  .rule p{margin:0;font-size:14px;color:var(--ink-2)}
+
+  footer{
+    margin-top:60px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--muted);font-size:13px
+  }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+<header class="hd">
+  <p class="eyebrow">IdeaHub · 对外接入</p>
+  <h1>IdeaHub 接入说明</h1>
+  <p class="lede">
+    给技术1 和技术2 的写入接口。两条铁律贯穿全文：<b>同一个客户不会被重复建档</b>，
+    <b>分析结果不会自动进正式库</b>。照着填就行，接口是幂等的，失败可以放心重试。
+  </p>
+  <div class="meta">
+    <span>服务地址 <b class="mono">https://xm.xingxingqule.com:9443</b></span>
+    <span>认证 <b class="mono">Authorization: Bearer &lt;api key&gt;</b></span>
+    <span>请求体 <b class="mono">application/json · UTF-8</b></span>
+  </div>
+</header>
+
+<div class="cols">
+
+  <nav class="rail">
+    <div class="rail-t">目录</div>
+    <a href="#connect">接入方式</a>
+    <a href="#start">拿到钥匙</a>
+    <a href="#tech2">一、技术2</a>
+    <a href="#tech2" class="sub">客户资料与 AI 分析</a>
+    <a href="#delivery" class="sub">交付记录</a>
+    <a href="#tech1">二、技术1</a>
+    <a href="#tech1" class="sub">市场分析结果</a>
+    <a href="#errors">三、错误码</a>
+    <a href="#rules">四、三条提醒</a>
+  </nav>
+
+  <main>
+
+    <section id="connect">
+      <h2>接入方式</h2>
+      <p class="sect-sub">
+        你的系统保持独立：代码、服务器、数据库都还是你自己的。
+        <b>你不需要 IdeaHub 的数据库账号、密码或端口</b> —— 两边唯一的接触点是一个 HTTPS 请求。
+      </p>
+
+      <figure>
+        <svg viewBox="0 0 900 300" role="img"
+             aria-label="技术方的服务器通过一个 HTTPS POST 请求把结果发给 IdeaHub 接口，IdeaHub 在服务端校验密钥、枚举、标签字典和幂等后写入自己的数据库；技术方不直接接触数据库">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <text x="140" y="34" text-anchor="middle" font-size="11" letter-spacing="1.5" fill="currentColor" opacity=".7">你这边</text>
+          <rect x="30" y="48" width="220" height="150" rx="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <text x="140" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">技术1 / 技术2</text>
+          <text x="140" y="114" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".85">自己的服务器</text>
+          <text x="140" y="136" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".85">自己的代码和语言</text>
+          <text x="140" y="158" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".85">自己的数据库</text>
+          <text x="140" y="182" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">跑完分析，拿到一份结果</text>
+
+          <g class="svg-accent">
+            <line x1="256" y1="123" x2="380" y2="123" stroke="currentColor" stroke-width="2.5" marker-end="url(#a2)"/>
+            <text x="318" y="108" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">HTTPS POST</text>
+            <text x="318" y="146" text-anchor="middle" font-size="10.5" fill="currentColor">Authorization: Bearer</text>
+            <text x="318" y="162" text-anchor="middle" font-size="10.5" fill="currentColor">一段 JSON</text>
+          </g>
+
+          <text x="620" y="34" text-anchor="middle" font-size="11" letter-spacing="1.5" fill="currentColor" opacity=".7">IdeaHub 这边</text>
+          <rect x="386" y="48" width="484" height="150" rx="12" fill="none" stroke="currentColor" stroke-width="1.5"/>
+
+          <rect x="408" y="76" width="150" height="96" rx="9" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="483" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">接口层</text>
+          <text x="483" y="126" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">校验密钥和权限</text>
+          <text x="483" y="144" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">校验枚举和标签</text>
+          <text x="483" y="162" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">按 id 判重</text>
+
+          <line x1="564" y1="124" x2="606" y2="124" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+
+          <rect x="612" y="76" width="140" height="96" rx="9" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="682" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">PostgreSQL</text>
+          <text x="682" y="134" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">只有接口层进得来</text>
+          <text x="682" y="154" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">不对外开放端口</text>
+
+          <line x1="758" y1="124" x2="800" y2="124" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text x="828" y="118" text-anchor="middle" font-size="11" fill="currentColor">业务同事</text>
+          <text x="828" y="136" text-anchor="middle" font-size="11" fill="currentColor">在界面上看到</text>
+
+          <line x1="30" y1="238" x2="870" y2="238" stroke="currentColor" stroke-width="1" opacity=".25"/>
+          <text x="450" y="264" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".8">
+            你要准备的只有两样东西：一个网址，一把密钥。
+          </text>
+          <text x="450" y="284" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".8">
+            不需要数据库连接串、不需要开放端口、不需要 VPN，也不需要知道对面用的是什么数据库。
+          </text>
+        </svg>
+        <figcaption>
+          校验全部发生在 IdeaHub 的接口层：密钥权限、枚举取值、标签是否在字典里、这条是不是已经推过。
+          所以推错了不会写进库，重复推也不会产生第二条 —— 你那边不用自己维护这些规则。
+        </figcaption>
+      </figure>
+
+      <h3>三步接完</h3>
+      <div class="rules">
+        <div class="rule">
+          <span class="n">1</span>
+          <div>
+            <b>拿一把密钥</b>
+            <p>找 IdeaHub 管理员要。他在「团队 → 标签与对接」页点一下生成，把那串 <code>ih_tech1_…</code> 或 <code>ih_tech2_…</code> 发给你。只显示一次，收到后请自己存好。</p>
+          </div>
+        </div>
+        <div class="rule">
+          <span class="n">2</span>
+          <div>
+            <b>在你的代码里加一段 HTTP 请求</b>
+            <p>你的分析流程跑完、拿到结果的那一步之后，把结果按下面的字段拼成 JSON，POST 过去。用什么语言、什么 HTTP 库都行。</p>
+          </div>
+        </div>
+        <div class="rule">
+          <span class="n">3</span>
+          <div>
+            <b>先 ping，再发一条真的</b>
+            <p>先调 <code>/api/ingest/ping</code> 确认密钥通了，再推一条真实数据。推完让 IdeaHub 那边在界面上确认能看到，就算接完了。</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>代码长这样</h3>
+      <pre><span class="c"># Python</span>
+import requests
+
+IDEAHUB = <span class="s">"https://xm.xingxingqule.com:9443"</span>
+KEY     = <span class="s">"ih_tech2_你的密钥"</span>
+
+def 推送客户(结果):
+    r = requests.post(
+        f<span class="s">"{IDEAHUB}/api/ingest/client"</span>,
+        headers={<span class="s">"Authorization"</span>: f<span class="s">"Bearer {KEY}"</span>},
+        json={
+            <span class="s">"externalId"</span>: 结果[<span class="s">"客户id"</span>],      <span class="c"># 你自己系统里的 id，别改</span>
+            <span class="s">"alias"</span>: 结果[<span class="s">"化名"</span>],
+            <span class="s">"aiSituation"</span>: 结果[<span class="s">"情况分析"</span>],
+            <span class="s">"aiUser"</span>: 结果[<span class="s">"用户分析"</span>],
+        },
+        timeout=10,
+    )
+    r.raise_for_status()
+    return r.json()   <span class="c"># {"ok": true, "id": 74, "created": false}</span></pre>
+
+      <pre><span class="c">// Node.js —— 不需要装任何依赖</span>
+const res = await fetch(<span class="s">"https://xm.xingxingqule.com:9443/api/ingest/save"</span>, {
+  method: <span class="s">"POST"</span>,
+  headers: {
+    <span class="s">"Authorization"</span>: <span class="s">`Bearer ${KEY}`</span>,
+    <span class="s">"Content-Type"</span>: <span class="s">"application/json"</span>,
+  },
+  body: JSON.stringify({
+    type: <span class="s">"demand"</span>,
+    sourceRef: 分析结果.id,          <span class="c">// 你自己系统里的 id，别改</span>
+    sourceUrl: 分析结果.视频链接,
+    title: 分析结果.需求名称,
+  }),
+});
+if (!res.ok) throw new Error(await res.text());</pre>
+
+      <div class="note">
+        <p><b>没有实时性要求。</b>你可以跑完一条推一条，也可以攒一批定时推，还可以每天全量重推一遍 ——
+        接口按 <code>externalId</code> / <code>sourceRef</code> 判重，重复推送只会更新原来那条，不会产生副本。</p>
+      </div>
+    </section>
+
+    <section id="start">
+      <h2>拿到钥匙之后</h2>
+      <p class="sect-sub">
+        密钥由 IdeaHub 管理员在「团队 → 标签与对接」页生成，<b>只显示一次</b>。
+        丢了就重新生成一把、把旧的停用。权限是分开的：技术1 的钥匙写不了客户档案，技术2 的钥匙也写不了灵感。
+      </p>
+
+      <h3>先自测通不通</h3>
+      <pre><span class="c"># 不写任何数据，只验证钥匙</span>
+curl -H <span class="s">"Authorization: Bearer $KEY"</span> \
+     https://xm.xingxingqule.com:9443/api/ingest/ping
+
+<span class="c"># {"ok":true,"name":"技术1","scopes":["tech1"]}</span></pre>
+    </section>
+
+    <section id="tech2">
+      <h2>一、客户资料与 AI 分析 <span class="who">技术2</span></h2>
+      <p class="sect-sub">
+        IdeaHub 负责长期保存和查看，技术2 负责收集和分析。同一个客户不要重复建档 ——
+        靠 <code>externalId</code> 认人，这是唯一必填项。
+      </p>
+
+      <div class="ep">
+        <div class="ep-hd">
+          <span class="verb">POST</span>
+          <span class="path">/api/ingest/client</span>
+          <span class="ep-note">第一次调是建档，之后每次调都是更新同一条</span>
+        </div>
+        <div class="ep-body">
+<pre>{
+  <span class="k">"externalId"</span>: <span class="s">"t2-8891"</span>,
+  <span class="k">"alias"</span>: <span class="s">"L小姐"</span>,
+  <span class="k">"tier"</span>: <span class="s">"A"</span>,
+  <span class="k">"stage"</span>: <span class="s">"consulted"</span>,
+  <span class="k">"female"</span>:   { <span class="k">"年龄"</span>: <span class="s">"29"</span>, <span class="k">"城市"</span>: <span class="s">"杭州"</span>, <span class="k">"职业"</span>: <span class="s">"设计师"</span> },
+  <span class="k">"male"</span>:     { <span class="k">"年龄"</span>: <span class="s">"33"</span>, <span class="k">"职业"</span>: <span class="s">"工程师"</span> },
+  <span class="k">"relation"</span>: { <span class="k">"关系阶段"</span>: <span class="s">"冷淡期"</span>, <span class="k">"见面次数"</span>: <span class="s">"6"</span> },
+  <span class="k">"timeline"</span>: <span class="s">"认识→升温→冷淡→现在"</span>,
+  <span class="k">"aiSituation"</span>: <span class="s">"关系处于冷淡期，男方回避型依恋特征明显…"</span>,
+  <span class="k">"aiUser"</span>: <span class="s">"用户焦虑型依恋，急于确认关系…"</span>,
+  <span class="k">"deal"</span>: { <span class="k">"成交产品"</span>: <span class="s">"陪跑90天"</span>, <span class="k">"成交金额"</span>: <span class="s">"39800"</span> },
+  <span class="k">"tags"</span>: [<span class="s">"冷淡期"</span>, <span class="s">"判断对方态度"</span>]
+}</pre>
+
+          <div class="tw">
+            <table>
+              <thead><tr><th>字段</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td><code>externalId</code></td><td><b>必填。</b>你那边的客户 id。同一个值永远对应 IdeaHub 里的同一条客户</td></tr>
+                <tr><td><code>alias</code></td><td>化名。<b>不要传真名</b>，IdeaHub 里全部是脱敏的</td></tr>
+                <tr><td><code>tier</code></td><td><code>S</code> / <code>A</code> / <code>B</code> / <code>C</code></td></tr>
+                <tr><td><code>stage</code></td><td><code>lead</code> 新客资 · <code>wechat</code> 已加微 · <code>profiled</code> 已建档 · <code>consulted</code> 已咨询 · <code>coaching</code> 已陪跑 · <code>renewed</code> 已续费 · <code>lost</code> 已流失</td></tr>
+                <tr><td><code>aiSituation</code></td><td>AI <b>情况</b>分析。在客户详情页第 ⑤ 区单独显示</td></tr>
+                <tr><td><code>aiUser</code></td><td>AI <b>用户</b>分析。第 ⑥ 区单独显示。两者必须分开传，不要合成一段</td></tr>
+                <tr><td><code>female</code> <code>male</code><br><code>relation</code> <code>deal</code></td><td>自由键值对，会和已有内容合并，不会互相覆盖</td></tr>
+                <tr><td><code>tags</code></td><td>标签<b>名字</b>数组。名字必须在 IdeaHub 的标签字典里，不在的会被忽略 —— 这是「全站统一标签」的前提，不接受随手造的新标签。要加标签请让管理员在界面上加</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="note">
+            <p><b>没传的字段不会被清空。</b>业务人员在界面上手改过的等级、阶段、化名，也不会被你的推送冲掉。</p>
+            <p>返回 <code>{"ok":true,"id":74,"created":false}</code> —— <code>created</code> 为 <code>false</code> 表示这次是更新已有客户。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ep" id="delivery">
+        <div class="ep-hd">
+          <span class="verb">POST</span>
+          <span class="path">/api/ingest/client/delivery</span>
+          <span class="ep-note">显示在客户详情页第 ⑧ 区</span>
+        </div>
+        <div class="ep-body">
+          <p>追加一条交付记录。客户必须已经建过档，否则返回 404。</p>
+<pre>{
+  <span class="k">"externalId"</span>: <span class="s">"t2-8891"</span>,
+  <span class="k">"happenedAt"</span>: <span class="s">"2026-08-24"</span>,
+  <span class="k">"kind"</span>: <span class="s">"陪跑"</span>,
+  <span class="k">"summary"</span>: <span class="s">"第三周复盘"</span>
+}</pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="tech1">
+      <h2>二、市场分析结果 <span class="who">技术1</span></h2>
+      <p class="sect-sub">
+        业务人员在技术1 的结果页点「保存到 IdeaHub」时调这个口。
+        存到哪里，<b>由他点了哪个按钮决定，后端不猜</b>。
+      </p>
+
+      <div class="ep">
+        <div class="ep-hd">
+          <span class="verb">POST</span>
+          <span class="path">/api/ingest/save</span>
+          <span class="ep-note">三个去处，由 type 决定</span>
+        </div>
+        <div class="ep-body">
+          <div class="tw">
+            <table>
+              <thead><tr><th>type</th><th>存到哪</th><th>什么时候用</th></tr></thead>
+              <tbody>
+                <tr><td><code>demand</code></td><td>用户需求</td><td>从评论 / 私信里提炼出的一条用户需求</td></tr>
+                <tr><td><code>idea</code></td><td><b>灵感池</b>（不是正式库）</td><td>一个选题想法、一个可以做的方向</td></tr>
+                <tr><td><code>reference</code></td><td>对标作品台账</td><td>分析过的别人家的视频，指标一起带过来</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="note warn">
+            <p><b>不会自动进正式库。</b>正式库仍然只能由业务人员在 IdeaHub 里确认转入 —— 这是任务表写死的规则。</p>
+          </div>
+
+<pre>{
+  <span class="k">"type"</span>: <span class="s">"demand"</span>,
+  <span class="k">"sourceRef"</span>: <span class="s">"t1-vid-5521"</span>,
+  <span class="k">"sourceUrl"</span>: <span class="s">"https://v.douyin.com/xxxx"</span>,
+  <span class="k">"title"</span>: <span class="s">"想让对方主动联系自己"</span>,
+  <span class="k">"quote"</span>: <span class="s">"评论区高频：为什么我不主动他就不找我"</span>,
+  <span class="k">"scene"</span>: <span class="s">"暧昧期停滞"</span>,
+  <span class="k">"realGoal"</span>: <span class="s">"确认对方是否有意愿"</span>,
+  <span class="k">"tags"</span>: [<span class="s">"暧昧期"</span>, <span class="s">"推进不动"</span>]
+}</pre>
+
+          <p>
+            <code>type: "idea"</code> 时用 <code>title</code> + <code>content</code>；
+            <code>type: "reference"</code> 时用 <code>title</code> + <code>channel</code>
+            （<code>persona</code> / <code>matrix</code> / <code>live</code>，默认 <code>matrix</code>）
+            + <code>metrics</code>（如 <code>{"曝光":220000,"收藏":8100}</code>）+ <code>publishedAt</code>。
+          </p>
+
+          <div class="tw">
+            <table>
+              <thead><tr><th>字段</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td><code>sourceRef</code></td><td><b>必填。</b>你那边这条分析结果的 id。<b>同一个值重复保存不会产生第二条记录</b>，只会更新原来那条</td></tr>
+                <tr><td><code>sourceUrl</code></td><td>原视频 / 原评论的地址。IdeaHub 里每条资料都会显示「来源」，点得开原始出处</td></tr>
+                <tr><td><code>tags</code></td><td>同上，只认字典里已有的标签名</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>返回 <code>{"ok":true,"type":"demand","id":2,"created":true,"board":"demands"}</code></p>
+        </div>
+      </div>
+
+      <div class="ep">
+        <div class="ep-hd">
+          <span class="verb">POST</span>
+          <span class="path">/api/ingest/analysis?channel=persona</span>
+          <span class="ep-note">整份采集分析 JSON 原样推进来</span>
+        </div>
+        <div class="ep-body">
+          <p>
+            <b>把技术1 导出的那份 JSON 原样 POST 进来就行</b> —— 不用拆字段、不用转 CSV、不用改导出格式。
+            它会落进「真人作品 / 矩阵作品」的<b>对标账号</b>里，业务人员点开卡片就能看到封面、
+            账号粉丝数、公开互动数、AI 的视频七问和评论五问（带原话证据）、高赞评论、
+            带时间码的完整逐字稿。
+          </p>
+
+<pre>curl -X POST <span class="s">"https://xm.xingxingqule.com:9443/api/ingest/analysis?channel=persona"</span> \
+     -H <span class="s">"Authorization: Bearer $KEY"</span> \
+     -H <span class="s">"Content-Type: application/json; charset=utf-8"</span> \
+     --data-binary @女孩子无聊的本质是生命力的匮乏.json</pre>
+
+          <p>用推送脚本更省事，一次推一个文件夹：</p>
+
+<pre>export IDEAHUB_KEY=ih_tech1_你的密钥
+python3 推送到ideahub.py analysis persona 今天跑出来的结果/</pre>
+
+          <p><b>channel 决定进哪个板块</b>，写在 URL 上，JSON 里一个字都不用动：</p>
+          <div class="tw">
+            <table>
+              <thead><tr><th>channel</th><th>落到哪</th></tr></thead>
+              <tbody>
+                <tr><td><code>persona</code></td><td>真人作品 → 对标账号</td></tr>
+                <tr><td><code>matrix</code></td><td>矩阵作品 → 对标账号（<b>不带 channel 时的默认值</b>）</td></tr>
+                <tr><td><code>live</code></td><td>真人直播 → 对标直播</td></tr>
+                <tr><td><code>persona,matrix</code></td><td>同时进两个板块 —— 同一个视频既是真人对标也是矩阵对标时用</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>JSON 里这些字段会被读出来。<b>其余字段一个不丢</b>，原样存着，将来界面上要显示随时能取：</p>
+          <div class="tw">
+            <table>
+              <thead><tr><th>JSON 字段</th><th>用途</th></tr></thead>
+              <tbody>
+                <tr><td><code>task_id</code></td><td><b>幂等依据。</b>同一个 task_id 推一万次也只有一条记录，放心重试。没有它就退回用 <code>source_url</code> 算指纹</td></tr>
+                <tr><td><code>title</code> / <code>post_title</code> / <code>display_title</code> / <code>cover_title</code></td><td>作品标题，按这个顺序取第一个非空的。<code>cover_title</code> 是封面 OCR、带识别误差，所以放最后</td></tr>
+                <tr><td><code>source_url</code></td><td>原作品链接，界面上「打开原作品」用</td></tr>
+                <tr><td><code>platform</code></td><td><code>xiaohongshu</code> / <code>douyin</code> / <code>kuaishou</code> / <code>weibo</code> / <code>bilibili</code> / <code>wechat</code>，认不出来算「其他」</td></tr>
+                <tr><td><code>account.*</code></td><td><b>对标账号台账会自动建档</b>：账号名、主页、粉丝数、简介。粉丝数每次推送都刷新</td></tr>
+                <tr><td><code>engagement.*</code></td><td>「4万」「3.2万」这种缩写会被读成数字（40000 / 32000），能排序能筛选</td></tr>
+                <tr><td><code>topics</code></td><td>当标签名来认，<b>只认 IdeaHub 标签字典里已有的</b>，其余忽略</td></tr>
+                <tr><td><code>ai_analysis.video.items</code></td><td>视频七问。<b>键的顺序就是显示顺序</b>，别打乱</td></tr>
+                <tr><td><code>ai_analysis.comments.items</code></td><td>评论洞察，连 <code>evidence_comments</code> 里的原话一起显示</td></tr>
+                <tr><td><code>media_assets.video.cover_image_b64</code></td><td><b>封面原图，强烈建议给这个</b> —— 见下面「关于封面清晰度」</td></tr><tr><td><code>media_assets.video.*</code></td><td>封面地址（收到时就下到 IdeaHub 本地，平台链接过期也不受影响）、时长、尺寸、清晰度</td></tr>
+                <tr><td><code>video_text</code> + <code>video_text_meta</code></td><td>逐字稿。有段没识别成功（<code>chunks_succeeded &lt; chunks_total</code>）界面上会标出来</td></tr>
+                <tr><td><code>comments</code> / <code>comment_summary</code></td><td>高赞评论原文 +「扫了多少条」这些说明</td></tr>
+                <tr><td><code>schema_version</code></td><td>记下来，以后格式换代了两边对得上</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+<h4 style="margin:26px 0 8px">关于封面清晰度（请务必看一眼）</h4>
+          <p>平台给的 <code>thumbnail_url</code> 是 <b>CDN 的预览变体</b>（小红书那份是 <code>!nd_prv_wlteh_jpg_3</code>）：
+          尺寸写着 1080×1441，实际只有 <b>27KB</b>，每像素 0.017 字节 —— 人脸糊成一片。
+          而且那个签名<b>只对这一个变体有效</b>，换成原图或别的清晰度后缀一律 403，
+          所以 IdeaHub 这边无论怎么处理都救不回来。</p>
+          <p><b>解决办法：把整张封面直接放进 JSON。</b>你那边为了做封面 OCR 本来就截过原始帧，给出来是顺手的事：</p>
+<pre>{
+  <span class="k">"media_assets"</span>: {
+    <span class="k">"video"</span>: {
+      <span class="k">"cover_image_b64"</span>: <span class="s">"data:image/jpeg;base64,/9j/4AAQSkZJRg..."</span>,
+      <span class="k">"thumbnail_url"</span>: <span class="s">"http://sns-webpic-qc.xhscdn.com/..."</span>,
+      <span class="k">"duration_seconds"</span>: 296.077
+    }
+  }
+}</pre>
+          <div class="tw">
+            <table>
+              <tbody>
+                <tr><td>写法</td><td><code>data:image/jpeg;base64,xxx</code> 和光秃秃的 base64 都收，不用纠结</td></tr>
+                <tr><td>格式</td><td>JPEG / PNG / WebP / GIF / AVIF。<b>按真实字节认，不看声明的 mime</b></td></tr>
+                <tr><td>大小</td><td>单张上限 3MB。一张 1080×1920 的清晰竖图约 200~500KB，正常</td></tr>
+                <tr><td>请求体上限</td><td>这个接口放宽到 <b>8MB</b>（其他接口仍是 1MB）</td></tr>
+                <tr><td>没给怎么办</td><td>自动退回去下 <code>thumbnail_url</code>，行为和以前完全一样，<b>不给也不会报错</b></td></tr>
+                <tr><td>存哪</td><td>收到就落成本地文件，之后一律走 <code>GET /api/works/:id/cover</code>，不受签名过期影响</td></tr>
+                <tr><td>会不会撑爆库</td><td>不会。图落地之后会从存档的 JSON 里摘掉，只留一句说明，其余字段一个不动</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+<pre>{
+  <span class="k">"ok"</span>: true,
+  <span class="k">"taskId"</span>: <span class="s">"f90d29b0a27b"</span>,
+  <span class="k">"title"</span>: <span class="s">"女孩子无聊的本质是生命力的匮乏"</span>,
+  <span class="k">"id"</span>: 174, <span class="k">"created"</span>: true,
+  <span class="k">"results"</span>: [{ <span class="k">"channel"</span>: <span class="s">"persona"</span>, <span class="k">"id"</span>: 174,
+                <span class="k">"created"</span>: true, <span class="k">"accountId"</span>: 9, <span class="k">"tagsApplied"</span>: 2 }]
+}</pre>
+
+          <div class="note warn">
+            <p><b>不覆盖人写的东西。</b>台账里的「备注 / 复盘」业务人员写过就不会被推送冲掉（空着才填 AI 的一句话主题），
+            账号的「定位」同理。标题、链接、互动数这些客观事实每次推送都会刷新。</p>
+            <p><b>请求体上限 8MB</b>（其他接口是 1MB）。一份带完整逐字稿和评论的分析约 30KB，再带一张清晰封面约 400KB，离上限还远。</p>
+            <p>这个口子只写<b>对标</b>那半边，永远不会动「自己账号」的数据。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="errors">
+      <h2>三、错误码</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th>状态</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td><code>401</code></td><td>没带 <code>Authorization</code> 头，或 key 无效 / 已停用</td></tr>
+            <tr><td><code>403</code></td><td>key 的权限不对（技术1 的钥匙去调技术2 的口）</td></tr>
+            <tr><td><code>400</code></td><td>必填字段缺失或取值不合法，<code>error</code> 字段里写了具体是哪个</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="rules">
+      <h2>四、给对接方的三条提醒</h2>
+      <div class="rules">
+        <div class="rule">
+          <span class="n">1</span>
+          <div>
+            <b>externalId / sourceRef 一旦定下来就别改</b>
+            <p>它们是「同一条东西」的唯一依据。改了就会在 IdeaHub 里多出一条重复记录，而且没人能一眼看出这两条其实是一个。</p>
+          </div>
+        </div>
+        <div class="rule">
+          <span class="n">2</span>
+          <div>
+            <b>标签只能用字典里已有的</b>
+            <p>需要新标签就找 IdeaHub 管理员在「标签与对接」页加一个，全站立刻可用。这是为了让「分手」在灵感、需求、案例、客户档案里是同一个词。</p>
+          </div>
+        </div>
+        <div class="rule">
+          <span class="n">3</span>
+          <div>
+            <b>失败要重试</b>
+            <p>接口是幂等的，同一条重复推送不会产生副本，放心重试。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      对应《技术3｜IdeaHub团队资料库｜第一版任务表》任务 10、11。
+      源文件：<code>/root/ideahub-deploy/docs/接入说明.md</code>
+    </footer>
+
+  </main>
+</div>
+</div>
+
+</body>
+</html>

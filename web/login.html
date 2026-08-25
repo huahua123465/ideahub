@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-ui="soft">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · IdeaHub</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><rect width='20' height='20' rx='5' fill='%235966d9'/><path d='M10 4a4 4 0 0 0-2.5 7.1c.4.4.7.9.7 1.4h3.6c0-.5.3-1 .7-1.4A4 4 0 0 0 10 4Z' fill='none' stroke='white' stroke-width='1.4'/></svg>">
+<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./login.css">
+<link rel="stylesheet" href="./soft.css?v=20260824-soft3">
+</head>
+<body class="authpage">
+
+<main class="authbox">
+  <div class="authbrand">
+    <div class="bulb"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3.2a4.7 4.7 0 0 0-2.9 8.4c.5.4.8 1 .8 1.6h4.2c0-.6.3-1.2.8-1.6A4.7 4.7 0 0 0 10 3.2Z"/><path d="M8.4 15.4h3.2M8.9 17.2h2.2"/></svg></div>
+    <div>
+      <b>IdeaHub</b>
+      <small>内容与经营研究室</small>
+    </div>
+  </div>
+
+  <div class="authcard">
+    <div class="authtabs">
+      <button class="authtab on" id="tabLogin">登录</button>
+      <button class="authtab" id="tabReg">注册</button>
+    </div>
+
+    <!-- 第一个账号的提示，只在库里一个账号都没有时出现 -->
+    <div class="authnote" id="firstNote" hidden>
+      <b>这是第一个账号</b>
+      注册后你会自动成为<b>管理员</b>，之后就能把评审权限分给同事。
+    </div>
+
+    <form class="authform" id="formLogin">
+      <div class="field">
+        <label for="lgUser">姓名</label>
+        <input class="inp" id="lgUser" autocomplete="username" autocapitalize="off"
+               spellcheck="false" placeholder="注册时填的姓名">
+      </div>
+      <div class="field">
+        <label for="lgPw">密码</label>
+        <input class="inp" id="lgPw" type="password" autocomplete="current-password" placeholder="密码">
+      </div>
+      <div class="autherr" id="lgErr"></div>
+      <button type="submit" class="btn btn-primary authsubmit" id="lgBtn">登录</button>
+    </form>
+
+    <form class="authform" id="formReg" hidden>
+      <div class="row2">
+        <div class="field">
+          <label for="rgName">姓名 <span>*</span></label>
+          <input class="inp" id="rgName" autocomplete="username" placeholder="登录和署名都用它">
+        </div>
+        <div class="field">
+          <label for="rgDept">部门 <span class="opt">（选填）</span></label>
+          <input class="inp" id="rgDept" autocomplete="organization" placeholder="比如 产品部">
+        </div>
+      </div>
+      <div class="field">
+        <label for="rgPw">密码 <span>*</span></label>
+        <input class="inp" id="rgPw" type="password" autocomplete="new-password" placeholder="随便设，没有限制">
+      </div>
+      <div class="field">
+        <label for="rgPw2">再输一次 <span>*</span></label>
+        <input class="inp" id="rgPw2" type="password" autocomplete="new-password" placeholder="确认密码">
+      </div>
+      <div class="field" id="inviteWrap" hidden>
+        <label for="rgInvite">邀请码 <span>*</span></label>
+        <input class="inp" id="rgInvite" placeholder="找管理员要">
+      </div>
+      <div class="autherr" id="rgErr"></div>
+      <button type="submit" class="btn btn-primary authsubmit" id="rgBtn">注册并进入</button>
+    </form>
+  </div>
+
+  <div class="authfoot">洞察不是终点，形成判断并持续复用才是。</div>
+</main>
+
+<script type="module" src="./src/login.js"></script>
+</body>
+</html>

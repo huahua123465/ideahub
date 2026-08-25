@@ -1,0 +1,13 @@
+# 仓库里一律用 LF。
+# 不这么设的话：在 Windows 上 checkout 会变成 CRLF，推回来之后
+# scripts/*.sh 在 Linux 上会因为行尾的 \r 直接报 "bad interpreter"，
+# 而且每个文件都会显示成整份改动，看不出真正改了哪几行。
+* text=auto eol=lf
+
+# 二进制别当文本处理
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.ico binary

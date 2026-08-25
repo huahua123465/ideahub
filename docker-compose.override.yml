@@ -1,0 +1,13 @@
+# 这台 VPS 上的端口适配。
+#   80    被 canvas-media-https (caddy) 占
+#   443 / 8443 / 2053 / 2083 / 2087 / 2096 / 11111 / 62789 被 xray / x-ui 占
+#   9443  被 canvas-media-https 的 https 占
+#   3010 / 3011 被别的容器占
+# ideahub 走 18080（五位，好记：8080 前面加个 1），只对外开这一个口，不映射 443。
+#
+# 端口写成变量、默认值放在这里：以后要换端口，改 .env 里的 HTTP_PORT 就行，
+# 不用动这个文件，也不用记得同时改 Caddyfile（Caddyfile 里 listen 的是容器内的 80，与外部端口无关）。
+services:
+  caddy:
+    ports: !override
+      - "${HTTP_PORT:-18080}:80"

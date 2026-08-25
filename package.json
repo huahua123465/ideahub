@@ -1,0 +1,30 @@
+{
+  "name": "ideahub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公司内部灵感库：灵感池 + 正式库",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "node server/src/index.mjs",
+    "web": "node scripts/serve-web.mjs",
+    "db:init": "node server/src/db/init.mjs",
+    "db:seed": "node server/src/seed.mjs",
+    "db:reset": "node server/src/db/init.mjs --drop && node server/src/seed.mjs",
+    "test:api": "node scripts/test-api.mjs",
+    "test:ui": "node scripts/ui-check.mjs",
+    "test": "npm run db:seed && npm run test:api && npm run test:ui",
+    "demo": "node scripts/record-demo.mjs",
+    "setup": "node scripts/setup.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "puppeteer": "^25.8.0"
+  }
+}

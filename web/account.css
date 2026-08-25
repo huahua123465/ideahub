@@ -1,0 +1,62 @@
+/* ============================================================
+   账号相关：头像菜单、用户管理表、修改密码。
+   和 login.css 一样单独放，不动作为 UI 比对基准的 styles.css。
+   ============================================================ */
+
+/* 同 login.css：设过 display 的元素必须自己把 [hidden] 补回来，
+   否则 #miUsers 这个「仅管理员」的菜单项会对所有人可见 —— 那是权限泄露，不只是样式问题。 */
+[hidden]{display:none !important}
+
+/* ---------- 头像下拉菜单 ---------- */
+.usermenu{position:relative}
+
+.menupop{position:absolute;right:0;top:calc(100% + 9px);width:210px;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);
+  padding:6px;z-index:60;opacity:0;pointer-events:none;transform:translateY(-4px);
+  transition:opacity .16s,transform .16s}
+.menupop.on{opacity:1;pointer-events:auto;transform:none}
+
+.menuhead{padding:9px 10px 10px;border-bottom:1px solid var(--line-soft);margin-bottom:5px}
+.menuhead b{display:block;font-size:13.5px;font-weight:700;letter-spacing:-.01em}
+.menuhead span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+
+.menuitem{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:8px;
+  font-size:13px;color:var(--ink2);transition:.12s}
+.menuitem:hover{background:var(--line-soft);color:var(--ink)}
+.menuitem.danger{color:var(--crit)}
+.menuitem.danger:hover{background:var(--crit-bg)}
+.menusep{height:1px;background:var(--line-soft);margin:5px 0}
+
+/* ---------- 用户管理 ---------- */
+.modal-wide{width:720px}
+
+.userlist{max-height:60vh;overflow-y:auto;padding:4px 22px 0}
+
+.urow{display:flex;align-items:center;gap:12px;padding:11px 0;
+  border-bottom:1px solid var(--line-soft)}
+.urow:last-child{border-bottom:none}
+
+.urow .av{width:32px;height:32px;border-radius:50%;color:#fff;display:grid;place-items:center;
+  font-size:12.5px;font-weight:700;flex:none}
+.urow .who{flex:1;min-width:0}
+.urow .who b{display:block;font-size:13.5px;font-weight:650;letter-spacing:-.01em}
+.urow .who span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 角色是个三档选择，用分段控件而不是下拉：三个选项全摆出来，
+   谁是什么角色、能改成什么，一眼看全，不用点开才知道。 */
+.roles{display:flex;background:var(--page);border:1px solid var(--line);border-radius:8px;
+  padding:2px;gap:2px;flex:none}
+.roles button{padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;
+  color:var(--muted);transition:.12s;white-space:nowrap}
+.roles button:hover:not(.on):not([disabled]){color:var(--ink2);background:var(--line-soft)}
+.roles button.on{background:var(--surface);color:var(--blue);box-shadow:var(--shadow)}
+.roles button[disabled]{cursor:not-allowed;opacity:.45}
+
+.urow .more{flex:none;font-size:12px;color:var(--muted);padding:5px 8px;border-radius:6px}
+.urow .more:hover{background:var(--line-soft);color:var(--ink2)}
+
+.utag{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:5px;
+  background:var(--violet-bg);color:var(--violet);margin-left:6px;vertical-align:1px}
+
+.uempty{padding:26px 0 30px;text-align:center;color:var(--muted);font-size:13px}

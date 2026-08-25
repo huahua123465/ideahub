@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-ui="soft">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IdeaHub · 内部灵感库</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><rect width='20' height='20' rx='4' fill='%2368455f'/><g fill='none' stroke='%23fffaf4' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10 4a4 4 0 0 0-2.5 7.1c.4.4.7.9.7 1.4h3.6c0-.5.3-1 .7-1.4A4 4 0 0 0 10 4Z'/><path d='M8.6 14.6h2.8M9 16.2h2'/></g></svg>">
+<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./account.css">
+<link rel="stylesheet" href="./soft.css?v=20260824-soft3">
+<!-- 提前并行拉取全部模块。
+     ES 模块是逐层发现的：浏览器先下 main.js，解析完才知道要下哪 19 个，
+     那些再解析完才知道下一层 —— 在有延迟的网络上这就是好几个来回的等待。
+     modulepreload 让它一开始就全部并发拉，首屏快很多。
+     这份清单由 scripts/gen-preload.mjs 生成，加了新模块记得重跑一次。 -->
+<!-- PRELOAD_OFF --><!-- 已打包成 dist/app.js，不需要逐个模块预加载 -->
+<!-- /modulepreload -->
+</head>
+<body>
+
+<header class="topbar">
+  <button class="nav-toggle" id="navToggle" aria-label="打开功能导航" aria-expanded="false">
+    <i></i><i></i><i></i>
+  </button>
+  <div class="brand"><div class="bulb"><span class="ico" data-ico="bulb"></span></div>IdeaHub <small>内容与经营研究室</small></div>
+  <!-- 导航按《技术3 第一版任务表》任务 1 的六组分法。
+       分组按业务动作切（研究内容 / 做内容 / 管客户 / 做交付 / 看数据），
+       不按数据结构切 —— 新人问的是「我要干的这件事在哪」，不是「这张表叫什么」。 -->
+  <nav class="nav" id="appNav" aria-label="功能导航">
+    <div class="nav-mobile-head">
+      <div><b>IdeaHub</b><span>内容与经营研究室</span></div>
+      <button id="navClose" aria-label="关闭功能导航">×</button>
+    </div>
+    <div class="navgrp" data-group="home">
+      <button class="navtop">总览<i class="caret"></i></button>
+      <div class="navmenu">
+        <button id="tab-home" class="on" data-go="home" aria-current="page">今日工作台</button>
+      </div>
+    </div>
+    <div class="navgrp" data-group="content">
+      <button class="navtop">市场与内容<i class="caret"></i></button>
+      <div class="navmenu">
+        <button id="tab-pool" data-go="pool">灵感池<span class="badge" id="poolN">–</span></button>
+        <button id="tab-demands" data-go="demands">用户需求</button>
+        <button id="tab-formal" data-go="formal">正式库<span class="badge" id="formalN">–</span></button>
+      </div>
+    </div>
+
+    <div class="navgrp" data-group="ops">
+      <button class="navtop">内容运营<i class="caret"></i></button>
+      <div class="navmenu">
+        <button id="tab-persona" data-go="persona">真人作品</button>
+        <button id="tab-matrix" data-go="matrix">矩阵作品</button>
+        <button id="tab-live" data-go="live">真人直播</button>
+      </div>
+    </div>
+
+    <div class="navgrp" data-group="cust">
+      <button class="navtop">销售与客户<i class="caret"></i></button>
+      <div class="navmenu">
+        <button id="tab-sales" data-go="sales">销售转化</button>
+        <button id="tab-clients" data-go="clients">客户档案</button>
+      </div>
+    </div>
+
+    <div class="navgrp" data-group="deliver">
+      <button class="navtop">交付与案例<i class="caret"></i></button>
+      <div class="navmenu">
+        <button id="tab-delivery" data-go="delivery">后端交付</button>
+        <button id="tab-cases" data-go="cases">案例库</button>
+      </div>
+    </div>
+
+    <div class="navgrp" data-group="team">
+      <button class="navtop">团队<i class="caret"></i></button>
+      <div class="navmenu">
+        <button id="tab-reports" data-go="reports">工作提交</button>
+        <button id="tab-tagadmin" data-go="tagadmin">标签与对接</button>
+      </div>
+    </div>
+
+    <div class="navgrp" data-group="data">
+      <button class="navtop">数据<i class="caret"></i></button>
+      <div class="navmenu">
+        <button id="tab-funnel" data-go="funnel">数据漏斗</button>
+        <button id="tab-stats" data-go="stats">统计</button>
+      </div>
+    </div>
+  </nav>
+  <div class="page-context">
+    <span id="pageGroup">总览</span>
+    <b id="pageContext">今日工作台</b>
+  </div>
+  <div class="spacer"></div>
+  <button class="mobile-search-btn" id="mobileSearchBtn" aria-label="打开全局搜索">
+    <span class="ico" data-ico="search"></span>
+  </button>
+  <div class="search">
+    <span class="ico" data-ico="search"></span>
+    <input id="q" placeholder="全局搜索：灵感 / 需求 / 正式库 / 客户 / 案例…" autocomplete="off">
+    <button class="search-ai" id="smartSearchBtn" type="button" title="按意思智能搜索">
+      <span class="ico" data-ico="sparkle"></span><span>语义</span>
+    </button>
+    <!-- 搜索结果面板。挂在搜索框下面而不是跳到一个独立页面：
+         找资料是「在当前工作里顺手查一下」，跳走再跳回来会打断手上的事。 -->
+    <div class="searchpop" id="searchPop" hidden></div>
+  </div>
+  <button class="smart-import-trigger" id="smartImportBtn" title="AI 整理导入" aria-label="打开 AI 整理导入">
+    <span class="ico" data-ico="sparkle"></span><span class="smart-import-label">AI 整理</span>
+  </button>
+  <button class="btn btn-primary" id="btnNew"><span class="btn-plus">＋</span><span id="btnNewLabel">提交灵感</span></button>
+  <div class="notif">
+    <button class="notifbtn" id="notifBtn" title="消息"><span class="ico" data-ico="bell"></span><span class="notifdot" id="notifDot" hidden>0</span></button>
+    <div class="menupop notifpop" id="notifPop">
+      <div class="menuhead">
+        <b>消息</b>
+        <button class="link" id="notifReadAll">全部已读</button>
+      </div>
+      <!-- 桌面通知没开时才显示，内容由 views/notify.js 画（见 paintPerm） -->
+      <div id="notifPerm" hidden></div>
+      <div id="notifList"></div>
+    </div>
+  </div>
+  <div class="usermenu">
+    <div class="avatar" id="meAvatar" style="background:#4a3aa7">–</div>
+    <div class="menupop" id="userMenu">
+      <div class="menuhead">
+        <b id="umName">–</b>
+        <span id="umMeta">–</span>
+      </div>
+      <button class="menuitem" id="miUsers" hidden>用户管理</button>
+      <button class="menuitem mobile-notifications" id="miNotifications">消息通知</button>
+      <button class="menuitem" id="miPassword">修改密码</button>
+      <div class="menusep"></div>
+      <button class="menuitem danger" id="miLogout">退出登录</button>
+    </div>
+  </div>
+  <div class="navmask" id="navMask"></div>
+</header>
+
+<div class="main" id="main">
+  <div class="wrap">
+
+    <!-- ============ 今日工作台 ============ -->
+    <section class="view on" id="v-home"></section>
+
+    <!-- ============ 灵感池 ============ -->
+    <section class="view" id="v-pool">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">灵感社区</div>
+          <h1>灵感池</h1>
+          <div class="sub">把值得讨论的想法放在这里，先浏览、再共创，成熟后进入正式库。</div>
+        </div>
+      </div>
+      <div class="filters pool-toolbar" id="poolFilters">
+        <button class="chip on" data-f="scope" data-v="">全部</button>
+        <button class="chip" data-f="scope" data-v="mine">我提的</button>
+        <div class="divider-v"></div>
+        <button class="chip" data-f="category" data-v="产品">产品</button>
+        <button class="chip" data-f="category" data-v="技术">技术</button>
+        <button class="chip" data-f="category" data-v="运营">运营</button>
+        <button class="chip" data-f="category" data-v="流程">流程</button>
+        <div class="divider-v"></div>
+        <button class="chip on chip-ico" data-f="sort" data-v="hot"><span class="ico" data-ico="flame"></span>按热度</button>
+        <button class="chip" data-f="sort" data-v="new">最新</button>
+        <div class="divider-v"></div>
+        <!-- 转正式之后原灵感留在这里，点这个筛出来（任务 7）。
+             不默认混进列表 —— 灵感池要看的是「还没定的东西」。 -->
+        <button class="chip" data-f="status" data-v="promoted">已转正式</button>
+      </div>
+      <!-- 统一标签筛选（任务 6）。内容由 views/tagfilter.js 按标签字典画出来，
+           和客户档案、案例库、用户需求用的是同一套字典。 -->
+      <div class="pool-filter-more"><button class="board-tool" id="poolFilterToggle">标签与来源筛选</button></div>
+      <div class="bd-filter-panel" id="poolFilterPanel" hidden>
+        <div class="filter-caption"><b>标签与来源</b><span>需要时再展开，不让筛选项压过灵感本身</span></div>
+        <div class="filters tagfilter" id="poolTagFilter"></div>
+      </div>
+      <button class="newpill" id="poolNewPill" hidden></button>
+      <div class="grid" id="poolGrid"></div>
+    </section>
+
+    <!-- ============ 正式库 ============ -->
+    <section class="view" id="v-formal">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">已立项资产</div>
+          <h1>正式库</h1>
+          <div class="sub">已通过评审、分配负责人并立项的灵感。每条都有唯一编号。</div>
+        </div>
+      </div>
+      <div class="table">
+        <table>
+          <thead><tr>
+            <th style="width:158px">编号</th><th>灵感</th><th style="width:104px">负责人</th>
+            <th style="width:110px">立项日期</th><th style="width:148px">进度</th><th style="width:92px">方案文档</th>
+          </tr></thead>
+          <tbody id="formalBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 业务板块（真人作品 / 矩阵作品 / 真人直播 / 销售转化 / 后端交付） ============
+         这五个 section 是空的，首次切进去时由 web/src/views/board.js 按 boards.js
+         的字段定义搭出来 —— 五个板块共用一套渲染器，不在 HTML 里重复五遍表格。 -->
+    <section class="view" id="v-demands"></section>
+    <section class="view" id="v-reports"></section>
+    <section class="view" id="v-clientDetail"></section>
+    <section class="view" id="v-tagadmin"></section>
+    <section class="view" id="v-persona"></section>
+    <section class="view" id="v-matrix"></section>
+    <section class="view" id="v-live"></section>
+    <section class="view" id="v-sales"></section>
+    <section class="view" id="v-delivery"></section>
+    <section class="view" id="v-clients"></section>
+    <section class="view" id="v-cases"></section>
+    <section class="view" id="v-funnel"></section>
+
+    <!-- ============ 统计 ============ -->
+    <section class="view" id="v-stats">
+      <div class="page-head">
+        <div><div class="page-kicker">关键经营数字</div><h1>简单统计</h1><div class="sub" id="statsRange">直接来自系统现有记录，不需要手工填报</div></div>
+      </div>
+      <!-- 任务 15 只保留五个真正会看的数量。每张卡都可以回到数据来源。 -->
+      <div class="stat-key-grid" id="statKeyGrid"></div>
+      <div class="panel stat-sales-panel">
+        <div class="stat-panel-head">
+          <div><h4>基础销售漏斗</h4><div class="hint">按客户当前阶段自动计算 · 点击任一阶段查看对应客户</div></div>
+          <span class="stat-live"><i></i>实时数据</span>
+        </div>
+        <div class="sales-flow" id="salesFlow"></div>
+        <div class="stat-source-note">统计口径：后一阶段视为已经走过前面阶段；已流失客户不计入有效客资。</div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ============ 提交弹窗 ============ -->
+<div class="mask" id="mask"></div>
+
+<!-- ============ 智能导入 ============ -->
+<div class="modal smart-import-modal" id="smartImportModal" role="dialog" aria-modal="true" aria-labelledby="smartImportTitle">
+  <header class="smart-import-head">
+    <div class="smart-import-brand"><span class="ico" data-ico="sparkle"></span></div>
+    <div>
+      <h2 id="smartImportTitle">智能导入</h2>
+      <div class="hint">粘贴一段原始内容，自动识别去向并填写各板块字段。</div>
+    </div>
+    <button class="smart-import-close" data-close aria-label="关闭"><span class="ico" data-ico="close"></span></button>
+  </header>
+
+  <div class="smart-import-scroll">
+    <section class="smart-import-compose" id="smartImportCompose">
+      <div class="smart-import-guide">
+        <b>不需要先整理格式</b>
+        <span>聊天记录、会议笔记、客户反馈、作品复盘或工作总结都可以直接粘贴。</span>
+      </div>
+      <div class="smart-provider" id="smartProvider">
+        <div class="smart-provider-summary">
+          <span class="smart-provider-mark" id="smartProviderMark"></span>
+          <div>
+            <small>当前识别模型</small>
+            <b id="smartProviderName">正在读取配置…</b>
+            <span id="smartProviderMeta">AI 不可用时会自动使用基础规则</span>
+          </div>
+        </div>
+        <button class="smart-provider-toggle" id="smartProviderToggle" type="button" aria-expanded="false" hidden>
+          配置模型 <span aria-hidden="true">⌄</span>
+        </button>
+      </div>
+      <div class="smart-provider-panel" id="smartProviderPanel" aria-hidden="true">
+        <div class="smart-provider-panel-inner">
+          <div class="smart-provider-title">
+            <div><b>连接文本模型</b><span>已为你预设苍原算力，只需填写 API Key</span></div>
+            <span class="smart-provider-safe">密钥加密保存</span>
+          </div>
+          <div class="smart-provider-grid">
+            <div class="field smart-provider-url">
+              <label for="smartProviderUrl">API 地址 <span class="opt">（已自动设置）</span></label>
+              <input class="inp" id="smartProviderUrl" type="url" autocomplete="off"
+                placeholder="https://ai.cangyuansuanli.cn">
+              <span class="smart-provider-help">只填网站地址也可以，系统会自动补全 /v1</span>
+            </div>
+            <div class="field smart-provider-key">
+              <label for="smartProviderKey">API Key</label>
+              <div class="smart-key-input">
+                <input class="inp" id="smartProviderKey" type="password" autocomplete="new-password"
+                  spellcheck="false" placeholder="输入新密钥；留空则使用已保存密钥">
+                <button id="smartProviderKeyEye" type="button" aria-label="显示密钥">显示</button>
+              </div>
+              <span class="smart-provider-help" id="smartProviderKeyHint">页面不会读取或显示已保存密钥</span>
+            </div>
+          </div>
+          <div class="smart-provider-model-row">
+            <button class="btn btn-ghost smart-provider-fetch" id="smartProviderFetch" type="button">拉取模型</button>
+            <div class="field smart-provider-model">
+              <label for="smartProviderModel">选择文本模型</label>
+              <select class="inp" id="smartProviderModel" disabled>
+                <option value="">先拉取可用模型</option>
+              </select>
+            </div>
+            <button class="btn btn-primary smart-provider-save" id="smartProviderSave" type="button" disabled>使用此模型</button>
+          </div>
+          <div class="smart-provider-feedback" id="smartProviderFeedback" role="status"></div>
+        </div>
+      </div>
+      <div class="field">
+        <div class="smart-import-labelrow">
+          <label for="smartImportText">原始内容 <span>*</span></label>
+          <button class="link" id="smartImportExample" type="button">填入示例</button>
+        </div>
+        <textarea class="inp smart-import-text" id="smartImportText" maxlength="12000"
+          placeholder="例如：张总反馈最近直播线索不少，但客服跟进慢，希望增加客户提醒机制。下周先测试企业微信通知……"></textarea>
+        <div class="smart-import-count"><span id="smartImportChars">0</span> / 12000</div>
+      </div>
+      <div class="field">
+        <label for="smartImportSource">原始链接 <span class="opt">（可选）</span></label>
+        <input class="inp" id="smartImportSource" type="url" placeholder="https://… 原视频、文档或客户资料地址">
+      </div>
+      <div class="smart-import-safety">
+        <span class="ico" data-ico="check"></span>
+        <span><b>先预览，再写入</b>　AI 不会直接改数据库；你可以修改去向和字段，也可以取消任意一条。</span>
+      </div>
+    </section>
+
+    <section class="smart-import-analyzing" id="smartImportAnalyzing" hidden>
+      <div class="smart-orbit"><span class="ico" data-ico="sparkle"></span><i></i><i></i><i></i></div>
+      <h3>正在理解这段内容</h3>
+      <p>识别业务板块、提取关键信息并生成可编辑草稿…</p>
+      <div class="smart-scan"><i></i></div>
+    </section>
+
+    <section class="smart-import-preview" id="smartImportPreview" hidden>
+      <div class="smart-preview-summary">
+        <div><span id="smartImportMode">AI 智能识别</span><b id="smartImportOverview">已完成识别</b></div>
+        <small>已选 <b id="smartImportSelected">0</b> 条；确认前可直接修改</small>
+      </div>
+      <div class="smart-suggestions" id="smartImportSuggestions"></div>
+    </section>
+
+    <section class="smart-import-done" id="smartImportDone" hidden>
+      <div class="smart-done-icon"><span class="ico" data-ico="check"></span></div>
+      <h3>导入完成</h3>
+      <p id="smartImportDoneText"></p>
+      <div class="smart-done-list" id="smartImportDoneList"></div>
+    </section>
+  </div>
+
+  <footer class="smart-import-footer">
+    <button class="btn btn-ghost" id="smartImportBack" hidden>返回修改原文</button>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close id="smartImportCancel">取消</button>
+    <button class="btn btn-primary" id="smartImportAnalyze"><span class="ico" data-ico="sparkle"></span>开始识别</button>
+    <button class="btn btn-primary" id="smartImportCommit" hidden>确认导入所选内容</button>
+  </footer>
+</div>
+
+<div class="modal" id="modal">
+  <header>
+    <h2>提交一个灵感</h2>
+    <div class="hint">不用打磨得多完整 —— 一句话的想法也值得被记下来。</div>
+  </header>
+  <div class="form">
+    <div class="field">
+      <label>标题 <span>*</span></label>
+      <input class="inp" id="fTitle" placeholder="用一句话说清楚这个想法" maxlength="80">
+    </div>
+    <div class="dupe" id="dupe"></div>
+    <div class="row2">
+      <div class="field">
+        <label>分类 <span>*</span></label>
+        <select class="inp" id="fCat">
+          <option>产品</option><option>技术</option><option>运营</option>
+          <option>流程</option><option>其他</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>自由标签 <span class="opt">（可选）</span></label>
+        <input class="inp" id="fTags" placeholder="回车分隔，如：AI、降本">
+      </div>
+    </div>
+    <!-- 统一标签（任务 3）：和用户需求、客户档案、案例库共用一套字典。
+         上面那个自由输入框留着是给一次性的关键词用的，两者不冲突。 -->
+    <div class="field">
+      <label>统一标签 <span class="opt">（和其他模块共用，方便一起筛）</span></label>
+      <div class="tagpick" id="fTagPick"></div>
+    </div>
+    <!-- 来源（任务 4） -->
+    <div class="bdgrid">
+      <div class="field">
+        <label for="fSourceType">来源</label>
+        <select class="inp" id="fSourceType"></select>
+      </div>
+      <div class="field">
+        <label for="fSourceUrl">原始链接 <span class="opt">（能存就存）</span></label>
+        <input class="inp" id="fSourceUrl" type="url" placeholder="https://… 原视频 / 评论 / 客户资料">
+      </div>
+    </div>
+    <div class="field">
+      <label>详细说明 <span>*</span></label>
+      <textarea class="inp" id="fBody" placeholder="想解决什么问题？大概怎么做？"></textarea>
+    </div>
+  </div>
+  <footer>
+    <div class="check" id="anon"><div class="box"><span class="ico" data-ico="check"></span></div>匿名提交</div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-primary" id="btnSubmit">提交到灵感池</button>
+  </footer>
+</div>
+
+<!-- ============ 采纳弹窗 ============ -->
+<div class="modal modal-sm" id="adoptModal">
+  <header>
+    <h2>采纳并立项</h2>
+    <div class="hint">采纳后会生成正式编号，进入正式库，并播报到群机器人。</div>
+  </header>
+  <div class="form">
+    <div class="field">
+      <label>灵感</label>
+      <div class="inp" id="adoptTitle" style="background:var(--page);color:var(--ink2)"></div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>负责人 <span>*</span></label>
+        <select class="inp" id="adoptOwner"></select>
+      </div>
+      <div class="field">
+        <label>初始进度 <span class="opt">（可选）</span></label>
+        <select class="inp" id="adoptProgress">
+          <option value="0">0% · 刚立项</option>
+          <option value="10">10% · 已排期</option>
+          <option value="30">30% · 进行中</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-good" id="btnAdoptConfirm"><span class="ico" data-ico="check"></span>确认采纳</button>
+  </footer>
+</div>
+
+<!-- ============ 否决弹窗 ============ -->
+<div class="modal modal-sm" id="rejectModal">
+  <header>
+    <h2>否决这条灵感</h2>
+    <div class="hint">理由会记进流转记录并播报到群 —— 石沉大海比被否决更伤人。</div>
+  </header>
+  <div class="form">
+    <div class="field">
+      <label>灵感</label>
+      <div class="inp" id="rejectTitle" style="background:var(--page);color:var(--ink2)"></div>
+    </div>
+    <div class="field">
+      <label>否决理由 <span>*</span></label>
+      <textarea class="inp" id="rejectReason" style="height:84px"
+        placeholder="为什么现在不做？如果只是时机不对，也写清楚什么条件下可以重新提出。"></textarea>
+    </div>
+  </div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-crit" id="btnRejectConfirm">确认否决</button>
+  </footer>
+</div>
+
+<!-- ============ 业务板块的通用编辑弹窗 ============ -->
+<div class="modal" id="bdModal">
+  <header>
+    <h2 id="bdTitle">新增</h2>
+    <div class="hint">这些台账是团队共同维护的，任何人都能录和改；删除只有管理员能做。</div>
+  </header>
+  <div class="form">
+    <div class="bdgrid" id="bdForm"></div>
+    <div class="bdfiles" id="bdFiles" hidden></div>
+    <!-- 关联资料（任务 8）。和附件区一样，只在编辑已存在的记录时出现 —— 
+         还没保存的记录没有 id，关联挂不上去。 -->
+    <div class="bdlinks" id="bdLinks" hidden></div>
+  </div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-primary" id="btnBdSave">保存</button>
+  </footer>
+</div>
+
+<!-- ============ 右侧聊天面板 ============
+     收起时只剩右下角一个悬浮按钮。常驻展开会一直吃掉右侧一条，
+     而这个系统主体是宽表格，最缺的就是横向空间。 -->
+<button class="chatbtn" id="chatBtn" title="聊天"><span class="ico" data-ico="chat"></span><span class="chatdot" id="chatDot" hidden>0</span></button>
+<aside class="chatpanel" id="chatPanel">
+  <!-- 左栏：人员和群列表，常驻。聊着天也能随时点别人切过去 -->
+  <div class="chatside" id="chatSide">
+    <header>
+      <b>聊天</b>
+      <div class="spacer"></div>
+      <button class="chatx chatx-txt" id="chatNewGroup" title="建群"><span class="ico" data-ico="plus"></span>建群</button>
+    </header>
+    <div class="chatlist" id="chatList"></div>
+  </div>
+
+  <!-- 右栏：当前会话 -->
+  <div class="chatmain" id="chatMain">
+    <header>
+      <button class="chatback" id="chatBack" title="返回列表"><span class="ico" data-ico="back"></span></button>
+      <b id="chatTitle">聊天</b>
+      <div class="spacer"></div>
+      <button class="chatx" id="chatMembers" title="群成员" hidden><span class="ico" data-ico="users"></span></button>
+      <button class="chatx" id="chatGroupDel" title="解散群聊" hidden><span class="ico" data-ico="trash"></span></button>
+      <button class="chatx" id="chatClose" title="收起"><span class="ico" data-ico="close"></span></button>
+    </header>
+    <div class="chatmsgs" id="chatMsgs"></div>
+    <div class="chatat" id="chatAt" hidden></div>
+    <div class="chatfoot" id="chatFoot" hidden>
+      <label class="chatclip" title="发文件"><span class="ico" data-ico="clip"></span>
+        <input type="file" id="chatFile" multiple
+          accept=".html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg">
+      </label>
+      <textarea class="inp" id="chatInput" rows="1" placeholder="说点什么…（Enter 发送，群里可以 @）"></textarea>
+      <button class="btn btn-primary" id="chatSend">发送</button>
+    </div>
+  </div>
+</aside>
+<!-- 消息操作菜单：编辑 / 撤回 / 删除。挂在 body 上而不是气泡里，
+     否则会被 .chatmsgs 的 overflow 裁掉 -->
+<div class="chatmenu" id="chatMenu" hidden></div>
+
+<!-- 建群 / 拉人：一次勾完，不要一个个 confirm -->
+<div class="modal modal-sm" id="groupModal">
+  <header>
+    <h2 id="groupTitle">建群</h2>
+    <div class="hint">勾选要拉进来的同事，可以多选。</div>
+  </header>
+  <div class="form">
+    <div class="field" id="groupNameField">
+      <label for="groupName">群名字 <span>*</span></label>
+      <input class="inp" id="groupName" placeholder="比如：前端组 / 本周复盘" maxlength="40">
+    </div>
+    <div class="field">
+      <label>成员</label>
+      <div class="picklist" id="groupPick"></div>
+    </div>
+  </div>
+  <footer>
+    <span class="dim" id="groupCount">已选 0 人</span>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-primary" id="groupOk">确定</button>
+  </footer>
+</div>
+
+<!-- ============ 详情抽屉 ============ -->
+<aside class="drawer" id="drawer">
+  <div class="dhead">
+    <div class="card-top">
+      <span class="pill pill-pending" id="dPill">待评审</span>
+      <span class="cat" id="dCat"></span>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-mini" data-close>关闭</button>
+    </div>
+    <h2 id="dTitle"></h2>
+    <div class="dmeta">
+      <span class="who"><span class="av" id="dAv"></span><span id="dAuthor"></span></span>
+      <span>·</span><span id="dTime"></span>
+      <span>·</span><span id="dViews"></span>
+    </div>
+  </div>
+  <div class="dbody" id="dBody">
+    <div class="content" id="dContent"></div>
+    <!-- 来源（任务 4）：一条正式内容要能追回原视频 / 评论 / 客户资料 -->
+    <div class="dsource" id="dSource" hidden></div>
+    <!-- 关联资料（任务 8） -->
+    <div class="bdlinks" id="dLinks" hidden></div>
+
+    <!-- 立项管理：只有负责人和管理员看得见，非采纳状态一律隐藏 -->
+    <div class="project" id="dProject" hidden>
+      <div class="sec-title">立项管理</div>
+      <div class="prow prow-top">
+        <label>进度</label>
+        <div class="stages" id="dStages">
+          <button class="stage" data-v="0"><b>刚立项</b><span>0%</span></button>
+          <button class="stage" data-v="10"><b>已排期</b><span>10%</span></button>
+          <button class="stage" data-v="30"><b>进行中</b><span>30%</span></button>
+          <button class="stage" data-v="50"><b>过半</b><span>50%</span></button>
+          <button class="stage" data-v="75"><b>收尾</b><span>75%</span></button>
+          <button class="stage" data-v="90"><b>待验收</b><span>90%</span></button>
+          <button class="stage" data-v="100"><b>已落地</b><span>100%</span></button>
+        </div>
+      </div>
+      <div class="prow">
+        <label for="dOwner">负责人</label>
+        <select class="inp" id="dOwner"></select>
+      </div>
+      <div class="prow">
+        <label for="dDocUrl">方案文档</label>
+        <input class="inp" id="dDocUrl" type="url" placeholder="https://… （可留空）">
+      </div>
+      <div class="prow">
+        <span class="lab" id="dProjectHint"></span>
+        <button class="btn btn-primary" id="btnSaveProject">保存</button>
+      </div>
+    </div>
+
+    <div class="sec-title">讨论 <span id="dCmtN" style="font-weight:400"></span></div>
+    <div id="dCmts"></div>
+    <div class="sec-title">流转记录</div>
+    <div class="timeline" id="dTl"></div>
+  </div>
+  <div class="dfoot">
+    <div class="cmt-input">
+      <input class="inp" id="dCmtInput" placeholder="说点什么…">
+      <div class="check" id="cmtAnon"><div class="box"><span class="ico" data-ico="check"></span></div>匿名</div>
+      <button class="btn btn-ghost" id="btnComment">发表</button>
+    </div>
+    <div class="review-bar" id="reviewBar">
+      <button class="big-vote" id="dVote">
+        <div class="n" id="dVoteN">0</div><div class="l">▲ 支持</div>
+      </button>
+      <span class="lab" id="reviewHint">去向由大家一起决定 · 否决要写理由</span>
+      <button class="btn btn-ghost" id="btnIdeaDel" hidden>删除</button>
+      <button class="btn btn-crit" id="btnReject">否决</button>
+      <!-- 任务 7 管这个动作叫「转正式」，界面上就该叫这个名字，
+           不然业务人员按着任务表找不到入口 -->
+      <button class="btn btn-good" id="btnAdopt"><span class="ico" data-ico="check"></span>转正式并立项</button>
+    </div>
+  </div>
+</aside>
+
+
+<!-- ============ 修改密码 ============ -->
+<div class="modal" id="pwModal">
+  <header>
+    <h2>修改密码</h2>
+    <div class="hint">改完之后，其它设备上的登录状态都会失效，需要重新登录。</div>
+  </header>
+  <div class="form">
+    <div class="field">
+      <label for="pwOld">当前密码 <span>*</span></label>
+      <input class="inp" id="pwOld" type="password" autocomplete="current-password">
+    </div>
+    <div class="field">
+      <label for="pwNew">新密码 <span>*</span></label>
+      <input class="inp" id="pwNew" type="password" autocomplete="new-password" placeholder="至少 8 位">
+    </div>
+    <div class="field">
+      <label for="pwNew2">再输一次 <span>*</span></label>
+      <input class="inp" id="pwNew2" type="password" autocomplete="new-password">
+    </div>
+    <div class="autherr" id="pwErr"></div>
+  </div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-primary" id="btnPwSave">保存</button>
+  </footer>
+</div>
+
+<!-- ============ 用户管理（仅管理员） ============ -->
+<div class="modal modal-wide" id="usersModal">
+  <header>
+    <h2>用户管理</h2>
+    <div class="hint">成员可以提交、投票和评论；评审委员可以采纳或否决；管理员还可以管理账号和撤销采纳。</div>
+  </header>
+  <div class="userlist" id="userList"></div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>关闭</button>
+  </footer>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- ============ 后端调用可视化 ============ -->
+<div class="apilog" id="apilog">
+  <div class="hd"><i></i>API / 数据库 实时调用</div>
+  <div id="apilines"></div>
+</div>
+
+<script type="module" src="./dist/app.js?v=mt8fanft"></script>
+</body>
+</html>

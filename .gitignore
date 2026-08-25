@@ -1,0 +1,19 @@
+# ============ 绝对不能进仓库的 ============
+# 数据库口令、邀请码、OPENAI_API_KEY 都在里面。
+# 一旦推上去，即使之后删掉，也永远留在 git 历史里。
+.env
+
+# Postgres 的数据目录 + 用户上传的附件（含真实客户资料）。
+# 81MB，而且是生产数据 —— 备份走 scripts/backup.sh，不走 git。
+data/
+
+# ============ 装出来 / 生成出来的 ============
+node_modules/
+# 前端打包产物。Docker 构建时会重新生成（见 Dockerfile 里的 build-web），
+# 提交它只会让每次改动都多出一个几百 KB 的二进制 diff。
+web/dist/
+
+# ============ 跑出来的临时文件 ============
+*.log
+scripts/.uidiff/
+scripts/推送失败待补.jsonl

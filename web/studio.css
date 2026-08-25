@@ -1,0 +1,426 @@
+/* ============================================================
+   IdeaHub Studio UI · 2026-08-24
+
+   独立于历史样式的视觉层。业务结构、权限和数据逻辑保持不动，
+   只把“通用紫色 SaaS 后台”重新表达为温暖、成熟的内容研究工作室。
+   ============================================================ */
+
+html[data-ui="studio"]{
+  --page:#f4f0ea;
+  --surface:#fffdf9;
+  --surface-2:#eee8e1;
+  --surface-3:#f8f5f0;
+  --ink:#29242a;
+  --ink2:#5f585f;
+  --muted:#948b91;
+  --line:rgba(63,52,60,.14);
+  --line-soft:rgba(63,52,60,.075);
+  --blue:#68455f;
+  --blue-dk:#52364b;
+  --blue-100:#f1e8ed;
+  --blue-200:#dbc8d3;
+  --grad-primary:linear-gradient(135deg,#765269,#5b3d55);
+  --good:#5f7d70;--good-bg:#e9f0ec;--good-line:#cbdad2;
+  --warn:#a66d36;--warn-bg:#f8eee2;--warn-line:#e8d1b8;
+  --crit:#b55f61;--crit-bg:#f8e9e8;--crit-line:#e8c7c6;
+  --violet:#765269;--violet-bg:#f1e8ed;--violet-line:#dbc8d3;
+  --r-sm:6px;--radius:8px;--r-lg:12px;
+  --shadow:0 1px 0 rgba(47,39,45,.04);
+  --shadow-md:0 12px 30px rgba(47,39,45,.11);
+  --shadow-lg:0 24px 70px rgba(38,30,36,.2);
+  --font:"HarmonyOS Sans SC","MiSans","PingFang SC","Microsoft YaHei UI","WenQuanYi Zen Hei",system-ui,sans-serif;
+  --display:"Source Han Serif SC","Noto Serif CJK SC","Songti SC","STSong","SimSun",serif;
+}
+
+html[data-ui="studio"] body{
+  background:
+    radial-gradient(900px 520px at 76% -8%,rgba(136,93,111,.06),transparent 62%),
+    var(--page);
+  color:var(--ink);font-size:14px;
+}
+html[data-ui="studio"] ::selection{background:#dfccd4;color:#33252e}
+
+/* ---------- 全局外壳 ---------- */
+html[data-ui="studio"] .topbar{
+  background:var(--surface);border-bottom:1px solid var(--line-soft);box-shadow:none;
+}
+html[data-ui="studio"] .brand{letter-spacing:.01em}
+html[data-ui="studio"] .brand .bulb{border-radius:6px;background:#68455f;box-shadow:none}
+html[data-ui="studio"] .brand small{color:#9b9297;letter-spacing:.02em}
+html[data-ui="studio"] .page-context{border-left-color:var(--line-soft)}
+html[data-ui="studio"] .page-context span{color:#9a9096}
+html[data-ui="studio"] .page-context b{color:#312b31}
+html[data-ui="studio"] .topbar .search{height:37px;border:0!important;border-bottom:1px solid #d5cdc8!important;border-radius:0;background:transparent!important;box-shadow:none!important}
+html[data-ui="studio"] .topbar .search:focus-within{border-bottom-color:#68455f!important}
+html[data-ui="studio"] .search-ai{border:0;border-left:1px solid var(--line-soft);border-radius:0;color:#775c6e;background:transparent}
+html[data-ui="studio"] .search-ai:hover{background:transparent;color:#4f3548}
+html[data-ui="studio"] .smart-import-trigger{height:36px;border:1px solid #d8cbd2;border-radius:7px;background:#f7f0f3;color:#624359;box-shadow:none}
+html[data-ui="studio"] .smart-import-trigger:hover{background:#eee2e8;border-color:#cdbbc5;color:#4f3548;box-shadow:none;transform:none}
+html[data-ui="studio"] .btn{border-radius:7px}
+html[data-ui="studio"] .btn-primary{background:#68455f;box-shadow:none}
+html[data-ui="studio"] .btn-primary:hover{background:#57394f;filter:none;box-shadow:none}
+html[data-ui="studio"] .btn-ghost{border-color:#d8d0ca;background:#fffdf9}
+html[data-ui="studio"] .avatar{border-radius:8px!important}
+
+@media (min-width:1181px){
+  html[data-ui="studio"] .topbar{
+    background:linear-gradient(90deg,#2c272d 0 230px,#fffdf9 230px);
+  }
+  html[data-ui="studio"] .topbar .brand{
+    align-self:stretch;flex:0 0 230px;min-width:230px;margin-left:-18px;margin-right:-14px;
+    padding-left:18px;box-sizing:border-box;background:#2c272d;color:#fffaf5;
+  }
+  html[data-ui="studio"] .topbar .brand small{color:rgba(255,250,245,.52)}
+  html[data-ui="studio"] .brand .bulb{background:#be756f;color:#fffaf5}
+  html[data-ui="studio"] .topbar .nav{
+    background:#2c272d;border-right:0;box-shadow:none;padding:18px 12px 30px;
+  }
+  html[data-ui="studio"] .navgrp{margin-bottom:11px}
+  html[data-ui="studio"] .navtop{color:rgba(255,250,245,.44)!important}
+  html[data-ui="studio"] .navtop::before{width:4px;height:4px;background:rgba(255,250,245,.22)!important}
+  html[data-ui="studio"] .navgrp.active .navtop{color:rgba(255,250,245,.7)!important}
+  html[data-ui="studio"] .navgrp.active .navtop::before{background:#c9877f!important;transform:scale(1.15)}
+  html[data-ui="studio"] .topbar .navmenu button{height:35px;color:rgba(255,250,245,.68);border-radius:6px}
+  html[data-ui="studio"] .topbar .navmenu button:hover{background:rgba(255,255,255,.055);color:#fffaf5;transform:none}
+  html[data-ui="studio"] .topbar .navmenu button.on,
+  html[data-ui="studio"] .topbar .navmenu button.on:hover{
+    background:#f0e5e7;color:#513747;box-shadow:none;transform:none;font-weight:700;
+  }
+  html[data-ui="studio"] .topbar .navmenu button.on::before{left:9px;width:2px;height:17px;background:#a95f62;box-shadow:none}
+  html[data-ui="studio"] .topbar .navmenu button.on .badge{background:#d9c3cb;color:#563a4e}
+  html[data-ui="studio"] .topbar .nav .badge{background:rgba(255,255,255,.09);color:rgba(255,250,245,.66)}
+  html[data-ui="studio"] .main{background:transparent;padding:34px 38px 80px}
+  html[data-ui="studio"] .wrap{max-width:1340px}
+}
+
+/* ---------- 编辑部式文字与页面层级 ---------- */
+html[data-ui="studio"] h1,
+html[data-ui="studio"] .page-head h1,
+html[data-ui="studio"] .dash-hero h1,
+html[data-ui="studio"] .client-detail-title h1{
+  font-family:var(--display);font-weight:700;letter-spacing:-.035em;
+}
+html[data-ui="studio"] .page-head{position:relative;margin-bottom:22px;padding:0 0 17px;border-bottom:1px solid var(--line)}
+html[data-ui="studio"] .page-head::after{content:"";position:absolute;left:0;bottom:-1px;width:42px;height:2px;background:#8f5b70}
+html[data-ui="studio"] .page-head h1{font-size:30px;line-height:1.18}
+html[data-ui="studio"] .page-head .sub{margin-top:7px;color:#7f757b;font-size:13px;line-height:1.65}
+html[data-ui="studio"] .page-kicker{margin-bottom:7px;color:#8d5c70;font-size:10.5px;font-weight:760;letter-spacing:.16em}
+html[data-ui="studio"] .view.on{animation:studio-in .18s ease-out}
+@keyframes studio-in{from{opacity:0;transform:translateY(3px)}}
+
+/* 筛选器像编辑台工具条，不再像一排糖果药丸。 */
+html[data-ui="studio"] .chip{height:31px;padding:0 11px;border:0;border-bottom:1px solid transparent;border-radius:0;background:transparent;color:#71686e}
+html[data-ui="studio"] .chip:hover{border-bottom-color:#c7b8c0;background:transparent;color:#3e353b}
+html[data-ui="studio"] .chip.on,
+html[data-ui="studio"] .tagpick .chip.on{border-bottom-color:#68455f;background:transparent;color:#53384c;font-weight:700}
+html[data-ui="studio"] .divider-v{height:15px;background:#d8d0ca}
+html[data-ui="studio"] .board-toolbar{margin:13px 0 20px;padding-bottom:11px;border-bottom:1px solid var(--line-soft)}
+html[data-ui="studio"] .bd-tabs{gap:0;padding:0;border:0;border-radius:0;background:transparent}
+html[data-ui="studio"] .bd-tab{height:33px;padding:0 13px;border:0;border-bottom:1px solid transparent;border-radius:0;background:transparent;color:#7e747a;box-shadow:none!important}
+html[data-ui="studio"] .bd-tab:hover{border-bottom-color:#c7b8c0;background:transparent}
+html[data-ui="studio"] .bd-tab.on{border-bottom:2px solid #68455f;background:transparent;color:#3f333b;box-shadow:none!important}
+html[data-ui="studio"] .board-tool{height:33px;border:1px solid #d7cec8;border-radius:6px;background:transparent}
+html[data-ui="studio"] .board-tool:hover,html[data-ui="studio"] .board-tool.on{border-color:#bea9b3;background:#f2e9ed;color:#563b4e}
+
+/* ---------- 今日工作台：每日编辑台 ---------- */
+html[data-ui="studio"] .dash-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:35px;margin:0 0 23px;padding:10px 0 25px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+html[data-ui="studio"] .dash-hero::after{display:none}
+html[data-ui="studio"] .dash-hero h1{font-size:39px;line-height:1.08}
+html[data-ui="studio"] .dash-hero p{margin-top:10px;color:#786f74;font-size:14px}
+html[data-ui="studio"] .dash-quick{gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+html[data-ui="studio"] .dash-quick button{min-width:150px;padding:11px 15px;border:0;border-right:1px solid var(--line-soft);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] .dash-quick button:last-child{border-right:0}
+html[data-ui="studio"] .dash-quick button:hover{transform:none;background:rgba(255,253,249,.68);box-shadow:none}
+html[data-ui="studio"] .dash-quick .ic{color:#8d5b70}
+
+html[data-ui="studio"] .dash-action-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:0 0 30px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+html[data-ui="studio"] .dash-action-grid>button{min-height:94px;padding:16px 18px;border:0;border-right:1px solid var(--line-soft);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] .dash-action-grid>button:last-child{border-right:0}
+html[data-ui="studio"] .dash-action-grid>button:hover{transform:none;background:rgba(255,253,249,.62);box-shadow:none}
+html[data-ui="studio"] .dash-action-icon{width:32px;height:32px;border-radius:50%;background:transparent!important;border:1px solid currentColor;opacity:.75}
+html[data-ui="studio"] .dash-action-grid b{font-family:var(--display);font-size:29px}
+
+html[data-ui="studio"] .dash-layout{grid-template-columns:minmax(0,1.25fr) minmax(330px,.75fr);gap:28px;margin-bottom:28px}
+html[data-ui="studio"] .dash-panel{border:0;border-top:2px solid #68455f;border-radius:0;background:rgba(255,253,249,.7);box-shadow:none}
+html[data-ui="studio"] .dash-panel>header{padding:16px 18px 13px;border-bottom:1px solid var(--line-soft)}
+html[data-ui="studio"] .dash-panel>header h2{font-family:var(--display);font-size:19px}
+html[data-ui="studio"] .dash-focus-list{padding:2px 15px 8px}
+html[data-ui="studio"] .dash-focus-item{padding:13px 5px}
+html[data-ui="studio"] .dash-focus-item>i{width:2px;height:33px;background:#9d6c7f!important}
+html[data-ui="studio"] .dash-focus-item:hover{background:transparent}
+html[data-ui="studio"] .dash-focus-item:hover b{color:#6d455b}
+html[data-ui="studio"] .dash-pipeline-list{padding:11px 18px 17px}
+html[data-ui="studio"] .dash-pipeline-list button>div{height:4px;background:#e8e0dc}
+html[data-ui="studio"] .dash-pipeline-list button>div i{background:#8d5b70}
+html[data-ui="studio"] .dash-pipeline-list em{color:#765269}
+html[data-ui="studio"] .dash-library{border-top-color:#6b8077}
+html[data-ui="studio"] .dash-library>div button{border-radius:0}
+html[data-ui="studio"] .dash-library>div button:hover{background:rgba(255,253,249,.8)}
+
+/* ---------- 摘要数字：一张连续台账 ---------- */
+html[data-ui="studio"] .board-overview{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:22px;border:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] .overview-cell{min-height:74px;padding:13px 17px}
+html[data-ui="studio"] .overview-cell+.overview-cell::before{top:12px;bottom:12px;background:var(--line-soft)}
+html[data-ui="studio"] .overview-cell span{text-transform:none;color:#897f85}
+html[data-ui="studio"] .overview-cell b{font-family:var(--display);font-size:25px}
+
+/* ---------- 业务资料：减少卡片汤 ---------- */
+html[data-ui="studio"] .board-grid{gap:14px}
+html[data-ui="studio"] .record-card{border:0;border-top:1px solid var(--line);border-radius:0;background:rgba(255,253,249,.72);box-shadow:none}
+html[data-ui="studio"] .record-card:hover{transform:none;border-top-color:#8b6475;box-shadow:none;background:#fffdfa}
+html[data-ui="studio"] .record-card:focus-visible{border-color:#68455f;box-shadow:0 0 0 2px #ddcbd3}
+html[data-ui="studio"] .record-card h3{font-family:var(--display)}
+html[data-ui="studio"] .record-index,
+html[data-ui="studio"] .playbook-no,
+html[data-ui="studio"] .case-code{color:#9a777f}
+html[data-ui="studio"] .record-tags .tag,
+html[data-ui="studio"] .tag{border:0;border-radius:3px;background:#eee9e4;color:#6e666b}
+html[data-ui="studio"] .record-menu summary{border-radius:4px}
+html[data-ui="studio"] .record-menu>div{border-radius:7px;background:#fffdfa}
+
+/* 用户洞察像研究摘录。 */
+html[data-ui="studio"] .board-demands{grid-template-columns:repeat(2,minmax(0,1fr))}
+html[data-ui="studio"] .insight-card{min-height:280px;padding:22px 23px;border-top:2px solid #a56c72}
+html[data-ui="studio"] .insight-card h3{font-size:19px}
+html[data-ui="studio"] .insight-card blockquote{border-radius:0;background:#f2ede8;color:#554d52}
+html[data-ui="studio"] .insight-card blockquote::before{width:2px;background:#b67576}
+html[data-ui="studio"] .scene-pill{border-radius:3px;background:#f3e6df;color:#925b4d}
+
+/* 内容作品像编辑台账，不像彩色海报墙。 */
+html[data-ui="studio"] .board-persona,
+html[data-ui="studio"] .board-matrix,
+html[data-ui="studio"] .board-live{grid-template-columns:1fr}
+html[data-ui="studio"] .content-card{grid-template-columns:minmax(280px,.78fr) minmax(0,1.22fr);min-height:230px;border-top:1px solid var(--line)}
+html[data-ui="studio"] .content-cover,
+html[data-ui="studio"] .tone-1 .content-cover,
+html[data-ui="studio"] .tone-2 .content-cover,
+html[data-ui="studio"] .tone-3 .content-cover{padding:23px 25px;color:var(--ink);background:#e9e1dc;border-right:1px solid #d9cec8}
+html[data-ui="studio"] .tone-1 .content-cover{background:#eee2df}
+html[data-ui="studio"] .tone-2 .content-cover{background:#e3eae5}
+html[data-ui="studio"] .tone-3 .content-cover{background:#e9e3ea}
+html[data-ui="studio"] .cover-top,html[data-ui="studio"] .cover-account{color:#82777d}
+html[data-ui="studio"] .content-cover h3{font-family:var(--display);font-size:23px;font-weight:700}
+html[data-ui="studio"] .content-detail{padding:22px 24px}
+html[data-ui="studio"] .metric-cell{border-radius:4px;background:#f1ede9}
+
+/* 方法和交付像章节/流程。 */
+html[data-ui="studio"] .board-sales,
+html[data-ui="studio"] .board-delivery{grid-template-columns:repeat(2,minmax(0,1fr))}
+html[data-ui="studio"] .playbook-card{min-height:230px;padding:22px;border-top:2px solid #9d7a65}
+html[data-ui="studio"] .playbook-label{border-radius:3px;background:#eee4e8;color:#68455f}
+html[data-ui="studio"] .playbook-body{color:#5e565b}
+html[data-ui="studio"] .flow-card::before{width:2px;background:#70857b}
+html[data-ui="studio"] .script-card .playbook-body{border-radius:2px;background:#eee9e4}
+
+/* 客户档案改为横向档案条，快速比较而不是浏览卡片墙。 */
+html[data-ui="studio"] .board-clients{grid-template-columns:1fr}
+html[data-ui="studio"] .client-card{display:grid;grid-template-columns:minmax(220px,.75fr) minmax(280px,1.15fr) minmax(260px,1fr);grid-template-rows:auto auto;align-items:center;gap:0 24px;min-height:0;padding:19px 21px;border-top:1px solid var(--line)}
+html[data-ui="studio"] .client-card>header{grid-column:1;grid-row:1/3;align-self:stretch;padding-right:21px;border-right:1px solid var(--line-soft)}
+html[data-ui="studio"] .client-avatar{border-radius:50%;background:#e9e2df;color:#6c5963}
+html[data-ui="studio"] .client-name h3{font-family:var(--display);font-size:20px}
+html[data-ui="studio"] .client-focus{grid-column:2;grid-row:1;margin:0;padding:12px 14px;border-radius:0;background:#f0ece7}
+html[data-ui="studio"] .client-next{grid-column:3;grid-row:1;grid-template-columns:70px 1fr;padding:12px 0;border-top:0}
+html[data-ui="studio"] .client-next i{grid-column:2;margin-top:5px}
+html[data-ui="studio"] .client-card footer{grid-column:2/4;grid-row:2;margin:9px 0 0;padding-top:9px;border-top:1px solid var(--line-soft)}
+html[data-ui="studio"] .tier-badge{border-radius:3px}
+
+/* 案例是一条推理链。 */
+html[data-ui="studio"] .board-cases{grid-template-columns:1fr}
+html[data-ui="studio"] .case-card{min-height:0;padding:23px 25px;border-top:2px solid #6e8279}
+html[data-ui="studio"] .case-card h3{font-size:21px}
+html[data-ui="studio"] .case-journey{gap:0;margin:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+html[data-ui="studio"] .case-journey>div{position:relative;padding:15px 18px;border-radius:0;background:transparent}
+html[data-ui="studio"] .case-journey>div+div{border-left:1px solid var(--line-soft)}
+html[data-ui="studio"] .case-journey i{color:#9b6b79}
+
+/* 工作提交更像审核收件箱。 */
+html[data-ui="studio"] .board-reports{grid-template-columns:repeat(2,minmax(0,1fr))}
+html[data-ui="studio"] .report-card{min-height:270px;padding:22px;border-top:2px solid #85707a}
+html[data-ui="studio"] .report-callout{border-radius:3px}
+
+/* ---------- 灵感池：编辑部提案列表 ---------- */
+html[data-ui="studio"] #poolGrid{display:grid;grid-template-columns:1fr;gap:0;border-top:1px solid var(--line)}
+html[data-ui="studio"] #poolGrid .idea-card{display:grid;grid-template-columns:150px minmax(0,1fr) 235px;grid-template-rows:auto auto;min-height:170px;padding:0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] #poolGrid .idea-card::before{left:0;right:auto;top:18px;bottom:18px;width:2px;height:auto;background:var(--cat)}
+html[data-ui="studio"] #poolGrid .idea-card:hover{transform:none;border-color:var(--line);background:rgba(255,253,249,.7);box-shadow:none}
+html[data-ui="studio"] .idea-card-head{grid-column:1;grid-row:1/3;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:16px;padding:22px 18px 20px 22px}
+html[data-ui="studio"] .idea-card-meta{flex-direction:column;align-items:flex-start;gap:7px}
+html[data-ui="studio"] .idea-card-copy{grid-column:2;grid-row:1;padding:20px 24px 0;border-left:1px solid var(--line-soft)}
+html[data-ui="studio"] #poolGrid .idea-card h3{font-family:var(--display);font-size:21px;line-height:1.42}
+html[data-ui="studio"] #poolGrid .idea-card:hover h3{color:#68455f}
+html[data-ui="studio"] #poolGrid .idea-card p{min-height:0;margin-top:8px;color:#655d62;line-height:1.78;-webkit-line-clamp:2}
+html[data-ui="studio"] .idea-tags{grid-column:2;grid-row:2;min-height:0;margin:10px 24px 20px}
+html[data-ui="studio"] .idea-tags .tag{border-radius:3px;background:#ece7e2;color:#756c71}
+html[data-ui="studio"] #poolGrid .idea-card-foot{grid-column:3;grid-row:1/3;min-height:0;margin:0;padding:21px 18px;flex-direction:column;align-items:stretch;justify-content:space-between;border-top:0;border-left:1px solid var(--line-soft);background:transparent}
+html[data-ui="studio"] .idea-author{align-self:flex-start}
+html[data-ui="studio"] .idea-engagement{margin:0;align-self:flex-end}
+html[data-ui="studio"] .idea-engagement .vote{border-radius:5px;background:transparent}
+
+/* ---------- 正式库与数据 ---------- */
+html[data-ui="studio"] .table{border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] th{height:42px;background:transparent;color:#8b8086;font-size:11.5px}
+html[data-ui="studio"] td{background-color:transparent}
+html[data-ui="studio"] tbody tr:hover{background:rgba(255,253,249,.72)}
+html[data-ui="studio"] .stat-key-grid{gap:0;margin-bottom:25px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+html[data-ui="studio"] .stat-key-card{min-height:116px;padding:17px 18px;border:0;border-right:1px solid var(--line-soft);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] .stat-key-card:last-child{border-right:0}
+html[data-ui="studio"] .stat-key-card::before{height:2px;background:#8a5a6f}
+html[data-ui="studio"] .stat-key-card:hover{transform:none;background:rgba(255,253,249,.65);box-shadow:none}
+html[data-ui="studio"] .stat-key-value{font-family:var(--display);font-size:33px}
+html[data-ui="studio"] .panel{border:0;border-top:1px solid var(--line);border-radius:0;background:rgba(255,253,249,.68);box-shadow:none}
+html[data-ui="studio"] .stat-sales-panel{border-top:2px solid #6b8077}
+html[data-ui="studio"] .sales-step{border-radius:4px;background:#f0ece7}
+html[data-ui="studio"] .sales-step:hover{transform:none;background:#ebe4df}
+html[data-ui="studio"] .sales-step small{color:#765269}
+
+html[data-ui="studio"] .funnel-hero{border:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] .funnel-principle{background:#68455f;color:#fffaf5}
+html[data-ui="studio"] .funnel-conversion-panel{border-top:2px solid #68455f;padding:20px}
+html[data-ui="studio"] .fnl-step-card{border:0;border-top:1px solid var(--line);border-radius:0;background:transparent}
+html[data-ui="studio"] .fnl-step-card.is-weak{border-top:2px solid #b55f61;background:#f7ece9}
+html[data-ui="studio"] .fnl-step-main>div b{color:#765269}
+html[data-ui="studio"] .fnl-step-meter{height:3px;background:#e1d8d3}
+html[data-ui="studio"] .fnl-step-meter i{background:#7c596d}
+html[data-ui="studio"] .layer-card{border-radius:4px;background:#f0ece7}
+
+/* ---------- 客户详情、系统配置 ---------- */
+html[data-ui="studio"] .client-detail-head{padding:20px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
+html[data-ui="studio"] .client-detail-avatar{border-radius:50%;background:#68455f;box-shadow:none}
+html[data-ui="studio"] .cdgrid{gap:12px}
+html[data-ui="studio"] .cdcard{padding:18px;border:0;border-top:1px solid var(--line);border-radius:0;background:rgba(255,253,249,.68);box-shadow:none}
+html[data-ui="studio"] .cdai{border-top:2px solid #8c5d71;background:#f4ecef}
+html[data-ui="studio"] .tag-admin-card{border-radius:0;background:rgba(255,253,249,.7)}
+html[data-ui="studio"] .tag-admin-card::before{height:2px}
+html[data-ui="studio"] .tag-admin-demand::before{background:#826676}
+html[data-ui="studio"] .keyget{border-radius:3px;background:#eee9e4}
+
+/* ---------- 表单、弹层与协作工具 ---------- */
+html[data-ui="studio"] .inp{border-color:#d6ccc7;border-radius:5px;background:#fffdfa}
+html[data-ui="studio"] .inp:focus{border-color:#8b6073;box-shadow:0 0 0 2px #eadde3}
+html[data-ui="studio"] .mask{background:rgba(37,31,36,.42);backdrop-filter:blur(3px)}
+html[data-ui="studio"] .modal,
+html[data-ui="studio"] .drawer,
+html[data-ui="studio"] .chatpanel,
+html[data-ui="studio"] .menupop,
+html[data-ui="studio"] .notifpop{border-color:#d7ccc7;border-radius:10px;background:#fffdfa;box-shadow:var(--shadow-lg)}
+html[data-ui="studio"] .modal header,html[data-ui="studio"] .drawer .dhead{background:#f5f0eb}
+html[data-ui="studio"] .smart-import-modal{border-radius:12px;background:#fffdfa}
+html[data-ui="studio"] .smart-import-modal .smart-import-head{background:#f3ecef}
+html[data-ui="studio"] .smart-import-brand{border-radius:7px;background:#68455f;box-shadow:none}
+html[data-ui="studio"] .smart-import-scroll{background:#faf7f3}
+html[data-ui="studio"] .smart-import-guide{border-radius:5px;border-color:#dfd0d7;background:#f1e8ed}
+html[data-ui="studio"] .smart-provider,html[data-ui="studio"] .smart-suggestion{border-radius:6px;background:#fffdfa;box-shadow:none}
+html[data-ui="studio"] .drawer .dfoot{background:#f7f2ed}
+html[data-ui="studio"] .chatbtn{border-radius:9px;background:#68455f;box-shadow:0 10px 26px rgba(60,42,54,.22)}
+html[data-ui="studio"] .chatpanel{background:#fffdfa}
+html[data-ui="studio"] .chatside{background:#f0ebe6}
+html[data-ui="studio"] .peer.on{background:#e8dce2;color:#53394c}
+html[data-ui="studio"] .toast{border-radius:6px;background:#342f34}
+html[data-ui="studio"] .topbar .avatar{background:#765269!important;color:#fffaf5!important}
+
+/* ---------- 登录页：研究室入口 ---------- */
+html[data-ui="studio"] body.authpage{background:
+  linear-gradient(90deg,#2c272d 0 48%,transparent 48%),
+  radial-gradient(800px 500px at 80% 0,#eee1e5,transparent 70%),#f4f0ea}
+html[data-ui="studio"] .authbox{position:relative;display:grid;grid-template-columns:minmax(300px,1fr) 410px;grid-template-rows:1fr auto;width:min(900px,100%);max-width:none;gap:24px 80px;align-items:center}
+html[data-ui="studio"] .authbox::before{content:"让零散经验，成为可以反复使用的判断。";grid-column:1;align-self:end;max-width:360px;color:#fffaf5;font-family:var(--display);font-size:34px;font-weight:700;line-height:1.55;letter-spacing:-.03em}
+html[data-ui="studio"] .authbrand{grid-column:1;grid-row:2;justify-content:flex-start;margin:0;color:#fffaf5}
+html[data-ui="studio"] .authbrand small{color:rgba(255,250,245,.55)}
+html[data-ui="studio"] .authbrand .bulb{border-radius:6px;background:#be756f;box-shadow:none}
+html[data-ui="studio"] .authcard{grid-column:2;grid-row:1/3;width:100%;padding:8px 30px 28px;border:0;border-top:3px solid #68455f;border-radius:7px;background:#fffdfa;box-shadow:0 24px 70px rgba(47,39,45,.13)}
+html[data-ui="studio"] .authtabs{border-color:#e5ddd7}
+html[data-ui="studio"] .authtab.on{color:#68455f;border-bottom-color:#68455f}
+html[data-ui="studio"] .authfoot{position:absolute;left:0;bottom:-45px;margin:0;color:rgba(255,250,245,.48);text-align:left}
+
+/* ---------- 平板与移动端 ---------- */
+@media (max-width:1180px){
+  html[data-ui="studio"],html[data-ui="studio"] body{max-width:100%;overflow-x:hidden}
+  html[data-ui="studio"] .topbar{background:#2c272d;border-bottom:0;color:#fffaf5}
+  html[data-ui="studio"] .brand .bulb{background:#be756f}
+  html[data-ui="studio"] .nav-toggle,html[data-ui="studio"] .mobile-search-btn,html[data-ui="studio"] .notifbtn{color:#fffaf5}
+  html[data-ui="studio"] .topbar .nav{background:#2c272d;border:0;color:#fffaf5}
+  html[data-ui="studio"] .nav-mobile-head{border-color:rgba(255,255,255,.1)}
+  html[data-ui="studio"] .nav-mobile-head span{color:rgba(255,250,245,.5)}
+  html[data-ui="studio"] .topbar .nav .nav-mobile-head button{color:rgba(255,250,245,.6)}
+  html[data-ui="studio"] .topbar .navtop{color:rgba(255,250,245,.45)!important}
+  html[data-ui="studio"] .topbar .navmenu button{color:rgba(255,250,245,.72)}
+  html[data-ui="studio"] .topbar .navmenu button.on{background:#f0e5e7;color:#513747;box-shadow:none}
+  html[data-ui="studio"] .topbar .navmenu button.on::before{background:#a95f62;box-shadow:none}
+  html[data-ui="studio"] .topbar .navmenu button.on .badge{background:#d9c3cb;color:#563a4e}
+  html[data-ui="studio"] .smart-import-trigger{border-color:rgba(255,255,255,.13);background:rgba(255,255,255,.06);color:#fffaf5}
+  html[data-ui="studio"] .topbar #btnNew{background:#be756f}
+  html[data-ui="studio"] .dash-hero{grid-template-columns:1fr;align-items:start}
+  html[data-ui="studio"] .dash-quick{width:100%}
+  html[data-ui="studio"] .dash-quick button{flex:1}
+}
+
+@media (max-width:980px){
+  html[data-ui="studio"] .dash-layout{grid-template-columns:1fr}
+  html[data-ui="studio"] .content-card{grid-template-columns:240px 1fr}
+  html[data-ui="studio"] .client-card{grid-template-columns:200px 1fr;grid-template-rows:auto auto auto}
+  html[data-ui="studio"] .client-card>header{grid-column:1;grid-row:1/4}
+  html[data-ui="studio"] .client-focus{grid-column:2;grid-row:1}
+  html[data-ui="studio"] .client-next{grid-column:2;grid-row:2}
+  html[data-ui="studio"] .client-card footer{grid-column:2;grid-row:3}
+  html[data-ui="studio"] #poolGrid .idea-card{grid-template-columns:125px minmax(0,1fr) 200px}
+}
+
+@media (max-width:700px){
+  html[data-ui="studio"] .page-head h1{font-size:27px}
+  html[data-ui="studio"] .dash-hero{padding-top:2px}
+  html[data-ui="studio"] .dash-hero h1{font-size:31px}
+  html[data-ui="studio"] .dash-quick{display:grid;width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}
+  html[data-ui="studio"] .dash-quick button{min-width:0}
+  html[data-ui="studio"] .dash-action-grid{grid-template-columns:repeat(2,1fr)}
+  html[data-ui="studio"] .dash-action-grid>button:nth-child(2){border-right:0}
+  html[data-ui="studio"] .dash-action-grid>button:nth-child(-n+2){border-bottom:1px solid var(--line-soft)}
+  html[data-ui="studio"] .board-demands,
+  html[data-ui="studio"] .board-sales,
+  html[data-ui="studio"] .board-delivery,
+  html[data-ui="studio"] .board-reports{grid-template-columns:1fr}
+  html[data-ui="studio"] .content-card{grid-template-columns:1fr}
+  html[data-ui="studio"] .content-cover{min-height:180px;border-right:0;border-bottom:1px solid var(--line)}
+  html[data-ui="studio"] .client-card{display:flex;padding:18px}
+  html[data-ui="studio"] .client-card>header{align-self:auto;padding:0 0 12px;border-right:0;border-bottom:1px solid var(--line-soft)}
+  html[data-ui="studio"] .client-focus{margin:12px 0 0}
+  html[data-ui="studio"] .client-next{grid-template-columns:75px 1fr;border-bottom:1px solid var(--line-soft)}
+  html[data-ui="studio"] .client-card footer{margin-top:0}
+  html[data-ui="studio"] #poolGrid .idea-card{display:flex;min-height:0}
+  html[data-ui="studio"] .idea-card-head{flex-direction:row;align-items:center;justify-content:space-between;padding:16px 17px 10px}
+  html[data-ui="studio"] .idea-card-meta{flex-direction:row;align-items:center}
+  html[data-ui="studio"] .idea-card-copy{padding:3px 17px 0;border-left:0}
+  html[data-ui="studio"] .idea-tags{margin:10px 17px 14px}
+  html[data-ui="studio"] #poolGrid .idea-card-foot{padding:12px 17px;flex-direction:row;align-items:center;border-left:0;border-top:1px solid var(--line-soft)}
+  html[data-ui="studio"] .idea-engagement{align-self:auto}
+  html[data-ui="studio"] .case-journey{grid-template-columns:1fr}
+  html[data-ui="studio"] .case-journey>div+div{border-left:0;border-top:1px solid var(--line-soft)}
+}
+
+@media (max-width:560px){
+  html[data-ui="studio"] .topbar .brand{color:#fffaf5}
+  html[data-ui="studio"] .topbar .avatar{border-radius:7px!important}
+  html[data-ui="studio"] .main{padding:20px 14px 126px}
+  html[data-ui="studio"] .page-head{padding-bottom:14px}
+  html[data-ui="studio"] .dash-hero{padding-bottom:20px}
+  html[data-ui="studio"] .dash-quick button{padding:11px 6px;border-bottom:0}
+  html[data-ui="studio"] .dash-action-grid{margin-bottom:24px}
+  html[data-ui="studio"] .dash-panel{background:rgba(255,253,249,.72)}
+  html[data-ui="studio"] .board-overview{grid-template-columns:repeat(2,1fr)}
+  html[data-ui="studio"] .record-card{background:rgba(255,253,249,.72)}
+  html[data-ui="studio"] .insight-card,html[data-ui="studio"] .playbook-card,
+  html[data-ui="studio"] .case-card,html[data-ui="studio"] .report-card{padding:18px}
+  html[data-ui="studio"] #poolGrid .idea-card h3{font-size:19px}
+  html[data-ui="studio"] .stat-key-grid{grid-template-columns:repeat(2,1fr)}
+  html[data-ui="studio"] .stat-key-card:nth-child(2n){border-right:0}
+  html[data-ui="studio"] .stat-key-card{border-bottom:1px solid var(--line-soft)}
+  html[data-ui="studio"] .stat-key-card:last-child{grid-column:1/-1;border-bottom:0}
+  html[data-ui="studio"] body.authpage{display:grid;padding:24px 20px;background:radial-gradient(700px 400px at 50% 0,#eee1e5,transparent 70%),#f4f0ea}
+  html[data-ui="studio"] .authbox{display:block;width:100%;max-width:420px}
+  html[data-ui="studio"] .authbox::before{display:none}
+  html[data-ui="studio"] .authbrand{justify-content:center;margin-bottom:20px;color:var(--ink)}
+  html[data-ui="studio"] .authbrand small{color:var(--muted)}
+  html[data-ui="studio"] .authcard{padding:7px 20px 22px;border-radius:7px}
+  html[data-ui="studio"] .authfoot{position:static;margin-top:18px;color:var(--muted);text-align:center}
+}
+
+@media (prefers-reduced-motion:reduce){html[data-ui="studio"] .dash-loading i{animation:none}}

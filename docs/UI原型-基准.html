@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IdeaHub · 内部灵感库</title>
+<style>
+:root{
+  --surface:#fcfcfb; --page:#f4f4f1; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --line:#e5e4dd; --line-soft:#eeede7;
+  --blue:#2a78d6; --blue-dk:#1c5cab; --blue-100:#e8f1fd; --blue-200:#cde2fb;
+  --good:#0ca30c; --good-bg:#e7f6e7; --warn:#b57d00; --warn-bg:#fdf3dc;
+  --crit:#d03b3b; --crit-bg:#fbeaea; --violet:#4a3aa7; --violet-bg:#eeecf9;
+  --radius:12px; --shadow:0 1px 2px rgba(11,11,11,.05),0 4px 16px rgba(11,11,11,.06);
+  --shadow-lg:0 8px 40px rgba(11,11,11,.16);
+  --font:"Noto Sans CJK SC",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font);background:var(--page);color:var(--ink);font-size:14px;
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:14px;color:inherit}
+
+/* ---------- top bar ---------- */
+.topbar{height:60px;background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:28px;padding:0 24px;position:relative;z-index:20}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:-.01em}
+.brand .bulb{width:28px;height:28px;border-radius:8px;background:linear-gradient(140deg,#3987e5,#2a78d6);
+  display:grid;place-items:center;color:#fff;font-size:15px}
+.brand small{font-weight:400;color:var(--muted);font-size:12px;margin-left:2px}
+.nav{display:flex;gap:2px}
+.nav button{padding:7px 14px;border-radius:8px;font-size:14px;color:var(--ink2);font-weight:500;
+  transition:background .15s,color .15s}
+.nav button:hover{background:var(--line-soft)}
+.nav button.on{background:var(--ink);color:#fff}
+.nav .badge{display:inline-block;margin-left:6px;background:var(--blue-200);color:var(--blue-dk);
+  font-size:11px;padding:1px 6px;border-radius:20px;font-weight:600;vertical-align:1px}
+.nav button.on .badge{background:rgba(255,255,255,.22);color:#fff}
+.spacer{flex:1}
+.search{display:flex;align-items:center;gap:7px;background:var(--page);border:1px solid var(--line);
+  border-radius:9px;padding:0 11px;height:34px;width:210px;color:var(--muted)}
+.search input{border:none;background:none;outline:none;width:100%;font-size:13px}
+.btn{border-radius:9px;padding:0 15px;height:34px;font-size:13.5px;font-weight:600;
+  display:inline-flex;align-items:center;gap:6px;transition:.15s}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--blue-dk)}
+.btn-ghost{background:var(--surface);border:1px solid var(--line);color:var(--ink2)}
+.btn-ghost:hover{background:var(--line-soft)}
+.btn-good{background:var(--good);color:#fff}
+.btn-good:hover{filter:brightness(.92)}
+.btn-crit{background:var(--surface);border:1px solid #e8c9c9;color:var(--crit)}
+.btn-crit:hover{background:var(--crit-bg)}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--violet);color:#fff;
+  display:grid;place-items:center;font-size:12.5px;font-weight:600;flex:none}
+
+/* ---------- layout ---------- */
+.main{height:calc(100vh - 60px);overflow-y:auto;padding:22px 24px 60px}
+.wrap{max-width:1240px;margin:0 auto}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+h1{font-size:21px;letter-spacing:-.02em;font-weight:700}
+.sub{color:var(--muted);font-size:13px;margin-top:4px}
+.view{display:none}.view.on{display:block}
+
+/* ---------- filters ---------- */
+.filters{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.chip{padding:5px 12px;border-radius:20px;font-size:13px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink2);transition:.15s}
+.chip:hover{border-color:var(--muted)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:500}
+.divider-v{width:1px;height:20px;background:var(--line);margin:0 4px}
+
+/* ---------- cards ---------- */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:15px 16px 13px;display:flex;flex-direction:column;gap:9px;cursor:pointer;
+  transition:box-shadow .18s,border-color .18s,transform .18s;position:relative}
+.card:hover{box-shadow:var(--shadow);border-color:#d6d5cc;transform:translateY(-2px)}
+.card-top{display:flex;align-items:center;gap:8px}
+.pill{font-size:11.5px;font-weight:600;padding:2.5px 9px;border-radius:6px;display:inline-flex;
+  align-items:center;gap:4px;line-height:1.45}
+.pill-pending{background:var(--warn-bg);color:var(--warn)}
+.pill-reviewing{background:var(--blue-100);color:var(--blue-dk)}
+.pill-adopted{background:var(--good-bg);color:#0a7d0a}
+.pill-rejected{background:var(--crit-bg);color:var(--crit)}
+.cat{font-size:12px;color:var(--muted)}
+.card h3{font-size:15.5px;font-weight:650;line-height:1.45;letter-spacing:-.01em}
+.card p{font-size:13px;color:var(--ink2);line-height:1.65;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:11.5px;color:var(--ink2);background:var(--page);border:1px solid var(--line-soft);
+  padding:1.5px 7px;border-radius:5px}
+.card-foot{display:flex;align-items:center;gap:10px;margin-top:auto;padding-top:10px;
+  border-top:1px solid var(--line-soft)}
+.who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.who .av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  font-size:10px;color:#fff;font-weight:600;flex:none}
+.acts{margin-left:auto;display:flex;gap:6px;align-items:center}
+.vote{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;
+  border:1px solid var(--line);border-radius:7px;padding:3.5px 9px;color:var(--ink2);
+  background:var(--surface);transition:.15s}
+.vote:hover{border-color:var(--blue);color:var(--blue)}
+.vote.voted{background:var(--blue-100);border-color:var(--blue-200);color:var(--blue-dk)}
+.vote .arrow{transition:transform .25s}
+.vote.voted .arrow{transform:translateY(-2px)}
+.cmt{font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.card.flash{animation:flash 1.6s ease}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--blue-200);border-color:var(--blue)}
+  100%{box-shadow:0 0 0 0 transparent}}
+.card.enter{animation:enter .45s cubic-bezier(.2,.8,.3,1)}
+@keyframes enter{from{opacity:0;transform:translateY(-14px) scale(.97)}to{opacity:1}}
+.card.adopting{animation:adopt .9s ease forwards}
+@keyframes adopt{0%{}35%{box-shadow:0 0 0 4px rgba(12,163,12,.28);border-color:var(--good)}
+  100%{opacity:0;transform:scale(.9) translateY(-10px)}}
+
+/* ---------- formal table ---------- */
+.table{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:11px 16px;
+  background:#faf9f6;border-bottom:1px solid var(--line);letter-spacing:.02em}
+td{padding:13px 16px;border-bottom:1px solid var(--line-soft);font-size:13.5px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:#faf9f6}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+  color:var(--blue-dk);font-weight:600;background:var(--blue-100);padding:2px 7px;border-radius:5px;
+  white-space:nowrap;display:inline-block}
+td.prog{white-space:nowrap}
+.link{color:var(--blue);text-decoration:none;font-size:13px}
+.link:hover{text-decoration:underline}
+tr.flash-row{animation:flashrow 2s ease}
+@keyframes flashrow{0%{background:#e7f6e7}100%{background:transparent}}
+.progress{height:5px;background:var(--line-soft);border-radius:3px;overflow:hidden;width:78px;display:inline-block;vertical-align:middle}
+.progress i{display:block;height:100%;background:var(--blue);border-radius:3px}
+
+/* ---------- stats ---------- */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.tile .lab{font-size:12.5px;color:var(--muted);font-weight:500}
+.tile .val{font-size:31px;font-weight:700;letter-spacing:-.03em;margin-top:5px;line-height:1.1}
+.tile .delta{font-size:12px;margin-top:5px;color:#006300;font-weight:500}
+.tile .delta.flat{color:var(--muted)}
+.charts{display:grid;grid-template-columns:1.15fr 1fr;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:17px 19px}
+.panel h4{font-size:14px;font-weight:650;margin-bottom:3px}
+.panel .hint{font-size:12px;color:var(--muted);margin-bottom:16px}
+.bar-row{display:grid;grid-template-columns:64px 1fr 38px;align-items:center;gap:11px;margin-bottom:12px}
+.bar-lab{font-size:12.5px;color:var(--ink2);text-align:right}
+.bar-track{height:26px;background:transparent;position:relative}
+.bar-track::before{content:"";position:absolute;inset:0;border-left:1px solid var(--line)}
+.bar-fill{height:22px;margin-top:2px;background:var(--blue);border-radius:0 4px 4px 0;width:0;
+  transition:width .8s cubic-bezier(.2,.8,.3,1)}
+.bar-val{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums;font-weight:600}
+.funnel{display:flex;flex-direction:column;gap:9px}
+.fn{display:flex;align-items:center;gap:12px}
+.fn .fbar{height:34px;border-radius:6px;display:flex;align-items:center;padding:0 11px;color:#fff;
+  font-size:12.5px;font-weight:600;width:0;transition:width .8s cubic-bezier(.2,.8,.3,1);white-space:nowrap;overflow:hidden}
+.fn .fmeta{font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* ---------- modal ---------- */
+.mask{position:fixed;inset:0;background:rgba(11,11,11,.42);opacity:0;pointer-events:none;
+  transition:opacity .22s;z-index:40}
+.mask.on{opacity:1;pointer-events:auto}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.97);width:560px;
+  background:var(--surface);border-radius:16px;box-shadow:var(--shadow-lg);z-index:50;
+  opacity:0;pointer-events:none;transition:.24s cubic-bezier(.2,.8,.3,1);overflow:hidden}
+.modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.modal header{padding:18px 22px 0}
+.modal header h2{font-size:17px;font-weight:700;letter-spacing:-.015em}
+.modal header .hint{font-size:12.5px;color:var(--muted);margin-top:4px}
+.form{padding:16px 22px 4px;display:flex;flex-direction:column;gap:13px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:5px}
+.field label span{color:var(--crit)}
+.field .opt{color:var(--muted);font-weight:400}
+.inp{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;outline:none;
+  background:var(--surface);transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-100)}
+textarea.inp{resize:none;height:96px;line-height:1.65}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.dupe{background:var(--warn-bg);border:1px solid #f0dfb4;border-radius:9px;padding:10px 12px;
+  font-size:12.5px;color:#7a5600;display:none}
+.dupe.on{display:block;animation:enter .3s}
+.dupe b{display:block;margin-bottom:5px;font-size:12.5px}
+.dupe a{color:#7a5600;text-decoration:underline;display:block;margin-top:3px}
+.modal footer{padding:14px 22px;border-top:1px solid var(--line-soft);display:flex;
+  align-items:center;gap:10px;background:#faf9f6;margin-top:14px}
+.check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+.check .box{width:16px;height:16px;border:1.5px solid var(--muted);border-radius:4px;display:grid;
+  place-items:center;color:#fff;font-size:10px;transition:.15s}
+.check.on .box{background:var(--blue);border-color:var(--blue)}
+
+/* ---------- drawer ---------- */
+.drawer{position:fixed;top:0;right:0;height:100vh;width:600px;background:var(--surface);
+  box-shadow:var(--shadow-lg);z-index:50;transform:translateX(100%);transition:transform .3s cubic-bezier(.2,.8,.3,1);
+  display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer .dhead{padding:20px 24px 15px;border-bottom:1px solid var(--line-soft)}
+.drawer .dhead .card-top{margin-bottom:9px}
+.drawer h2{font-size:19px;font-weight:700;line-height:1.45;letter-spacing:-.02em}
+.dmeta{display:flex;align-items:center;gap:10px;margin-top:11px;font-size:12.5px;color:var(--muted)}
+.dbody{flex:1;overflow-y:auto;padding:18px 24px}
+.dbody .content{font-size:14px;line-height:1.85;color:var(--ink2);white-space:pre-line}
+.sec-title{font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.04em;
+  margin:24px 0 12px;display:flex;align-items:center;gap:8px}
+.sec-title::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+.cmt-item{display:flex;gap:10px;margin-bottom:15px}
+.cmt-item .av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;color:#fff;font-weight:600;flex:none}
+.cmt-body{flex:1}
+.cmt-body .n{font-size:12.5px;font-weight:600}
+.cmt-body .n span{color:var(--muted);font-weight:400;margin-left:7px;font-size:11.5px}
+.cmt-body .t{font-size:13.5px;color:var(--ink2);line-height:1.7;margin-top:3px}
+.cmt-item.enter{animation:enter .35s}
+.timeline{border-left:2px solid var(--line-soft);margin-left:5px;padding-left:16px}
+.tl{position:relative;font-size:12.5px;color:var(--ink2);padding-bottom:12px;line-height:1.6}
+.tl::before{content:"";position:absolute;left:-21px;top:5px;width:8px;height:8px;border-radius:50%;
+  background:var(--line);border:2px solid var(--surface)}
+.tl.hi::before{background:var(--good)}
+.tl span{color:var(--muted);margin-left:6px;font-size:11.5px}
+.dfoot{border-top:1px solid var(--line);padding:13px 24px;background:#faf9f6}
+.cmt-input{display:flex;gap:9px;align-items:center;margin-bottom:11px}
+.cmt-input .inp{flex:1}
+.review-bar{display:flex;align-items:center;gap:9px}
+.review-bar .lab{font-size:12px;color:var(--muted);margin-right:auto}
+.big-vote{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:10px;padding:7px 13px;min-width:56px;transition:.15s}
+.big-vote:hover{border-color:var(--blue)}
+.big-vote.voted{background:var(--blue-100);border-color:var(--blue-200)}
+.big-vote .n{font-size:17px;font-weight:700;line-height:1.1}
+.big-vote .l{font-size:11px;color:var(--muted)}
+
+/* ---------- toast ---------- */
+.toasts{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:80;
+  display:flex;flex-direction:column;gap:9px;align-items:center}
+.toast{background:#0b0b0b;color:#fff;padding:11px 17px;border-radius:11px;font-size:13.5px;
+  box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:9px;animation:tin .3s cubic-bezier(.2,.8,.3,1);white-space:nowrap}
+.toast .ic{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex:none}
+.toast.ok .ic{background:var(--good);color:#fff}
+.toast.info .ic{background:var(--blue);color:#fff}
+.toast.out{animation:tout .3s forwards}
+@keyframes tin{from{opacity:0;transform:translateY(14px) scale(.96)}}
+@keyframes tout{to{opacity:0;transform:translateY(10px) scale(.96)}}
+
+/* ---------- api log (backend visualiser) ---------- */
+.apilog{position:fixed;left:20px;bottom:20px;width:392px;background:rgba(13,13,13,.94);
+  color:#d7d6cd;border-radius:12px;padding:11px 13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11.5px;line-height:1.75;z-index:70;box-shadow:var(--shadow-lg);opacity:0;
+  transition:opacity .3s;pointer-events:none;max-height:220px;overflow:hidden}
+.apilog.on{opacity:1}
+.apilog .hd{color:#7d7c74;font-size:10.5px;letter-spacing:.09em;margin-bottom:6px;
+  display:flex;align-items:center;gap:6px}
+.apilog .hd i{width:6px;height:6px;border-radius:50%;background:#0ca30c;display:inline-block}
+.apilog .ln{animation:enter .25s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apilog .m{color:#3987e5;font-weight:700}
+.apilog .m.post{color:#1baf7a}.apilog .m.patch{color:#eda100}
+.apilog .sql{color:#9085e9}
+.apilog .ok{color:#5fbf5f}
+.apilog .dim{color:#6f6e67}
+
+/* ---------- fake cursor ---------- */
+#cur{position:fixed;width:22px;height:22px;left:-40px;top:-40px;z-index:999;pointer-events:none;
+  transition:transform .08s}
+#cur svg{filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))}
+#cur.click{transform:scale(.82)}
+.ripple{position:fixed;width:34px;height:34px;border-radius:50%;border:2px solid var(--blue);
+  z-index:998;pointer-events:none;animation:rip .5s ease-out forwards}
+@keyframes rip{from{transform:translate(-50%,-50%) scale(.3);opacity:.9}
+  to{transform:translate(-50%,-50%) scale(1.5);opacity:0}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><div class="bulb">💡</div>IdeaHub <small>内部灵感库</small></div>
+  <nav class="nav">
+    <button id="tab-pool" class="on" onclick="go('pool')">灵感池<span class="badge" id="poolN">12</span></button>
+    <button id="tab-formal" onclick="go('formal')">正式库<span class="badge" id="formalN">6</span></button>
+    <button id="tab-stats" onclick="go('stats')">统计</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="search">🔍<input placeholder="搜索灵感…"></div>
+  <button class="btn btn-primary" id="btnNew" onclick="openModal()">＋ 提交灵感</button>
+  <div class="avatar" style="background:#4a3aa7">陈</div>
+</header>
+
+<div class="main" id="main">
+  <div class="wrap">
+
+    <!-- ============ 灵感池 ============ -->
+    <section class="view on" id="v-pool">
+      <div class="page-head">
+        <div>
+          <h1>灵感池</h1>
+          <div class="sub">所有人都能提、都能看。被采纳的灵感会进入正式库立项。</div>
+        </div>
+      </div>
+      <div class="filters">
+        <button class="chip on">全部</button>
+        <button class="chip">待评审</button>
+        <button class="chip">评审中</button>
+        <button class="chip">我提的</button>
+        <div class="divider-v"></div>
+        <button class="chip">产品</button>
+        <button class="chip">技术</button>
+        <button class="chip">运营</button>
+        <button class="chip">流程</button>
+        <div class="divider-v"></div>
+        <button class="chip on">🔥 按热度</button>
+        <button class="chip">最新</button>
+      </div>
+      <div class="grid" id="poolGrid"></div>
+    </section>
+
+    <!-- ============ 正式库 ============ -->
+    <section class="view" id="v-formal">
+      <div class="page-head">
+        <div>
+          <h1>正式库</h1>
+          <div class="sub">已通过评审、分配负责人并立项的灵感。每条都有唯一编号。</div>
+        </div>
+      </div>
+      <div class="table">
+        <table>
+          <thead><tr>
+            <th style="width:158px">编号</th><th>灵感</th><th style="width:104px">负责人</th>
+            <th style="width:110px">立项日期</th><th style="width:148px">进度</th><th style="width:92px">方案文档</th>
+          </tr></thead>
+          <tbody id="formalBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 统计 ============ -->
+    <section class="view" id="v-stats">
+      <div class="page-head">
+        <div><h1>统计看板</h1><div class="sub">数据范围：2026 年 1 月至今</div></div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="lab">累计灵感</div><div class="val" id="s1">0</div><div class="delta">↑ 本月新增 23 条</div></div>
+        <div class="tile"><div class="lab">待评审</div><div class="val" id="s2">0</div><div class="delta flat">最久已等待 6 天</div></div>
+        <div class="tile"><div class="lab">已采纳</div><div class="val" id="s3">0</div><div class="delta">↑ 本月新增 4 条</div></div>
+        <div class="tile"><div class="lab">采纳率</div><div class="val" id="s4">0%</div><div class="delta flat">行业健康区间 15–25%</div></div>
+      </div>
+      <div class="charts">
+        <div class="panel">
+          <h4>各分类灵感数</h4>
+          <div class="hint">按提交分类统计 · 单位：条</div>
+          <div id="barChart"></div>
+        </div>
+        <div class="panel">
+          <h4>灵感流转漏斗</h4>
+          <div class="hint">从提交到立项的转化情况</div>
+          <div class="funnel" id="funnel"></div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ============ 提交弹窗 ============ -->
+<div class="mask" id="mask" onclick="closeAll()"></div>
+<div class="modal" id="modal">
+  <header>
+    <h2>提交一个灵感</h2>
+    <div class="hint">不用打磨得多完整 —— 一句话的想法也值得被记下来。</div>
+  </header>
+  <div class="form">
+    <div class="field">
+      <label>标题 <span>*</span></label>
+      <input class="inp" id="fTitle" placeholder="用一句话说清楚这个想法">
+    </div>
+    <div class="dupe" id="dupe">
+      <b>⚠ 发现 2 条相似灵感，确认不是重复？</b>
+      <a>· 客服工单自动打标（相似度 71%）</a>
+      <a>· 用大模型总结用户反馈（相似度 64%）</a>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>分类 <span>*</span></label>
+        <select class="inp" id="fCat">
+          <option>产品</option><option>技术</option><option>运营</option>
+          <option>流程</option><option>其他</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>标签 <span class="opt">（可选）</span></label>
+        <input class="inp" id="fTags" placeholder="回车分隔，如：AI、降本">
+      </div>
+    </div>
+    <div class="field">
+      <label>详细说明 <span>*</span></label>
+      <textarea class="inp" id="fBody" placeholder="想解决什么问题？大概怎么做？"></textarea>
+    </div>
+  </div>
+  <footer>
+    <div class="check" id="anon" onclick="this.classList.toggle('on')">
+      <div class="box">✓</div>匿名提交
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" onclick="closeAll()">取消</button>
+    <button class="btn btn-primary" id="btnSubmit" onclick="submitIdea()">提交到灵感池</button>
+  </footer>
+</div>
+
+<!-- ============ 详情抽屉 ============ -->
+<aside class="drawer" id="drawer">
+  <div class="dhead">
+    <div class="card-top">
+      <span class="pill pill-reviewing" id="dPill">⏳ 评审中</span>
+      <span class="cat" id="dCat">技术 · #AI #效率</span>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" style="height:28px;padding:0 10px" onclick="closeAll()">关闭</button>
+    </div>
+    <h2 id="dTitle"></h2>
+    <div class="dmeta">
+      <span class="who"><span class="av" id="dAv"></span><span id="dAuthor"></span></span>
+      <span>·</span><span id="dTime"></span>
+      <span>·</span><span id="dViews">147 次浏览</span>
+    </div>
+  </div>
+  <div class="dbody" id="dBody">
+    <div class="content" id="dContent"></div>
+    <div class="sec-title">讨论 <span id="dCmtN" style="font-weight:400"></span></div>
+    <div id="dCmts"></div>
+    <div class="sec-title">流转记录</div>
+    <div class="timeline" id="dTl"></div>
+  </div>
+  <div class="dfoot">
+    <div class="cmt-input">
+      <input class="inp" id="dCmtInput" placeholder="说点什么…">
+      <button class="btn btn-ghost" onclick="postComment()">发表</button>
+    </div>
+    <div class="review-bar">
+      <button class="big-vote" id="dVote" onclick="voteFromDrawer()">
+        <div class="n" id="dVoteN">0</div><div class="l">▲ 支持</div>
+      </button>
+      <span class="lab">你是评审委员，可以决定这条灵感的去向</span>
+      <button class="btn btn-crit" onclick="rejectIdea()">否决</button>
+      <button class="btn btn-good" onclick="adoptIdea()">✓ 采纳并立项</button>
+    </div>
+  </div>
+</aside>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- ============ 后端调用可视化 ============ -->
+<div class="apilog" id="apilog">
+  <div class="hd"><i></i>API / 数据库 实时调用</div>
+  <div id="apilines"></div>
+</div>
+
+<div id="cur">
+<svg width="22" height="22" viewBox="0 0 22 22"><path d="M4 2l13 7.5-5.6 1.3-2.4 5.4z" fill="#fff" stroke="#0b0b0b" stroke-width="1.4" stroke-linejoin="round"/></svg>
+</div>
+
+<script>
+/* ============ 假数据 ============ */
+const COLORS = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#4a3aa7','#e34948'];
+const hash = s => [...s].reduce((a,c)=>a+c.charCodeAt(0),0);
+const avc = n => COLORS[hash(n)%COLORS.length];
+
+let pool = [
+ {id:7,t:'用大模型自动给客服工单打标签',c:'技术',tags:['AI','降本'],
+  d:'客服每天手动给几百条工单分类，既慢又不一致。可以接一个小模型，工单进来自动打「退款 / 物流 / 功能建议」等标签，人工只需复核。预计能省掉客服团队每天 2 小时。',
+  a:'林知远',s:'reviewing',v:34,cm:12,tm:'3 天前'},
+ {id:8,t:'新人入职「第一周清单」自动化',c:'流程',tags:['入职','效率'],
+  d:'现在新人入职靠 HR 手动拉群、发文档、约人。做一个入职流程引擎：入职当天自动建群、推送必读文档、按角色约好 5 场 1v1。',
+  a:'周未',s:'pending',v:28,cm:7,tm:'5 天前'},
+ {id:9,t:'把周会改成异步文档 + 15 分钟决策会',c:'流程',tags:['会议','协作'],
+  d:'现在的周会 60 分钟里有 45 分钟在同步信息，这部分完全可以写成文档提前读。会上只留需要当场拍板的事。',
+  a:'匿名',s:'pending',v:41,cm:23,tm:'6 天前'},
+ {id:10,t:'官网加一个「三分钟试用」的沙箱环境',c:'产品',tags:['增长','转化'],
+  d:'潜在客户现在必须注册才能看到产品长什么样，流失很大。做一个免注册的只读沙箱，塞进预置数据，让人三分钟内摸清楚。',
+  a:'苏禾',s:'reviewing',v:52,cm:16,tm:'1 周前'},
+ {id:11,t:'内部工具统一登录（SSO）',c:'技术',tags:['基建'],
+  d:'现在内部有 7 个系统 7 套密码，新人入职要开 7 次账号，离职要关 7 次。接一套 SSO，一次登录全部打通。',
+  a:'林知远',s:'pending',v:19,cm:5,tm:'1 周前'},
+ {id:12,t:'客户成功案例做成短视频而不是 PDF',c:'运营',tags:['内容','品牌'],
+  d:'现在的案例是 8 页 PDF，销售发出去基本没人看完。改成 90 秒竖版短视频，客户自己出镜讲，转发率会高很多。',
+  a:'叶昭',s:'pending',v:23,cm:9,tm:'1 周前'},
+ {id:13,t:'给报表系统加一个「订阅推送」',c:'产品',tags:['数据'],
+  d:'用户每天上来手动看同一张报表。加个订阅：选好报表和频率，到点自动推到企业微信。',
+  a:'苏禾',s:'pending',v:17,cm:4,tm:'9 天前'},
+ {id:14,t:'把构建流水线从 12 分钟压到 3 分钟',c:'技术',tags:['CI','效率'],
+  d:'现在每次提交要等 12 分钟才知道有没有挂。用远程缓存 + 只跑受影响的测试，应该能压到 3 分钟以内。',
+  a:'何叙',s:'pending',v:31,cm:11,tm:'11 天前'},
+ {id:15,t:'季度 OKR 复盘改成「灯塔案例」分享',c:'运营',tags:['文化'],
+  d:'OKR 复盘现在是每个组念 PPT。改成每季度选 3 个做得最好的案例深讲，其余书面提交。',
+  a:'匿名',s:'pending',v:14,cm:6,tm:'12 天前'},
+];
+
+let formal = [
+ {code:'IDEA-2026-0038',t:'搜索结果加入个性化排序',own:'苏禾',dt:'2026-07-14',p:80},
+ {code:'IDEA-2026-0037',t:'移动端离线草稿箱',own:'何叙',dt:'2026-06-30',p:100},
+ {code:'IDEA-2026-0036',t:'客户健康分预警看板',own:'叶昭',dt:'2026-06-11',p:55},
+ {code:'IDEA-2026-0035',t:'内部 API 网关限流改造',own:'林知远',dt:'2026-05-22',p:100},
+ {code:'IDEA-2026-0034',t:'新官网信息架构重做',own:'周未',dt:'2026-04-30',p:35},
+ {code:'IDEA-2026-0033',t:'销售线索自动分配规则引擎',own:'苏禾',dt:'2026-04-08',p:100},
+];
+
+const COMMENTS = {
+ 7:[{n:'苏禾',t:'客服组去年统计过，工单里 60% 是物流和退款两类，这两类特征很明显，模型不用很大就能做到 90% 准确率。',w:'2 天前'},
+    {n:'何叙',t:'技术上没问题。建议先跑影子模式：模型打标但不生效，跟人工结果比对两周，准确率达标再切。',w:'2 天前'},
+    {n:'周未',t:'+1。另外希望保留人工修正的入口，修正数据可以回流去做微调。',w:'昨天'}],
+};
+
+/* ============ 渲染 ============ */
+const pillMap={pending:['pill-pending','⏳ 待评审'],reviewing:['pill-reviewing','👀 评审中'],
+  adopted:['pill-adopted','✓ 已采纳'],rejected:['pill-rejected','✕ 已否决']};
+
+function cardHTML(x){
+  const [pc,pt]=pillMap[x.s];
+  return `<article class="card" data-id="${x.id}" onclick="openDrawer(${x.id})">
+    <div class="card-top"><span class="pill ${pc}">${pt}</span><span class="cat">${x.c}</span></div>
+    <h3>${x.t}</h3><p>${x.d}</p>
+    <div class="tags">${x.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
+    <div class="card-foot">
+      <span class="who"><span class="av" style="background:${avc(x.a)}">${x.a[0]}</span>${x.a} · ${x.tm}</span>
+      <span class="acts">
+        <span class="cmt">💬 ${x.cm}</span>
+        <button class="vote${x.voted?' voted':''}" onclick="event.stopPropagation();vote(${x.id},this)">
+          <span class="arrow">▲</span><span class="vn">${x.v}</span></button>
+      </span>
+    </div></article>`;
+}
+function renderPool(){
+  document.getElementById('poolGrid').innerHTML = pool.map(cardHTML).join('');
+  document.getElementById('poolN').textContent = pool.length;
+}
+function renderFormal(){
+  document.getElementById('formalBody').innerHTML = formal.map(f=>`<tr data-code="${f.code}">
+    <td><span class="code">${f.code}</span></td>
+    <td style="font-weight:550">${f.t}</td>
+    <td><span class="who"><span class="av" style="background:${avc(f.own)}">${f.own[0]}</span>${f.own}</span></td>
+    <td style="color:var(--ink2);font-variant-numeric:tabular-nums">${f.dt}</td>
+    <td class="prog"><span class="progress"><i style="width:${f.p}%"></i></span>
+        <span style="font-size:12px;color:var(--muted);margin-left:7px">${f.p}%</span></td>
+    <td><a class="link" href="#">查看 ↗</a></td></tr>`).join('');
+  document.getElementById('formalN').textContent = formal.length;
+}
+renderPool(); renderFormal();
+
+/* ============ 统计 ============ */
+const CATS=[['产品',31],['技术',44],['运营',22],['流程',26],['其他',9]];
+/* 漏斗 = 有序的量级，用同一个蓝色 ramp 由浅到深，不混色相 */
+const FUNNEL=[['提交',132,'#5598e7'],['进入评审',88,'#2a78d6'],['已采纳',24,'#1c5cab'],['已落地',11,'#104281']];
+function buildStats(){
+  document.getElementById('barChart').innerHTML = CATS.map(([n,v])=>
+    `<div class="bar-row"><div class="bar-lab">${n}</div>
+     <div class="bar-track"><div class="bar-fill" data-w="${v/44*100}"></div></div>
+     <div class="bar-val">${v}</div></div>`).join('');
+  document.getElementById('funnel').innerHTML = FUNNEL.map(([n,v,c],i)=>{
+    const pct=v/132*100, inside=pct>=26;   // 窄条把标签放到条外，避免被裁掉
+    const conv=i?Math.round(v/FUNNEL[i-1][1]*100)+'% 转化':'100%';
+    return `<div class="fn"><div class="fbar" style="background:${c}" data-w="${pct}">${inside?n+' '+v:''}</div>
+     <div class="fmeta">${inside?'':`<b style="color:var(--ink);font-weight:600">${n} ${v}</b> · `}${conv}</div></div>`;
+  }).join('');
+}
+buildStats();
+function animStats(){
+  countTo('s1',132); countTo('s2',9); countTo('s3',24); countTo('s4',18,'%');
+  setTimeout(()=>{document.querySelectorAll('.bar-fill,.fbar').forEach(e=>e.style.width=e.dataset.w+'%')},120);
+}
+function countTo(id,end,suf=''){
+  const el=document.getElementById(id); let i=0; const step=Math.max(1,Math.round(end/28));
+  clearInterval(el._t);
+  el._t=setInterval(()=>{i+=step; if(i>=end){i=end;clearInterval(el._t)} el.textContent=i+suf},22);
+}
+
+/* ============ 导航 ============ */
+function go(v){
+  ['pool','formal','stats'].forEach(k=>{
+    document.getElementById('v-'+k).classList.toggle('on',k===v);
+    document.getElementById('tab-'+k).classList.toggle('on',k===v);
+  });
+  document.getElementById('main').scrollTop=0;
+  if(v==='stats'){document.querySelectorAll('.bar-fill,.fbar').forEach(e=>e.style.width='0');animStats();
+    api('GET','/api/stats/overview','SELECT status, count(*) FROM ideas GROUP BY status');}
+  if(v==='formal'){
+    api('GET','/api/ideas?status=adopted','SELECT * FROM ideas WHERE status=\'adopted\' ORDER BY adopted_at DESC');
+    if(justAdopted){
+      const r=document.querySelector(`tr[data-code="${justAdopted}"]`);
+      if(r){r.classList.remove('flash-row');void r.offsetWidth;r.classList.add('flash-row');}
+    }
+  }
+  if(v==='pool') api('GET','/api/ideas?status=pending&sort=hot','SELECT * FROM ideas WHERE status IN (\'pending\',\'reviewing\') ORDER BY hot_score DESC');
+}
+
+/* ============ 交互 ============ */
+function openModal(){document.getElementById('mask').classList.add('on');document.getElementById('modal').classList.add('on');}
+function closeAll(){document.querySelectorAll('.mask,.modal,.drawer').forEach(e=>e.classList.remove('on'));
+  document.getElementById('dupe').classList.remove('on');}
+
+function submitIdea(){
+  const t=document.getElementById('fTitle').value.trim()||'未命名灵感';
+  const b=document.getElementById('fBody').value.trim();
+  const c=document.getElementById('fCat').value;
+  const tg=document.getElementById('fTags').value.split(/[、,，]/).filter(Boolean);
+  const anon=document.getElementById('anon').classList.contains('on');
+  api('POST','/api/ideas','BEGIN; INSERT INTO ideas(...) VALUES(...) RETURNING id;');
+  api('SQL','','INSERT INTO idea_activities(action=\'created\'); COMMIT;');
+  api('MQ','','→ 企业微信群机器人：新灵感待评审');
+  const n={id:99,t,c,tags:tg.length?tg:['新提交'],d:b,a:anon?'匿名':'陈屿',s:'pending',v:0,cm:0,tm:'刚刚'};
+  pool.unshift(n); renderPool();
+  const el=document.querySelector('.card[data-id="99"]');
+  el.classList.add('enter'); setTimeout(()=>el.classList.add('flash'),120);
+  closeAll(); toast('ok','灵感已提交，已通知评审委员');
+  ['fTitle','fBody','fTags'].forEach(i=>document.getElementById(i).value='');
+}
+
+function vote(id,btn){
+  const x=pool.find(p=>p.id===id); if(!x) return;
+  x.voted=!x.voted; x.v+=x.voted?1:-1;
+  btn.classList.toggle('voted',x.voted);
+  btn.querySelector('.vn').textContent=x.v;
+  api('POST',`/api/ideas/${id}/vote`,'INSERT INTO idea_votes ON CONFLICT DO NOTHING');
+}
+
+let cur=null, justAdopted=null;
+function openDrawer(id){
+  cur=pool.find(p=>p.id===id); if(!cur) return;
+  const [pc,pt]=pillMap[cur.s];
+  document.getElementById('dPill').className='pill '+pc;
+  document.getElementById('dPill').textContent=pt;
+  document.getElementById('dCat').textContent=cur.c+' · '+cur.tags.map(t=>'#'+t).join(' ');
+  document.getElementById('dTitle').textContent=cur.t;
+  document.getElementById('dAuthor').textContent=cur.a;
+  const av=document.getElementById('dAv'); av.textContent=cur.a[0]; av.style.background=avc(cur.a);
+  document.getElementById('dTime').textContent=cur.tm;
+  document.getElementById('dContent').textContent=cur.d;
+  document.getElementById('dVoteN').textContent=cur.v;
+  document.getElementById('dVote').classList.toggle('voted',!!cur.voted);
+  const cs=COMMENTS[id]||[];
+  document.getElementById('dCmtN').textContent=`（${cur.cm}）`;
+  document.getElementById('dCmts').innerHTML=cs.map(c=>
+    `<div class="cmt-item"><div class="av" style="background:${avc(c.n)}">${c.n[0]}</div>
+     <div class="cmt-body"><div class="n">${c.n}<span>${c.w}</span></div><div class="t">${c.t}</div></div></div>`).join('')
+     ||'<div style="font-size:13px;color:var(--muted)">还没有人讨论，来说第一句。</div>';
+  document.getElementById('dTl').innerHTML=
+    `<div class="tl">${cur.a} 提交了这条灵感<span>${cur.tm}</span></div>`+
+    (cur.s==='reviewing'?'<div class="tl">陈屿 认领评审，状态 → 评审中<span>2 天前</span></div>':'');
+  document.getElementById('dBody').scrollTop=0;
+  document.getElementById('mask').classList.add('on');
+  document.getElementById('drawer').classList.add('on');
+  api('GET',`/api/ideas/${id}`,'SELECT i.*, c.*, a.* FROM ideas i LEFT JOIN idea_comments c … LEFT JOIN idea_activities a …');
+}
+function voteFromDrawer(){
+  cur.voted=!cur.voted; cur.v+=cur.voted?1:-1;
+  document.getElementById('dVoteN').textContent=cur.v;
+  document.getElementById('dVote').classList.toggle('voted',cur.voted);
+  api('POST',`/api/ideas/${cur.id}/vote`,'INSERT INTO idea_votes ON CONFLICT DO NOTHING');
+  renderPool();
+}
+function postComment(){
+  const inp=document.getElementById('dCmtInput'); const v=inp.value.trim(); if(!v)return;
+  const box=document.getElementById('dCmts');
+  if(box.children.length && box.textContent.includes('还没有人讨论')) box.innerHTML='';
+  box.insertAdjacentHTML('beforeend',
+    `<div class="cmt-item enter"><div class="av" style="background:#4a3aa7">陈</div>
+     <div class="cmt-body"><div class="n">陈屿<span>刚刚</span></div><div class="t">${v}</div></div></div>`);
+  cur.cm++; document.getElementById('dCmtN').textContent=`（${cur.cm}）`;
+  inp.value=''; document.getElementById('dBody').scrollTop=document.getElementById('dBody').scrollHeight;
+  api('POST',`/api/ideas/${cur.id}/comments`,'INSERT INTO idea_comments; UPDATE ideas SET comment_count=comment_count+1');
+  renderPool();
+}
+function adoptIdea(){
+  const code='IDEA-2026-0039';
+  api('PATCH',`/api/ideas/${cur.id}/status`,'BEGIN; SELECT … FOR UPDATE;');
+  api('SQL','','UPDATE ideas SET status=\'adopted\', code=\'IDEA-2026-0039\', adopted_at=now();');
+  api('SQL','','INSERT INTO idea_activities(from_status=\'reviewing\', to_status=\'adopted\'); COMMIT;');
+  api('MQ','','→ 通知提交人 + 群机器人播报');
+  const el=document.querySelector(`.card[data-id="${cur.id}"]`);
+  if(el) el.classList.add('adopting');
+  const it=cur;
+  closeAll();
+  setTimeout(()=>{
+    pool=pool.filter(p=>p.id!==it.id); renderPool();
+    formal.unshift({code,t:it.t,own:'林知远',dt:'2026-08-20',p:0}); renderFormal(); justAdopted=code;
+    toast('ok',`已采纳 · 编号 ${code} · 负责人 林知远`);
+  },780);
+}
+function rejectIdea(){ toast('info','否决需填写理由（演示中略过）'); }
+
+function toast(k,msg){
+  const el=document.createElement('div'); el.className='toast '+k;
+  el.innerHTML=`<span class="ic">${k==='ok'?'✓':'i'}</span>${msg}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),300)},3400);
+}
+
+/* ============ 后端调用可视化 ============ */
+const logBox=document.getElementById('apilog'), lines=document.getElementById('apilines');
+let logT=null;
+function api(m,path,sql){
+  logBox.classList.add('on');
+  const cls=m.toLowerCase();
+  let html;
+  if(m==='SQL')      html=`<div class="ln"><span class="sql">   └ pg</span> <span class="dim">${sql}</span></div>`;
+  else if(m==='MQ')  html=`<div class="ln"><span class="ok">   └ mq</span> <span class="dim">${sql}</span></div>`;
+  else html=`<div class="ln"><span class="m ${cls}">${m}</span> ${path} <span class="ok">200</span>`+
+            (sql?`<div class="ln"><span class="sql">   └ pg</span> <span class="dim">${sql}</span></div>`:'')+`</div>`;
+  lines.insertAdjacentHTML('beforeend',html);
+  while(lines.children.length>7) lines.firstElementChild.remove();
+  clearTimeout(logT); logT=setTimeout(()=>logBox.classList.remove('on'),4200);
+}
+
+/* ============ 演示用光标 ============ */
+const curEl=document.getElementById('cur');
+addEventListener('mousemove',e=>{curEl.style.left=e.clientX+'px';curEl.style.top=e.clientY+'px';});
+addEventListener('mousedown',e=>{
+  curEl.classList.add('click');
+  const r=document.createElement('div'); r.className='ripple';
+  r.style.left=e.clientX+'px'; r.style.top=e.clientY+'px';
+  document.body.appendChild(r); setTimeout(()=>r.remove(),500);
+});
+addEventListener('mouseup',()=>curEl.classList.remove('click'));
+
+/* 打字机（供演示脚本调用） */
+window.typeInto=function(id,text,ms){
+  return new Promise(res=>{
+    const el=document.getElementById(id); el.focus(); el.value='';
+    let i=0; const t=setInterval(()=>{
+      el.value=text.slice(0,++i);
+      if(i>=text.length){clearInterval(t);res();}
+    },ms||42);
+  });
+};
+window.showDupe=()=>document.getElementById('dupe').classList.add('on');
+</script>
+</body>
+</html>

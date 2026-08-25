@@ -1,0 +1,10 @@
+node_modules
+data
+docs
+.git
+.env
+scripts/.uidiff
+*.md
+# 但 web/ 下的 md 是要给对接方下载的，必须进镜像。
+# 上面那条 *.md 是为了不把 README / 进度记录 这些开发文档打进去。
+!web/*.md
