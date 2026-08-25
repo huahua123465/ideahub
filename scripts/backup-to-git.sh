@@ -27,7 +27,27 @@ if [ "$SIZE" -lt 10240 ]; then
   rm -f backup/ideahub-db.sql.tmp
   exit 1
 fi
-mv backup/ideahub-db.sql.tmp backup/ideahub-db.sql
+
+# pg_dump 每次都会生成一个随机的 \restrict 令牌（PG 16 的还原防护），
+# 于是即使一行数据都没变，导出文件也会差两行。不处理的话每天都会多一个
+# "备份"提交，而里面什么都没变 —— 时间长了就没人再看这些提交了。
+#
+# 做法是"只有正文真的变了才换文件"，而不是去改 pg_dump 的输出：
+# 那两行是还原时的安全护栏，留着原样最好。
+if git cat-file -e HEAD:backup/ideahub-db.sql 2>/dev/null; then
+  OLD=$(mktemp); NEW=$(mktemp)
+  git show HEAD:backup/ideahub-db.sql | grep -v '^\\restrict \|^\\unrestrict ' > "$OLD"
+  grep -v '^\\restrict \|^\\unrestrict ' backup/ideahub-db.sql.tmp > "$NEW"
+  if cmp -s "$OLD" "$NEW"; then
+    rm -f backup/ideahub-db.sql.tmp "$OLD" "$NEW"
+    echo "[备份] 数据库内容无变化，保留上一份导出"
+  else
+    rm -f "$OLD" "$NEW"
+    mv backup/ideahub-db.sql.tmp backup/ideahub-db.sql
+  fi
+else
+  mv backup/ideahub-db.sql.tmp backup/ideahub-db.sql
+fi
 
 # ---- 提交 ----
 # 附件（data/uploads）本身就在工作区里跟踪着，git add -A 会带上新增的那些。
