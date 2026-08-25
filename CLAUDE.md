@@ -10,7 +10,10 @@
 1. **改动范围默认锁死在 `/root/ideahub-deploy/` 之内。** 要写这个目录以外的任何文件，先停下来问。
 2. **拿不准就问，不要试。** 这台机器上跑着生产服务，"试一下看会不会坏"的代价是别人的服务掉线。
 3. **动手前后各跑一次 `bash scripts/check-neighbors.sh`**，确认邻居服务状态没变。
-4. 本项目**不是 git 仓库**，没有版本回退。改文件前先备份到项目外的临时目录。
+4. 本项目**是 git 仓库**（2026-08-25 起），远端是 GitHub 私有仓库 `huahua123465/ideahub`。
+   改坏了可以 `git checkout -- <文件>` 退回去，不必再往项目外拷临时备份。
+   **注意远端仓库里有 `.env` 和 `data/uploads/`（真实客户附件）** —— 那是有意的，
+   它同时充当异地备份，所以仓库必须一直保持 Private。
 
 ---
 
@@ -87,7 +90,9 @@ IdeaHub 自己的 Caddy 拿不到 80。这是有意的设计，不要试图"改�
 - 在 `/opt/ai-stack` 或 `/` 下执行 `docker compose down`
 - 动 xray / x-ui 的任何东西（`443/8443/2053/2083/2087/2096/11111/62789`）
 - `rm -rf` 项目目录以外的路径
-- 碰 `/root/ideahub-deploy/data/`（Postgres 数据 + 用户上传的附件，**没有异地备份**）
+- 碰 `/root/ideahub-deploy/data/`（Postgres 数据 + 用户上传的附件）。
+  异地备份现在有了（每天 03:20 自动推 GitHub，见下面「备份」一节），
+  但那是**每天一次**的快照 —— 今天新产生的数据仍然只有这一份，删了就没了。
 
 ---
 
@@ -99,8 +104,8 @@ cd /root/ideahub-deploy
 # 1. 改之前：记录邻居基线
 bash scripts/check-neighbors.sh > /tmp/before.txt
 
-# 2. 备份要动的文件（本项目没有 git）
-mkdir -p /tmp/ideahub-backup && cp <要改的文件> /tmp/ideahub-backup/
+# 2. 确认工作区干净（有 git 了，不用再手工拷备份）
+git status --short          # 应该是空的；不空说明有别人/上一轮没提交的改动
 
 # 3. 改代码 → 语法检查 → 打包
 node --check web/src/<改过的文件>.js
@@ -118,6 +123,20 @@ diff /tmp/before.txt /tmp/after.txt   # 应当无差异
 反过来说，改源码本身不会影响正在跑的站点，这一步是天然的安全垫。
 
 ---
+
+## 五又二分之一、备份与恢复
+
+| | |
+|---|---|
+| 每天 03:00 | `scripts/backup.sh` → 本地 `/backup/ideahub`，保留 30 天 |
+| 每天 03:20 | `scripts/backup-to-git.sh` → 推到 GitHub 私有仓库（代码 + `.env` + 附件 + 整库导出） |
+
+远端仓库是**这套系统的完整副本**：机器没了，在新机器上 clone 下来就能原样起回来，
+步骤见 `backup/恢复说明.md`。`.env` 也在里面，恢复时不用重新想数据库密码。
+
+**只覆盖 IdeaHub。** 这台机器上的 xray / x-ui、new-api、infinite-canvas 都不在备份范围内。
+
+改 `.env` 要留意：它现在跟着仓库走，从别处 `git pull` 会覆盖掉服务器上这一份。
 
 ## 六、访问地址
 
