@@ -131,8 +131,16 @@ const MIME = {
   '.svg':  'image/svg+xml',
   '.png':  'image/png',
   '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  // 登录页那张插图就是 webp。不在这张表里的话会以
+  // application/octet-stream 发出去 —— 浏览器多半会嗅探后照样显示，
+  // 但那是碰巧能用：一旦哪天前面加了 nosniff，图就整个不出来了。
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.gif':  'image/gif',
   '.ico':  'image/x-icon',
   '.woff2':'font/woff2',
+  '.woff': 'font/woff',
 };
 
 async function serveStatic(req, pathname, res) {
