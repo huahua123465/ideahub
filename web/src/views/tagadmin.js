@@ -9,6 +9,7 @@ import { api } from '../api.js';
 import { esc, $ } from '../util.js';
 import { toast } from '../toast.js';
 import { tagDict, invalidate, KIND_ORDER, KIND_LABEL } from '../tagstore.js';
+import { confirmAction } from '../confirm.js';
 
 let me = { role: 'member' };
 export const setMe = u => { me = u; };
@@ -77,7 +78,14 @@ async function paintTags() {
 
   box.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('删除这个标签？已经用过的标签只会停用，历史资料上的标签不受影响。')) return;
+      const ok = await confirmAction({
+        eyebrow: '影响全站标签',
+        title: '删除这个标签？',
+        message: '还没被用过的标签会直接删掉；已经用过的只会停用。',
+        note: '历史资料上已经打好的这个标签不受影响，仍然看得到。',
+        confirmLabel: '确认删除',
+      });
+      if (!ok) return;
       try {
         const r = await api.tagDelete(Number(btn.dataset.del));
         toast('ok', r.message || '已删除');
@@ -155,7 +163,14 @@ async function paintKeys() {
 
   box.querySelectorAll('.key-revoke').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('停用这把钥匙？对接方会立刻写不进来。')) return;
+      const ok = await confirmAction({
+        eyebrow: '会中断对接',
+        title: '停用这把钥匙？',
+        message: '对接方（技术1 / 技术2）会立刻写不进来，正在跑的推送会开始报 401。',
+        note: '停用不可撤销。要恢复对接只能重新生成一把新钥匙交给对方。',
+        confirmLabel: '确认停用',
+      });
+      if (!ok) return;
       try { await api.apiKeyRevoke(Number(btn.dataset.id)); await paintKeys(); }
       catch (e) { toast('info', e.message || '停用失败'); }
     });

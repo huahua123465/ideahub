@@ -89,7 +89,7 @@ export const api = {
   setStatus: (id, status, extra = {}) => call('PATCH', `/api/ideas/${id}/status`, { status, ...extra }),
   similar:   (q)           => call('GET',   '/api/ideas/similar' + qs({ q })),
   stats:     ()            => call('GET',   '/api/stats/overview'),
-  ideaDelete:(id)          => call('DELETE', `/api/ideas/${id}`),
+  ideaDelete:(id, purge)   => call('DELETE', `/api/ideas/${id}${purge ? '?purge=1' : ''}`),
 
   /* ---------- 第一版团队资料库 ---------- */
   // 统一标签（任务 3）
@@ -103,7 +103,7 @@ export const api = {
   demands:       (opts = {})   => call('GET',    '/api/demands' + qs(opts)),
   demandsCreate: (payload)     => call('POST',   '/api/demands', payload),
   demandsPatch:  (id, payload) => call('PATCH',  `/api/demands/${id}`, payload),
-  demandsDelete: (id)          => call('DELETE', `/api/demands/${id}`),
+  demandsDelete: (id, purge)   => call('DELETE', `/api/demands/${id}${purge ? '?purge=1' : ''}`),
 
   // 全局搜索（任务 5）
   search:      (q, opts = {}) => call('GET', '/api/search' + qs({ q, ...opts })),
@@ -139,12 +139,12 @@ export const api = {
   accounts:       (opts = {})   => call('GET',    '/api/accounts' + qs(opts)),
   accountsCreate: (payload)     => call('POST',   '/api/accounts', payload),
   accountsPatch:  (id, payload) => call('PATCH',  `/api/accounts/${id}`, payload),
-  accountsDelete: (id)          => call('DELETE', `/api/accounts/${id}`),
+  accountsDelete: (id, purge)   => call('DELETE', `/api/accounts/${id}${purge ? '?purge=1' : ''}`),
 
   works:          (opts = {})   => call('GET',    '/api/works' + qs(opts)),
   worksCreate:    (payload)     => call('POST',   '/api/works', payload),
   worksPatch:     (id, payload) => call('PATCH',  `/api/works/${id}`, payload),
-  worksDelete:    (id)          => call('DELETE', `/api/works/${id}`),
+  worksDelete:    (id, purge)   => call('DELETE', `/api/works/${id}${purge ? '?purge=1' : ''}`),
   /** 技术1 推过来的那份完整采集分析。约 30KB 一条，只在点开某条对标时才拉 ——
       列表里带的是 row.analysis 那一小块摘要（见 boards.mjs 的注释）。 */
   workAnalysis:   (id)          => call('GET',    `/api/works/${id}/analysis`),
@@ -152,17 +152,17 @@ export const api = {
   playbook:       (opts = {})   => call('GET',    '/api/playbook' + qs(opts)),
   playbookCreate: (payload)     => call('POST',   '/api/playbook', payload),
   playbookPatch:  (id, payload) => call('PATCH',  `/api/playbook/${id}`, payload),
-  playbookDelete: (id)          => call('DELETE', `/api/playbook/${id}`),
+  playbookDelete: (id, purge)   => call('DELETE', `/api/playbook/${id}${purge ? '?purge=1' : ''}`),
 
   clients:        (opts = {})   => call('GET',    '/api/clients' + qs(opts)),
   clientsCreate:  (payload)     => call('POST',   '/api/clients', payload),
   clientsPatch:   (id, payload) => call('PATCH',  `/api/clients/${id}`, payload),
-  clientsDelete:  (id)          => call('DELETE', `/api/clients/${id}`),
+  clientsDelete:  (id, purge)   => call('DELETE', `/api/clients/${id}${purge ? '?purge=1' : ''}`),
 
   cases:          (opts = {})   => call('GET',    '/api/cases' + qs(opts)),
   casesCreate:    (payload)     => call('POST',   '/api/cases', payload),
   casesPatch:     (id, payload) => call('PATCH',  `/api/cases/${id}`, payload),
-  casesDelete:    (id)          => call('DELETE', `/api/cases/${id}`),
+  casesDelete:    (id, purge)   => call('DELETE', `/api/cases/${id}${purge ? '?purge=1' : ''}`),
 
   /* ---------- 客户档案的附件 ----------
      上传不能走 call()：那个函数会把 body 序列化成 JSON 并设 content-type。

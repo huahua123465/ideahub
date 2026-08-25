@@ -11,6 +11,7 @@ import { currentUser } from '../lib/auth.mjs';
 import { publish } from '../lib/bus.mjs';
 import { sourceOf, sourceRow, str } from '../lib/entity.mjs';
 import { loadTags, setTags, clearTags, tagWhere } from '../lib/tags.mjs';
+import { purgeRecord } from '../lib/purge.mjs';
 
 function demandRow(r, tags = []) {
   return {
@@ -124,9 +125,19 @@ export function mount(router) {
 
   /** 软删。业务人员自己就能删（任务 14 要求「不需要找技术改数据库」），
       但记录留在库里，误删能捞回来。 */
-  router.del('/api/demands/:id', async (req, res, params) => {
-    await currentUser(req);
+  router.del('/api/demands/:id', async (req, res, params, url) => {
+    const me = await currentUser(req);
     const id = Number(params.id);
+
+    // ?purge=1 —— 管理员永久删除。软删捞得回来，这个捞不回来，所以只开给管理员。
+    if (q(url, 'purge')) {
+      assertAdmin(me);
+      const stat = await purgeRecord({ entity: 'demand', table: 'demands', id: id, scope: null });
+      if (!stat.ok) throw notFound('没有这条需求');
+      sendJson(res, 200, { ok: true, purged: true, ...stat });
+      publish('board:updated', { board: 'demands' });
+      return;
+    }
     const { rows } = await query(
       'UPDATE demands SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING id', [id]);
     if (!rows[0]) throw notFound('没有这条需求');

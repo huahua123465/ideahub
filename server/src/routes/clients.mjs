@@ -14,6 +14,7 @@ import { currentUser } from '../lib/auth.mjs';
 import { publish } from '../lib/bus.mjs';
 import { sourceOf, sourceRow } from '../lib/entity.mjs';
 import { loadTags, setTags, clearTags, tagWhere } from '../lib/tags.mjs';
+import { purgeRecord } from '../lib/purge.mjs';
 
 const STAGES = ['lead', 'wechat', 'profiled', 'consulted', 'coaching', 'renewed', 'lost'];
 const TIERS = ['S', 'A', 'B', 'C'];
@@ -192,9 +193,19 @@ export function mount(router) {
     publish('board:updated', { board: 'clients' });
   });
 
-  router.del('/api/clients/:id', async (req, res, params) => {
-    await assertCanDelete(req);
+  router.del('/api/clients/:id', async (req, res, params, url) => {
+    const me = await assertCanDelete(req);
     const cid = Number(params.id);
+
+    // ?purge=1 —— 管理员永久删除。软删捞得回来，这个捞不回来，所以只开给管理员。
+    if (q(url, 'purge')) {
+      assertAdmin(me);
+      const stat = await purgeRecord({ entity: 'client', table: 'clients', id: cid, scope: 'client' });
+      if (!stat.ok) throw notFound('没有这个客户');
+      sendJson(res, 200, { ok: true, purged: true, ...stat });
+      publish('board:updated', { board: 'clients' });
+      return;
+    }
     const { rows } = await query(
       'UPDATE clients SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING id', [cid]);
     if (!rows[0]) throw notFound('没有这个客户');
@@ -297,9 +308,19 @@ export function mount(router) {
     publish('board:updated', { board: 'cases' });
   });
 
-  router.del('/api/cases/:id', async (req, res, params) => {
-    await assertCanDelete(req);
+  router.del('/api/cases/:id', async (req, res, params, url) => {
+    const me = await assertCanDelete(req);
     const kid = Number(params.id);
+
+    // ?purge=1 —— 管理员永久删除。软删捞得回来，这个捞不回来，所以只开给管理员。
+    if (q(url, 'purge')) {
+      assertAdmin(me);
+      const stat = await purgeRecord({ entity: 'case', table: 'cases', id: kid, scope: null });
+      if (!stat.ok) throw notFound('没有这个案例');
+      sendJson(res, 200, { ok: true, purged: true, ...stat });
+      publish('board:updated', { board: 'cases' });
+      return;
+    }
     const { rows } = await query(
       'UPDATE cases SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING id', [kid]);
     if (!rows[0]) throw notFound('没有这个案例');

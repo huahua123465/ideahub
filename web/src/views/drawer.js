@@ -6,6 +6,7 @@ import { toast } from '../toast.js';
 import { STATUS_ICON } from '../icons.js';
 import { SOURCE_LABEL } from '../tagstore.js';
 import * as links from './links.js';
+import { confirmAction } from '../confirm.js';
 
 let cur = null;
 let me = { id: 1, name: '陈屿', role: 'admin' };
@@ -18,7 +19,14 @@ export const current = () => cur;
  */
 export async function removeCurrent() {
   if (!cur) return;
-  if (!confirm(`确定删除「${cur.title}」？\n删除后它不再出现在灵感池、正式库和搜索结果里。`)) return;
+  const ok = await confirmAction({
+    eyebrow: '可恢复删除',
+    title: '删除这条灵感？',
+    message: `「${cur.title}」将不再出现在灵感池、正式库和全局搜索中。`,
+    note: '记录仍保留在数据库中，需要时可由管理员恢复。',
+    confirmLabel: '确认删除',
+  });
+  if (!ok) return;
   try {
     await api.ideaDelete(cur.id);
     closeDrawer();

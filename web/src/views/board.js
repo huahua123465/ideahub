@@ -241,6 +241,13 @@ function build(key, root) {
       menu?.querySelector('summary')?.focus();
       return removeRow(key, Number(del.dataset.del));
     }
+    const purge = e.target.closest('[data-purge]');
+    if (purge) {
+      const menu = purge.closest('details');
+      menu?.removeAttribute('open');
+      menu?.querySelector('summary')?.focus();
+      return purgeRow(key, Number(purge.dataset.purge));
+    }
     const ed = e.target.closest('[data-edit]');
     if (ed) return openEdit(key, Number(ed.dataset.edit));
     // 删除收进更多菜单，避免手机上每张卡都常驻一个红色危险操作。
@@ -404,6 +411,7 @@ function paintRows(key, root) {
     cases: caseCard, reports: reportCard,
   };
   const renderer = renderers[key] || genericCard;
+  renderKey = key;
   body.innerHTML = s.items.map((row, i) => renderer(row, i, key, s.tab)).join('');
 }
 
@@ -425,7 +433,10 @@ const sourceHtml = row => {
 };
 const deleteHtml = row => `<details class="record-menu">
   <summary aria-label="更多操作">${ICON.more}</summary>
-  <div><button data-del="${row.id}">${ICON.trash}<span>删除记录</span></button></div>
+  <div>
+    <button data-del="${row.id}">${ICON.trash}<span>删除记录</span></button>
+    ${purgeBtn(row)}
+  </div>
 </details>`;
 /** 点开是只读详情的卡片（技术1 分析过的对标作品）要在菜单里补一个入口，
     否则「改个标题、写一句为什么值得对标」这件事在界面上没有任何办法做到。 */
@@ -434,9 +445,26 @@ const menuHtml = row => `<details class="record-menu">
   <div>
     <button data-edit="${row.id}">${ICON.pencil}<span>编辑台账字段</span></button>
     <button data-del="${row.id}">${ICON.trash}<span>删除记录</span></button>
+    ${purgeBtn(row)}
   </div>
 </details>`;
 const cardAttrs = row => `data-id="${row.id}" role="button" tabindex="0"`;
+
+/**
+ * 当前正在渲染的板块。
+ *
+ * 卡片模板（deleteHtml / menuHtml）是纯字符串函数，拿不到 key，而
+ * 「要不要显示永久删除」取决于这个板块是不是软删。给八个模板逐个加参数
+ * 改动面更大，而列表渲染是**同步**的一次 map —— 渲染前设一下就够用。
+ */
+let renderKey = null;
+
+/** 永久删除只给管理员，而且只在软删板块出现：
+    非软删的板块本来就是真删，两个菜单项做同一件事只会让人犹豫该点哪个。 */
+const canPurge = () => me.role === 'admin' && !!BOARDS[renderKey]?.softDelete;
+const purgeBtn = row => (canPurge()
+  ? `<button data-purge="${row.id}" class="menu-danger">${ICON.trash}<span>永久删除</span></button>`
+  : '');
 
 function demandCard(row, i) {
   return `<article class="record-card insight-card" ${cardAttrs(row)}>
@@ -885,7 +913,18 @@ async function loadFiles(clientId, boardKey, scope = 'clients') {
 
   fbox.querySelectorAll('.fdel').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('确定删除这个附件？')) return;
+      const isImg = btn.closest('.imgcard');
+      const name = isImg
+        ? (btn.closest('.imgcard')?.querySelector('img')?.alt || '这张图')
+        : (btn.closest('.fileitem')?.querySelector('a')?.textContent || '这个附件');
+      const ok = await confirmAction({
+        eyebrow: '不可恢复操作',
+        title: isImg ? '删除这张图？' : '删除这个附件？',
+        message: `「${name}」会从这条记录上移除。`,
+        note: '文件本体会一起删掉，删除后无法恢复。',
+        confirmLabel: '确认删除',
+      });
+      if (!ok) return;
       try {
         await api.fileDelete(Number(btn.dataset.fid));
         toast('ok', '已删除');
@@ -997,6 +1036,41 @@ export async function saveEdit() {
     toast('info', e.message || '保存失败');
   } finally {
     btn.disabled = false;
+  }
+}
+
+/**
+ * 永久删除（管理员）。
+ *
+ * 和 removeRow 的差别不是"更狠一点"，是**没有后路**：软删的记录还躺在库里，
+ * 找管理员就能捞回来；这个连同附件、标签、关联和磁盘上的图片一起抹掉，
+ * 谁都恢复不了。所以措辞里不留任何"应该还能找回来"的暗示。
+ */
+async function purgeRow(key, id) {
+  const b = BOARDS[key];
+  const row = stateOf(key).items.find(x => Number(x.id) === id);
+  const name = String(row?.title || '').trim();
+  const ok = await confirmAction({
+    eyebrow: '永久删除 · 无法恢复',
+    title: '把这条记录从数据库里抹掉？',
+    message: name
+      ? `「${name}」及其附件、标签、关联关系会被一起删除。`
+      : '这条记录及其附件、标签、关联关系会被一起删除。',
+    note: '这不是普通删除：记录不会留在数据库里，管理员也无法恢复。'
+        + '只想让它从列表里消失的话，请用「删除记录」。',
+    confirmLabel: '我确定，永久删除',
+  });
+  if (!ok) return;
+  try {
+    const r = await api[b.api + 'Delete'](id, true);
+    // 顺手把清理了什么报出来 —— 永久删除是不可逆的，做完让人看见到底动了什么
+    const bits = [r?.attachments ? `附件 ${r.attachments}` : null,
+                  r?.images ? `图片 ${r.images}` : null,
+                  r?.links ? `关联 ${r.links}` : null].filter(Boolean);
+    toast('ok', bits.length ? `已永久删除（含 ${bits.join('、')}）` : '已永久删除');
+    await render(key);
+  } catch (e) {
+    toast('info', e.message || '永久删除失败');
   }
 }
 

@@ -2436,3 +2436,9 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
 @media (max-width:720px){
   .bench-imgs{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 }
+
+/* 更多菜单里的「永久删除」：和普通删除区分开 —— 两者后果不一样，
+   长得一样的话迟早有人在列表里点错。只给管理员渲染。 */
+.record-menu .menu-danger{color:var(--crit)}
+.record-menu .menu-danger .ic{color:var(--crit)}
+.record-menu .menu-danger:hover{background:var(--crit-bg)}

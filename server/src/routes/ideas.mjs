@@ -6,6 +6,7 @@ import { currentUser } from '../lib/auth.mjs';
 import { publish } from '../lib/bus.mjs';
 import { sourceOf } from '../lib/entity.mjs';
 import { setTags, clearTags, tagWhere, loadTags } from '../lib/tags.mjs';
+import { purgeRecord } from '../lib/purge.mjs';
 
 const CATEGORIES = ['产品', '技术', '运营', '流程', '其他'];
 
@@ -281,7 +282,7 @@ export function mount(router) {
      软删：业务人员自己就能删错填的记录，不用找技术改数据库；
      但记录留在库里，误删能捞回来，指向它的评论和关联也不会变成断头指针。
      作者本人和管理员可删 —— 别人提的灵感不该被随手删掉。 */
-  router.del('/api/ideas/:id', async (req, res, params) => {
+  router.del('/api/ideas/:id', async (req, res, params, url) => {
     const me = await currentUser(req);
     const id = Number(params.id);
     const { rows: cur } = await query(
@@ -289,6 +290,16 @@ export function mount(router) {
     if (!cur[0]) throw notFound('这条灵感不存在或已被删除');
     if (Number(cur[0].author_id) !== me.id && me.role !== 'admin') {
       throw forbidden('只有作者本人和管理员能删除');
+    }
+
+    // ?purge=1 —— 管理员永久删除。软删捞得回来，这个捞不回来，所以只开给管理员。
+    if (q(url, 'purge')) {
+      assertAdmin(me);
+      const stat = await purgeRecord({ entity: 'idea', table: 'ideas', id: id, scope: null });
+      if (!stat.ok) throw notFound('这条灵感不存在');
+      sendJson(res, 200, { ok: true, purged: true, ...stat });
+      publish('idea:bulk', {});
+      return;
     }
     await query('UPDATE ideas SET deleted_at = now() WHERE id = $1', [id]);
     await clearTags('idea', id);

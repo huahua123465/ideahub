@@ -10,12 +10,13 @@
  */
 import { query } from '../db/index.mjs';
 import { readJson, sendJson, q, need, badRequest, notFound, forbidden } from '../lib/http.mjs';
-import { currentUser } from '../lib/auth.mjs';
+import { currentUser, assertAdmin } from '../lib/auth.mjs';
 import { publish } from '../lib/bus.mjs';
 import { sourceOf, sourceRow } from '../lib/entity.mjs';
 import { loadTags, setTags, clearTags, tagWhere } from '../lib/tags.mjs';
 import { analysisView } from '../lib/t1-analysis.mjs';
 import { COVER_DIR, dropCover } from '../lib/cover.mjs';
+import { purgeRecord } from '../lib/purge.mjs';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -182,8 +183,22 @@ export function mount(router) {
     publish('board:updated', { board: rows[0].channel });
   });
 
-  router.del('/api/accounts/:id', async (req, res, params) => {
-    await assertCanDelete(req);
+  router.del('/api/accounts/:id', async (req, res, params, url) => {
+    const me = await assertCanDelete(req);
+
+    // ?purge=1 —— 管理员永久删除。works.account_id 是 ON DELETE SET NULL，
+    // 所以挂在这个账号下的作品不会被连带删掉，只是变成"没有归属账号"。
+    if (q(url, 'purge')) {
+      assertAdmin(me);
+      const id = Number(params.id);
+      const { rows: ch } = await query('SELECT channel FROM channel_accounts WHERE id = $1', [id]);
+      if (!ch[0]) throw notFound('没有这个账号');
+      const stat = await purgeRecord({ entity: 'account', table: 'channel_accounts', id, scope: null });
+      sendJson(res, 200, { ok: true, purged: true, ...stat });
+      publish('board:updated', { board: ch[0].channel });
+      return;
+    }
+
     const { rows } = await query(
       `UPDATE channel_accounts SET deleted_at = now()
         WHERE id = $1 AND deleted_at IS NULL RETURNING channel`, [Number(params.id)]);
@@ -348,9 +363,35 @@ export function mount(router) {
     publish('board:updated', { board: row.channel });
   });
 
-  router.del('/api/works/:id', async (req, res, params) => {
-    await assertCanDelete(req);
+  router.del('/api/works/:id', async (req, res, params, url) => {
+    const me = await assertCanDelete(req);
     const wid = Number(params.id);
+
+    // ?purge=1 —— 管理员的**永久删除**：直接从库里抹掉，不留 deleted_at 那一行。
+    // 和软删的区别不只是"更彻底"：软删完记录还在，误删能捞回来；这个捞不回来。
+    // 所以它只开给管理员，而且界面上是另一个菜单项，不是同一个按钮的选项 ——
+    // 两个后果完全不同的操作放在同一次点击里，迟早会有人点错。
+    if (q(url, 'purge')) {
+      assertAdmin(me);
+      const { rows: ch } = await query('SELECT channel FROM works WHERE id = $1', [wid]);
+      if (!ch[0]) throw notFound('没有这条记录');
+      // 先收拾磁盘上的图：封面 + 图文笔记那一叠。work_analyses 有
+      // ON DELETE CASCADE，行会跟着走，但文件不会 —— 不在这里删就永远没人认领了。
+      const { rows: wa } = await query(
+        'SELECT cover_file, digest FROM work_analyses WHERE work_id = $1', [wid]);
+      let imgs = 0;
+      if (wa[0]) {
+        if (wa[0].cover_file) await dropCover(wa[0].cover_file);
+        for (const f of (Array.isArray(wa[0].digest?.imageFiles) ? wa[0].digest.imageFiles : [])) {
+          if (f?.file) { await dropCover(f.file); imgs++; }
+        }
+      }
+      const stat = await purgeRecord({ entity: 'work', table: 'works', id: wid, scope: null });
+      sendJson(res, 200, { ok: true, purged: true, images: imgs, ...stat });
+      publish('board:updated', { board: ch[0].channel });
+      return;
+    }
+
     const { rows } = await query(
       `UPDATE works SET deleted_at = now()
         WHERE id = $1 AND deleted_at IS NULL RETURNING channel`, [wid]);
@@ -421,8 +462,21 @@ export function mount(router) {
     publish('board:updated', { board: rows[0].board });
   });
 
-  router.del('/api/playbook/:id', async (req, res, params) => {
-    await assertCanDelete(req);
+  router.del('/api/playbook/:id', async (req, res, params, url) => {
+    const me = await assertCanDelete(req);
+
+    // ?purge=1 —— 管理员永久删除
+    if (q(url, 'purge')) {
+      assertAdmin(me);
+      const id = Number(params.id);
+      const { rows: bd } = await query('SELECT board FROM playbook_items WHERE id = $1', [id]);
+      if (!bd[0]) throw notFound('没有这条记录');
+      const stat = await purgeRecord({ entity: 'playbook', table: 'playbook_items', id, scope: null });
+      sendJson(res, 200, { ok: true, purged: true, ...stat });
+      publish('board:updated', { board: bd[0].board });
+      return;
+    }
+
     const { rows } = await query(
       `UPDATE playbook_items SET deleted_at = now()
         WHERE id = $1 AND deleted_at IS NULL RETURNING board`, [Number(params.id)]);

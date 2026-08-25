@@ -15,6 +15,7 @@ import { toast } from '../toast.js';
 import { STAGE } from '../boards.js';
 import { SOURCE_LABEL } from '../tagstore.js';
 import * as links from './links.js';
+import { confirmAction } from '../confirm.js';
 
 const events = new EventTarget();
 export { events };
@@ -188,7 +189,14 @@ async function paint() {
   });
 
   root.querySelectorAll('.cd-del-delivery').forEach(b => b.addEventListener('click', async () => {
-    if (!confirm('删除这条交付记录？')) return;
+    const ok = await confirmAction({
+      eyebrow: '不可恢复操作',
+      title: '删除这条交付记录？',
+      message: '这条交付记录会从该客户的档案里移除。',
+      note: '删除后无法恢复。',
+      confirmLabel: '确认删除',
+    });
+    if (!ok) return;
     try {
       await api.deliveryDelete(cur, Number(b.dataset.did));
       await paint();

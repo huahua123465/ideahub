@@ -11,6 +11,7 @@ import { esc, $, fromNow, avatarColor, initial } from '../util.js';
 import { toast } from '../toast.js';
 import { ICON } from '../icons.js';
 import * as alertBox from './alert.js';
+import { confirmAction } from '../confirm.js';
 
 let peers = [], groups = [], unreadTotal = 0, lastUnread = 0;
 let openPanel = false;
@@ -255,11 +256,25 @@ async function act(kind, mid) {
       return;
     }
     if (kind === 'recall') {
-      if (!confirm('撤回这条消息？对方会看到「撤回了一条消息」。')) return;
+      const ok = await confirmAction({
+        eyebrow: '双方都会看到',
+        title: '撤回这条消息？',
+        message: '消息内容会从双方的对话里消失。',
+        note: '对方那边会留下一行「撤回了一条消息」，看得出你撤回过。',
+        confirmLabel: '确认撤回',
+      });
+      if (!ok) return;
       await api.chatRecall(mid);
     }
     if (kind === 'delete') {
-      if (!confirm('从你这里删掉这条消息？\n对方那边不受影响，仍然能看到。')) return;
+      const ok = await confirmAction({
+        eyebrow: '只影响你自己',
+        title: '从你这里删掉这条消息？',
+        message: '这条消息只会从你的对话里消失。',
+        note: '对方那边不受影响，仍然能看到它。要双方都看不到请用「撤回」。',
+        confirmLabel: '确认删除',
+      });
+      if (!ok) return;
       await api.chatDelete(mid);
     }
     // 正在编辑的就是这一条的话，编辑状态必须跟着结束
@@ -512,7 +527,14 @@ export function bind() {
 
   $('#chatGroupDel').addEventListener('click', async () => {
     if (conv?.kind !== 'group') return;
-    if (!confirm(`解散「${conv.name}」？\n群里的聊天记录和文件会一起删掉，所有人都看不到了，无法恢复。`)) return;
+    const ok = await confirmAction({
+      eyebrow: '不可恢复操作',
+      title: `解散「${conv.name}」？`,
+      message: '群里的聊天记录和文件会一起删掉，所有成员都将看不到。',
+      note: '这一步无法撤销，也没有任何人能恢复。',
+      confirmLabel: '确认解散',
+    });
+    if (!ok) return;
     try {
       await api.chatGroupDelete(conv.id);
       toast('ok', '群已解散');
