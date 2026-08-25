@@ -15,6 +15,11 @@ body.authpage{
 
 .authbox{width:100%;max-width:412px}
 
+/* 品牌故事区默认隐藏，soft 主题在宽屏下将它展开成手绘灵感册。
+   独立放在这里是为了保证主题样式没加载时，登录表单仍然正常可用。 */
+.authstory{display:none}
+.authstory h1,.authstory p,.authstory figure{margin:0}
+
 .authbrand{display:flex;align-items:center;gap:11px;margin-bottom:20px;justify-content:center}
 .authbrand .bulb{width:36px;height:36px;border-radius:10px;
   background:var(--grad-primary);display:grid;place-items:center;color:#fff;

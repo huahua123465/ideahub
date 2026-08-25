@@ -317,8 +317,21 @@ html[data-ui="soft"] .toast{border-radius:12px;background:#3e383e}
 html[data-ui="soft"] body.authpage{background:
   radial-gradient(700px 500px at 15% 10%,rgba(185,143,160,.12),transparent 68%),
   radial-gradient(700px 500px at 90% 90%,rgba(101,128,116,.08),transparent 65%),#f7f5f2}
-html[data-ui="soft"] .authbox{position:relative;display:grid;grid-template-columns:380px 410px;grid-template-rows:1fr auto;width:min(840px,100%);max-width:none;gap:0;align-items:center;border:1px solid rgba(69,57,65,.07);border-radius:26px;background:#fffdfa;box-shadow:0 30px 90px rgba(48,39,45,.12);overflow:visible}
-html[data-ui="soft"] .authbox::before{content:"把零散想法，轻松整理成清晰判断。";grid-column:1;grid-row:1;align-self:stretch;display:flex;align-items:center;padding:70px 42px 120px;border-radius:25px 0 0 25px;background:linear-gradient(145deg,#eee3e8,#f6efec);color:#4a3d46;font-family:var(--display);font-size:31px;font-weight:720;line-height:1.55;letter-spacing:-.035em}
+html[data-ui="soft"] .authbox{position:relative;display:grid;grid-template-columns:minmax(0,510px) 410px;grid-template-rows:1fr auto;width:min(920px,100%);min-height:560px;max-width:none;gap:0;align-items:center;border:1px solid rgba(69,57,65,.07);border-radius:26px;background:#fffdfa;box-shadow:0 30px 90px rgba(48,39,45,.12);overflow:hidden}
+html[data-ui="soft"] .authstory{position:relative;grid-column:1;grid-row:1/3;align-self:stretch;display:block;min-width:0;overflow:hidden;padding:38px 42px 118px;border-radius:25px 0 0 25px;background:
+  radial-gradient(420px 300px at 18% 8%,rgba(185,143,160,.14),transparent 72%),
+  linear-gradient(145deg,#f1ece3,#f7f1ea);color:#4a3d46;isolation:isolate}
+html[data-ui="soft"] .authstory::before{content:"";position:absolute;inset:0;z-index:-1;opacity:.22;pointer-events:none;background-image:
+  repeating-linear-gradient(0deg,rgba(87,72,61,.035) 0,rgba(87,72,61,.035) 1px,transparent 1px,transparent 4px)}
+html[data-ui="soft"] .authstory-copy{position:relative;z-index:2}
+html[data-ui="soft"] .authstory-copy span{display:block;margin-bottom:8px;color:#9a736c;font-size:11px;font-weight:700;letter-spacing:.18em}
+html[data-ui="soft"] .authstory-copy h1{color:#4a3d46;font-family:var(--display);font-size:30px;font-weight:720;line-height:1.42;letter-spacing:-.035em}
+html[data-ui="soft"] .authsketch{position:absolute;z-index:1;left:10px;right:4px;top:128px;bottom:78px;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 18px 24px rgba(75,60,48,.08))}
+html[data-ui="soft"] .authsketch img{display:block;width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply;opacity:.93;
+  -webkit-mask-image:radial-gradient(ellipse 76% 72% at 50% 52%,#000 62%,rgba(0,0,0,.82) 78%,transparent 100%);
+  mask-image:radial-gradient(ellipse 76% 72% at 50% 52%,#000 62%,rgba(0,0,0,.82) 78%,transparent 100%);
+  animation:auth-sketch-drift 8s ease-in-out infinite;transform-origin:50% 55%}
+@keyframes auth-sketch-drift{0%,100%{transform:translateY(0) rotate(-.18deg)}50%{transform:translateY(-4px) rotate(.18deg)}}
 html[data-ui="soft"] .authbrand{position:absolute;left:42px;bottom:64px;justify-content:flex-start;margin:0;color:#433941}
 html[data-ui="soft"] .authbrand small{color:#94868f}
 html[data-ui="soft"] .authbrand .bulb{border-radius:10px;background:#c47e78;box-shadow:none}
@@ -356,6 +369,16 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .client-next{grid-column:2;grid-row:2;border-left:0}
   html[data-ui="soft"] .client-card footer{grid-column:2;grid-row:3}
   html[data-ui="soft"] #poolGrid .idea-card:first-child{grid-template-columns:minmax(0,1fr) 215px}
+}
+
+@media (max-width:820px){
+  html[data-ui="soft"] body.authpage{display:grid;padding:24px 18px;background:radial-gradient(650px 420px at 50% 0,rgba(185,143,160,.15),transparent 70%),#f7f5f2}
+  html[data-ui="soft"] .authbox{display:block;width:100%;min-height:0;max-width:420px;border-radius:22px;overflow:hidden}
+  html[data-ui="soft"] .authstory{display:none}
+  html[data-ui="soft"] .authbrand{position:static;justify-content:center;margin:22px 0 4px;color:var(--ink)}
+  html[data-ui="soft"] .authbrand small{color:var(--muted)}
+  html[data-ui="soft"] .authcard{padding:12px 21px 24px;border-radius:0}
+  html[data-ui="soft"] .authfoot{position:static;margin:0 18px 20px;color:var(--muted);text-align:center}
 }
 
 @media (max-width:700px){
@@ -418,7 +441,7 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .stat-key-card:last-child{grid-column:1/-1}
   html[data-ui="soft"] body.authpage{display:grid;padding:24px 18px;background:radial-gradient(650px 420px at 50% 0,rgba(185,143,160,.15),transparent 70%),#f7f5f2}
   html[data-ui="soft"] .authbox{display:block;width:100%;max-width:420px;border-radius:22px;overflow:hidden}
-  html[data-ui="soft"] .authbox::before{display:none}
+  html[data-ui="soft"] .authstory{display:none}
   html[data-ui="soft"] .authbrand{position:static;justify-content:center;margin:22px 0 4px;color:var(--ink)}
   html[data-ui="soft"] .authbrand small{color:var(--muted)}
   html[data-ui="soft"] .authcard{padding:12px 21px 24px;border-radius:0}
