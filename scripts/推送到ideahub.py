@@ -22,13 +22,14 @@ analysis 的第二个参数是进哪个板块：
     matrix   矩阵作品的对标账号
     live     真人直播的对标
     persona,matrix  同一个作品同时进两个板块（同一份 JSON 不会变成两条重复记录）
-JSON 一个字都不用改，导出来是什么样就推什么样。
+JSON 字段不用手改。图文笔记如果在 JSON 旁边保留了 image_01.webp 这类文件，
+脚本会自动把图片本体附进请求，避免平台临时地址过期。
 
 CSV 第一行是表头，列名就是接口字段名（见接入说明文档）。
 带点的列名会被拼成嵌套对象：female.年龄 → {"female": {"年龄": ...}}
 tags 列用顿号或逗号分隔多个标签。
 """
-import csv, json, os, ssl, sys, time, urllib.error, urllib.request
+import base64, csv, json, os, ssl, sys, time, urllib.error, urllib.request
 from pathlib import Path
 
 BASE = os.environ.get("IDEAHUB_URL", "https://xm.xingxingqule.com:9443")
@@ -39,6 +40,11 @@ FAILED = Path(__file__).with_name("推送失败待补.jsonl")
 
 TIMEOUT = 20
 RETRY = 3          # 单条最多重试 3 次，之后落盘等下次补推
+MAX_IMAGE_BYTES = 3 * 1024 * 1024
+IMAGE_MIME = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif",
+}
 
 
 def 发请求(路径, 数据):
@@ -101,6 +107,54 @@ def 一行转对象(行):
         else:
             out[列名] = 值
     return out
+
+
+def 附上图文图片(数据, json文件):
+    """把 JSON 附近已经落盘的图文图片以内嵌 base64 附进本次请求。
+
+    只按 JSON 给出的 filename 在它自己目录的几个固定位置找，不递归搜索，
+    也不接受 filename 里的目录部分，避免一份外部 JSON 诱导脚本读取别处文件。
+    服务器仍会按真实文件头复核格式和 3MB 上限。
+    """
+    图片们 = 数据.get("images")
+    if not isinstance(图片们, list) or not 图片们:
+        return 0, 0, []
+
+    根 = Path(json文件).resolve().parent
+    任务 = str(数据.get("task_id") or "").strip()
+    stem = Path(json文件).stem
+    已附 = 0
+    缺失 = []
+
+    for 第几张, 图片 in enumerate(图片们, 1):
+        if not isinstance(图片, dict):
+            缺失.append(f"第{第几张}张（字段不是对象）")
+            continue
+        if any(str(图片.get(k) or "").strip()
+               for k in ("image_b64", "image_base64", "content_b64", "data_url")):
+            已附 += 1
+            continue
+
+        文件名 = Path(str(图片.get("filename") or "")).name
+        if not 文件名:
+            缺失.append(f"第{第几张}张（没有 filename）")
+            continue
+        候选 = [根 / 文件名, 根 / "images" / 文件名, 根 / stem / 文件名]
+        if 任务:
+            候选.append(根 / 任务 / 文件名)
+        文件 = next((x for x in 候选 if x.is_file()), None)
+        if not 文件:
+            缺失.append(文件名)
+            continue
+        大小 = 文件.stat().st_size
+        if not 大小 or 大小 > MAX_IMAGE_BYTES:
+            缺失.append(f"{文件名}（{大小} 字节，单张上限 3MB）")
+            continue
+        mime = IMAGE_MIME.get(文件.suffix.lower(), "application/octet-stream")
+        图片["image_b64"] = f"data:{mime};base64," + base64.b64encode(文件.read_bytes()).decode("ascii")
+        已附 += 1
+
+    return len(图片们), 已附, 缺失
 
 
 def 推一批(路径, csv文件):
@@ -180,6 +234,14 @@ def 推分析(板块, 路径们):
             print(f"  {p.name} ✗ 顶层要是一个 JSON 对象，不是数组")
             continue
 
+        图片总数, 图片已附, 图片缺失 = 附上图文图片(数据, p)
+        if 图片总数:
+            if 图片缺失:
+                预览 = "、".join(图片缺失[:4]) + ("……" if len(图片缺失) > 4 else "")
+                print(f"  {p.name} ! 本地图片附带 {图片已附}/{图片总数} 张；找不到：{预览}")
+            else:
+                print(f"  {p.name} · 本地图片 {图片已附}/{图片总数} 张已随请求附上")
+
         ok, 结果, 可重试 = 发请求(路径, 数据)
         if ok:
             成功 += 1
@@ -191,6 +253,8 @@ def 推分析(板块, 路径们):
                     更新 += 1
             去处 = "、".join(f"{条.get('board')}#{条.get('id')}" for 条 in 条目)
             print(f"  {p.name} ✓ {去处}  {结果.get('title') or ''}")
+            for 警告 in 结果.get("warnings") or []:
+                print(f"    ! {警告}")
         elif 可重试:
             待补 += 1
             落盘(路径, 数据, 结果)

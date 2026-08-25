@@ -26,6 +26,20 @@ const obj = (v) => JSON.stringify(v && typeof v === 'object' ? v : {});
 const TIERS = ['S', 'A', 'B', 'C'];
 const STAGES = ['lead', 'wechat', 'profiled', 'consulted', 'coaching', 'renewed', 'lost'];
 
+/** 重推图片按序号合并：新文件覆盖旧文件，本轮失败则保留旧文件。 */
+export function mergeImageFiles(previous, current, expected) {
+  const byIndex = new Map();
+  for (const f of Array.isArray(previous) ? previous : []) {
+    const i = Number(f?.i);
+    if (Number.isInteger(i) && i >= 0 && i < expected && f?.file) byIndex.set(i, f);
+  }
+  for (const f of Array.isArray(current) ? current : []) {
+    const i = Number(f?.i);
+    if (Number.isInteger(i) && i >= 0 && i < expected && f?.file) byIndex.set(i, f);
+  }
+  return [...byIndex.values()].sort((x, y) => Number(x.i) - Number(y.i));
+}
+
 /**
  * 校验枚举取值。
  *
@@ -243,7 +257,7 @@ export function mount(router) {
    * 而 works 的唯一索引只认 (source_type, source_ref)，不带 channel。
    */
   /**
-   * 存进 work_analyses.payload 之前，把那张 base64 封面摘出去。
+   * 存进 work_analyses.payload 之前，把 base64 封面和图文图片摘出去。
    *
    * 原则上这一列是「技术1 给什么就存什么」，但整张图是个例外：
    * 它已经落成本地文件了，再在 JSON 里留一份等于同样的几百 KB 存两遍，
@@ -252,11 +266,16 @@ export function mount(router) {
    * 换成一句说明，别让以后翻 payload 的人以为图丢了。
    */
   const slimPayload = (p) => {
+    const imageKeys = ['image_b64', 'image_base64', 'content_b64', 'data_url'];
     const b64 = p?.media_assets?.video?.cover_image_b64
              || p?.media_assets?.video?.cover_image || p?.cover_image_b64;
-    if (!b64 || String(b64).length < 64) return p;
-    const out = { ...p, media_assets: { ...p.media_assets } };
-    if (out.media_assets.video) {
+    const hasImages = Array.isArray(p?.images)
+      && p.images.some(im => imageKeys.some(k => String(im?.[k] || '').length >= 64));
+    if ((!b64 || String(b64).length < 64) && !hasImages) return p;
+
+    const out = { ...p };
+    if (b64) out.media_assets = { ...p.media_assets };
+    if (b64 && out.media_assets.video) {
       out.media_assets.video = { ...out.media_assets.video };
       for (const k of ['cover_image_b64', 'cover_image']) {
         if (out.media_assets.video[k]) {
@@ -267,14 +286,25 @@ export function mount(router) {
     if (out.cover_image_b64) {
       out.cover_image_b64 = `（已落地为本地封面文件，原始 ${String(out.cover_image_b64).length} 字符）`;
     }
+    if (hasImages) {
+      out.images = p.images.map(im => {
+        const copy = { ...im };
+        for (const k of imageKeys) {
+          if (String(copy[k] || '').length >= 64) {
+            copy[k] = `（已落地为本地图文文件，原始 ${String(copy[k]).length} 字符）`;
+          }
+        }
+        return copy;
+      });
+    }
     return out;
   };
 
   router.post('/api/ingest/analysis', async (req, res, _p, url) => {
     const key = await requireKey(req, 'tech1');
-    // 这个口子单独放宽到 8MB：整份分析约 30KB，但现在允许把一张清晰封面
-    // （base64，200~500KB）一起带进来。默认的 1MB 会把带图的推送直接顶回去。
-    const payload = await readJson(req, 8 * 1024 * 1024);
+    // 这个口子单独放宽到 32MB：除了清晰封面，还允许图文笔记把最多 18 张图片
+    // 以 base64 一起带来。收到后立即落文件，存数据库前会把 base64 摘掉。
+    const payload = await readJson(req, 32 * 1024 * 1024);
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       throw badRequest('请求体要是技术1 导出的那一份 JSON 对象本身，不是数组、不是字符串');
     }
@@ -310,9 +340,18 @@ export function mount(router) {
       const { file: coverFile, from: coverFrom } = await storeCover(a.coverSource, sourceRef);
       // 图文笔记：整叠图一起落地。它们是这条笔记的正文，不是配图 ——
       // 只存地址的话，过一天平台签名失效，界面上就只剩标题和一堆 403。
-      const imageFiles = a.images?.length
-        ? await mirrorImages(a.images.map(im => im.url), sourceRef)
+      const mirroredImages = a.images?.length
+        ? await mirrorImages(a.images, sourceRef)
         : [];
+      // 重推时网络抖动/地址过期，不能拿本轮的空结果清掉以前已经落地的图片。
+      // 按序号合并：旧的先放，新成功的覆盖同序号；已不在当前 payload 的尾图丢弃。
+      const { rows: previous } = await query(`
+        SELECT wa.digest->'imageFiles' AS image_files
+          FROM works w JOIN work_analyses wa ON wa.work_id = w.id
+         WHERE w.source_type = 'tech1' AND w.source_ref = $1
+         LIMIT 1`, [sourceRef]);
+      const kept = Array.isArray(previous[0]?.image_files) ? previous[0].image_files : [];
+      const imageFiles = mergeImageFiles(kept, mirroredImages, a.images.length);
       const out = await tx(async (c) => {
         // 账号台账：先按「同板块 + 对标 + 同平台 + 同账号名」找，找不到才建。
         // 没有用唯一索引兜底是因为 channel_accounts 上没有这个索引，
@@ -400,16 +439,23 @@ export function mount(router) {
       if (tagIds.length) await setTags('work', out.id, tagIds);
 
       results.push({ channel, board: channel, id: out.id, created: out.created,
-                     accountId: out.accountId, tagsApplied: tagIds.length });
+                     accountId: out.accountId, tagsApplied: tagIds.length,
+                     imagesExpected: a.images.length, imagesStored: imageFiles.length,
+                     imagesStoredNow: mirroredImages.length });
       publish('board:updated', { board: channel });
     }
 
+    const first = results[0];
+    const warnings = first.imagesStored < first.imagesExpected
+      ? [`图文图片只保存成功 ${first.imagesStored}/${first.imagesExpected} 张；请用 images[].image_b64 重推，或在平台临时地址过期前推送`]
+      : [];
     sendJson(res, 200, {
       ok: true,
       taskId: a.taskId, title: a.title, sourceRef: `t1:${ident}`,
       // 单个 channel 时也给 id / created，让推送脚本和 /api/ingest/save 用同一套打印逻辑
-      id: results[0].id, created: results[0].created,
-      results, by: key.name,
+      id: first.id, created: first.created,
+      imagesExpected: first.imagesExpected, imagesStored: first.imagesStored,
+      warnings, results, by: key.name,
     });
   });
 

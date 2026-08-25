@@ -583,6 +583,7 @@ python3 推送到ideahub.py analysis persona 今天跑出来的结果/</pre>
                 <tr><td><code>ai_analysis.video.items</code></td><td>视频七问。<b>键的顺序就是显示顺序</b>，别打乱</td></tr>
                 <tr><td><code>ai_analysis.comments.items</code></td><td>评论洞察，连 <code>evidence_comments</code> 里的原话一起显示</td></tr>
                 <tr><td><code>media_assets.video.cover_image_b64</code></td><td><b>封面原图，强烈建议给这个</b> —— 见下面「关于封面清晰度」</td></tr><tr><td><code>media_assets.video.*</code></td><td>封面地址（收到时就下到 IdeaHub 本地，平台链接过期也不受影响）、时长、尺寸、清晰度</td></tr>
+                <tr><td><code>images[]</code></td><td>图文笔记的正文图片；<code>image_b64</code> 优先，<code>source_url</code> 只作临时备用</td></tr>
                 <tr><td><code>video_text</code> + <code>video_text_meta</code></td><td>逐字稿。有段没识别成功（<code>chunks_succeeded &lt; chunks_total</code>）界面上会标出来</td></tr>
                 <tr><td><code>comments</code> / <code>comment_summary</code></td><td>高赞评论原文 +「扫了多少条」这些说明</td></tr>
                 <tr><td><code>schema_version</code></td><td>记下来，以后格式换代了两边对得上</td></tr>
@@ -611,7 +612,7 @@ python3 推送到ideahub.py analysis persona 今天跑出来的结果/</pre>
                 <tr><td>写法</td><td><code>data:image/jpeg;base64,xxx</code> 和光秃秃的 base64 都收，不用纠结</td></tr>
                 <tr><td>格式</td><td>JPEG / PNG / WebP / GIF / AVIF。<b>按真实字节认，不看声明的 mime</b></td></tr>
                 <tr><td>大小</td><td>单张上限 3MB。一张 1080×1920 的清晰竖图约 200~500KB，正常</td></tr>
-                <tr><td>请求体上限</td><td>这个接口放宽到 <b>8MB</b>（其他接口仍是 1MB）</td></tr>
+                <tr><td>请求体上限</td><td>这个接口放宽到 <b>32MB</b>（其他接口仍是 1MB），给图文笔记整组图片留空间</td></tr>
                 <tr><td>没给怎么办</td><td>自动退回去下 <code>thumbnail_url</code>，行为和以前完全一样，<b>不给也不会报错</b></td></tr>
                 <tr><td>存哪</td><td>收到就落成本地文件，之后一律走 <code>GET /api/works/:id/cover</code>，不受签名过期影响</td></tr>
                 <tr><td>会不会撑爆库</td><td>不会。图落地之后会从存档的 JSON 里摘掉，只留一句说明，其余字段一个不动</td></tr>
@@ -619,19 +620,44 @@ python3 推送到ideahub.py analysis persona 今天跑出来的结果/</pre>
             </table>
           </div>
 
+          <h4 style="margin:26px 0 8px">图文图片不能只传临时地址</h4>
+          <p>小红书图文地址路径中的 <code>202608241555</code> 是<b>失效时间</b>。技术1采集后隔天才推，
+          IdeaHub 收到时地址已经 403；即使 JSON 里有完整 OCR，也无法凭文字还原原图。</p>
+          <p>完整归档时应把技术1本地保留的图片本体一起带来。最新版推送脚本会按 <code>filename</code>
+          在 JSON 同目录、<code>images/</code>、同名目录或 task_id 目录中自动找图并附入请求：</p>
+<pre><span class="k">"images"</span>: [{
+  <span class="k">"index"</span>: 1,
+  <span class="k">"filename"</span>: <span class="s">"image_01.webp"</span>,
+  <span class="k">"source_url"</span>: <span class="s">"http://sns-webpic-qc.xhscdn.com/临时地址"</span>,
+  <span class="k">"image_b64"</span>: <span class="s">"data:image/webp;base64,UklGR..."</span>,
+  <span class="k">"text"</span>: <span class="s">"这张图的 OCR 文字"</span>
+}]</pre>
+          <div class="tw">
+            <table><tbody>
+              <tr><td>推荐字段</td><td><code>images[].image_b64</code>；也兼容 <code>image_base64</code>、<code>content_b64</code>、<code>data_url</code></td></tr>
+              <tr><td>优先级</td><td>图片本体优先；没有本体才尝试 <code>source_url</code></td></tr>
+              <tr><td>格式与大小</td><td>JPEG / PNG / WebP / GIF / AVIF；单张不超过 3MB，最多保存 20 张</td></tr>
+              <tr><td>失败提示</td><td>返回 <code>imagesExpected</code>、<code>imagesStored</code> 和 <code>warnings[]</code>，不再静默丢图</td></tr>
+              <tr><td>重推保护</td><td><code>imagesStoredNow</code> 是本轮新保存数；本轮失败的序号会保留以前已落地的图片</td></tr>
+            </tbody></table>
+          </div>
+          <p>旧记录显示“图片已过期”时，用<b>同一个 task_id</b>重推即可补图，不会多建一条作品。</p>
+
 <pre>{
   <span class="k">"ok"</span>: true,
   <span class="k">"taskId"</span>: <span class="s">"f90d29b0a27b"</span>,
   <span class="k">"title"</span>: <span class="s">"女孩子无聊的本质是生命力的匮乏"</span>,
   <span class="k">"id"</span>: 174, <span class="k">"created"</span>: true,
+  <span class="k">"imagesExpected"</span>: 8, <span class="k">"imagesStored"</span>: 8, <span class="k">"warnings"</span>: [],
   <span class="k">"results"</span>: [{ <span class="k">"channel"</span>: <span class="s">"persona"</span>, <span class="k">"id"</span>: 174,
-                <span class="k">"created"</span>: true, <span class="k">"accountId"</span>: 9, <span class="k">"tagsApplied"</span>: 2 }]
+                <span class="k">"created"</span>: true, <span class="k">"accountId"</span>: 9, <span class="k">"tagsApplied"</span>: 2,
+                <span class="k">"imagesExpected"</span>: 8, <span class="k">"imagesStored"</span>: 8, <span class="k">"imagesStoredNow"</span>: 8 }]
 }</pre>
 
           <div class="note warn">
             <p><b>不覆盖人写的东西。</b>台账里的「备注 / 复盘」业务人员写过就不会被推送冲掉（空着才填 AI 的一句话主题），
             账号的「定位」同理。标题、链接、互动数这些客观事实每次推送都会刷新。</p>
-            <p><b>请求体上限 8MB</b>（其他接口是 1MB）。一份带完整逐字稿和评论的分析约 30KB，再带一张清晰封面约 400KB，离上限还远。</p>
+            <p><b>请求体上限 32MB</b>（其他接口是 1MB）。普通视频分析仍只有几十 KB；图文笔记可以把整组图片一起带来。</p>
             <p>这个口子只写<b>对标</b>那半边，永远不会动「自己账号」的数据。</p>
           </div>
         </div>

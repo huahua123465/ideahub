@@ -170,17 +170,19 @@ export async function storeCover(src, sourceRef) {
  * 顺序发起、不并发：一条笔记九张图，并发下载对那个 CDN 像一次小爆发，
  * 而这是后台入库、没人在等，慢一点无所谓。
  *
- * @param urls  按显示顺序排好的地址数组
+ * @param sources  按显示顺序排好的图片来源；每项可带 inline 和/或 url
  * @param max   最多下几张。定 20 是因为小红书单条上限 18 张，留一点余量
- * @returns [{ i, file }]，下不下来的那张不出现在结果里
+ * @returns [{ i, file, from }]，存不下来的那张不出现在结果里
  */
-export async function mirrorImages(urls, sourceRef, max = 20) {
+export async function mirrorImages(sources, sourceRef, max = 20) {
   const out = [];
-  const list = (urls || []).slice(0, max);
+  const list = (sources || []).slice(0, max);
   for (let i = 0; i < list.length; i++) {
     // 文件名里带序号：同一条笔记的九张图各自独立，重推时逐张覆盖
-    const file = await mirrorCover(list[i], `${sourceRef}#${i}`);
-    if (file) out.push({ i, file });
+    const src = typeof list[i] === 'string' ? { url: list[i] } : (list[i] || {});
+    const { file, from } = await storeCover(
+      { inline: src.inline, urls: [src.url] }, `${sourceRef}#${i}`);
+    if (file) out.push({ i, file, from });
   }
   return out;
 }

@@ -154,9 +154,6 @@ export function readAnalysis(p) {
    * 他那边本来就为了做封面 OCR 截过原始帧，给出来是顺手的事。
    * 都没有才退回 thumbnail_url —— 有张糊的也比空白色块强。
    */
-  const coverInline = str(video.cover_image_b64) || str(video.cover_image)
-                   || str(src.cover_image_b64);
-
   /**
    * 图文笔记（media_type = image_post）的正文就是那一叠图，放在顶层 images[]，
    * 每张还带一段 OCR 出来的文字。视频笔记这个数组是空的。
@@ -169,13 +166,21 @@ export function readAnalysis(p) {
     .map((im, i) => ({
       index: Number(im?.index) || i + 1,
       url: str(im?.source_url) || str(im?.url),
+      // 完整归档不能只靠平台临时 URL。技术1 本地已经保留图片时，
+      // 用 image_b64 把图片本体一起带来；兼容几个直白别名，减少两边改格式的成本。
+      inline: str(im?.image_b64) || str(im?.image_base64)
+           || str(im?.content_b64) || str(im?.data_url),
       text: str(im?.text),
       width: Number(im?.width) || null,
       height: Number(im?.height) || null,
       bytes: Number(im?.size_bytes) || null,
     }))
-    .filter(im => im.url)
+    .filter(im => im.url || im.inline)
     .sort((a, b) => a.index - b.index);
+
+  // 视频封面和图文第一张都接受内嵌图片。图文 URL 过期时，第一张本体仍能当封面。
+  const coverInline = str(video.cover_image_b64) || str(video.cover_image)
+                   || str(src.cover_image_b64) || images[0]?.inline;
 
   // 封面候选：视频用它的缩略图，图文笔记退回第一张图
   const coverUrls = [video.cover_url, video.cover_image_url, video.thumbnail_url,
