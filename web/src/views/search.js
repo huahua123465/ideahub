@@ -17,6 +17,27 @@ export function bind() {
   const input = $('#q');
   const pop = $('#searchPop');
 
+  // Chrome / Edge 即使看到 autocomplete="off"，刷新或从前进后退缓存恢复时仍可能
+  // 把上一次输入重新塞回来。全局搜索不是草稿，不应该跨刷新保留；初始化、pageshow
+  // 以及浏览器可能稍晚执行的表单恢复之后各清一次。用户已经主动聚焦输入时不打断。
+  const clearRestoredQuery = () => {
+    clearTimeout(timer);
+    timer = null;
+    requestSeq++;
+    lastQ = '';
+    lastMode = 'keyword';
+    input.value = '';
+    smartLoading(false);
+    close();
+  };
+  const clearIfIdle = () => { if (document.activeElement !== input) clearRestoredQuery(); };
+  clearRestoredQuery();
+  setTimeout(clearIfIdle, 160);
+  window.addEventListener('pageshow', () => {
+    clearRestoredQuery();
+    setTimeout(clearIfIdle, 160);
+  });
+
   input.addEventListener('input', () => {
     clearTimeout(timer);
     requestSeq++; // 正在返回的旧请求作废，不能覆盖用户刚输入的新词
