@@ -472,9 +472,15 @@
 
 <!-- ============ 业务板块的通用编辑弹窗 ============ -->
 <div class="modal bd-modal" id="bdModal">
-  <header>
-    <h2 id="bdTitle">新增</h2>
-    <div class="hint" id="bdHint">这些台账是团队共同维护的，任何人都能录和改；删除只有管理员能做。</div>
+  <header class="bd-modal-head">
+    <div class="bd-modal-heading">
+      <h2 id="bdTitle">新增</h2>
+      <div class="hint" id="bdHint">这些台账是团队共同维护的，任何人都能录和改；删除只有管理员能做。</div>
+    </div>
+    <button class="bd-expand-btn" id="btnBdExpand" type="button" aria-expanded="false" title="放大弹窗">
+      <span class="bd-expand-icon" aria-hidden="true"></span>
+      <span class="bd-expand-label">放大</span>
+    </button>
   </header>
   <div class="form">
     <div class="bdgrid" id="bdForm"></div>

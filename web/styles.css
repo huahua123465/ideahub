@@ -335,10 +335,26 @@ tr:hover .bd-del{color:var(--crit)}
 .bd-modal{display:flex;flex-direction:column;max-height:min(88dvh,820px);overflow:hidden}
 .bd-modal>header,.bd-modal>footer{flex:none}
 .bd-modal>header{padding-bottom:16px;border-bottom:1px solid var(--line-soft)}
-.bd-modal>.form{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
+.bd-modal>.form{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
   padding:17px 22px 12px}
 .bd-modal>.form>.bdgrid{max-height:none;overflow:visible;padding-right:0}
 .bd-modal>footer{margin-top:0}
+.bd-modal-head{display:flex;align-items:flex-start;gap:16px}
+.bd-modal-heading{min-width:0;flex:1}
+.bd-expand-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;height:34px;
+  padding:0 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink2);
+  font-size:12px;font-weight:650;cursor:pointer;transition:.15s}
+.bd-expand-btn:hover{border-color:var(--blue-200);background:var(--blue-100);color:var(--blue-dk)}
+.bd-expand-btn:focus-visible{outline:0;box-shadow:0 0 0 3px var(--blue-100);border-color:var(--blue)}
+.bd-expand-icon{position:relative;width:14px;height:14px;border:1.5px solid currentColor;border-radius:2px}
+.bd-expand-icon::after{content:"";position:absolute;left:3px;bottom:3px;width:6px;height:6px;
+  border-left:1.5px solid currentColor;border-bottom:1.5px solid currentColor}
+#bdModal.bd-modal.bd-modal-expanded{width:calc(100vw - 32px);max-width:none;height:calc(100dvh - 32px);max-height:none}
+#bdModal.bd-modal-expanded .bd-expand-icon::after{left:2px;bottom:2px;border:0;border-top:1.5px solid currentColor;
+  border-right:1.5px solid currentColor}
+/* 工作提交和审核的长文本不再锁死高度：既能拖动增高，也能在框内滚动。 */
+#bdModal .bdgrid textarea.inp{height:104px;min-height:88px;max-height:min(52dvh,520px);
+  resize:vertical;overflow-y:auto}
 
 /* 工作审核不是“替别人改表单”，而是查看证据并给反馈。桌面双栏，
    左边是提交内容，右边是附件；附件再多也只滚中间区域。 */
@@ -359,7 +375,7 @@ tr:hover .bd-del{color:var(--crit)}
 .report-feedback-field{margin-top:3px;padding:15px;border:1px solid var(--violet-line);border-radius:13px;
   background:var(--violet-bg)}
 .report-feedback-field label{color:var(--violet)}
-.report-feedback-field textarea.inp{height:116px;background:var(--surface)}
+#bdModal .report-feedback-field textarea.inp{height:136px;background:var(--surface)}
 .report-review-modal .report-evidence-files{margin:0;padding:0 0 0 22px;border-top:0;
   border-left:1px solid var(--line-soft);position:sticky;top:0}
 .report-review-modal .report-evidence-files .sec-title{margin:0 0 10px}
@@ -374,7 +390,10 @@ tr:hover .bd-del{color:var(--crit)}
 }
 @media (max-width:560px){
   .bd-modal{max-height:calc(100dvh - 16px)}
+  #bdModal.bd-modal.bd-modal-expanded{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-height:none}
   .bd-modal>.form{padding:15px 16px 10px}
+  .bd-expand-label{display:none}
+  .bd-expand-btn{width:36px;padding:0}
   .report-review-modal .bdgrid{grid-template-columns:1fr}
   .report-fact,.report-fact-title,.report-fact-summary,.report-fact-resultUrl,
   .report-fact-blockers,.report-fact-needHelp,.report-feedback-field{grid-column:1}

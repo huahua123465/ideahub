@@ -667,6 +667,7 @@ function openEdit(key, id) {
   editing = { key, id, reviewMode };
 
   const modal = $('#bdModal');
+  setEditExpanded(false);
   modal.classList.toggle('report-review-modal', !!reviewMode);
 
   // 新增时把当前小板块对应的字段预填上：在「S 级」标签下点新增，等级就该默认是 S。
@@ -972,11 +973,26 @@ export function closeEdit() {
   const key = editing?.key;
   $('#bdModal').classList.remove('on');
   $('#bdModal').classList.remove('report-review-modal');
+  setEditExpanded(false);
   $('#mask').classList.remove('on');
   editing = null;
   // 弹窗开着时被 refresh() 跳过的那次刷新，现在补上。
   // 「跳过」不等于「算了」—— 不补的话关掉弹窗看到的还是旧数据。
   if (key && skipped.has(key)) { skipped.delete(key); render(key); }
+}
+
+/** 放大时只改变弹窗可视空间，不重画表单，已经输入的内容和光标位置都会保留。 */
+function setEditExpanded(expanded) {
+  const modal = $('#bdModal');
+  const btn = $('#btnBdExpand');
+  modal.classList.toggle('bd-modal-expanded', expanded);
+  btn.setAttribute('aria-expanded', String(expanded));
+  btn.title = expanded ? '还原弹窗' : '放大弹窗';
+  btn.querySelector('.bd-expand-label').textContent = expanded ? '还原' : '放大';
+}
+
+export function toggleEditSize() {
+  setEditExpanded(!$('#bdModal').classList.contains('bd-modal-expanded'));
 }
 
 /** 记下「因为弹窗开着而被跳过」的刷新，等弹窗关掉再补 */

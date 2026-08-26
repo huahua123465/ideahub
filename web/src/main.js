@@ -469,6 +469,7 @@ function bind() {
   $('#cmtAnon').addEventListener('click', e => e.currentTarget.classList.toggle('on'));
   $('#dStages').addEventListener('click', drawer.onStageClick);
   $('#btnBdSave').addEventListener('click', board.saveEdit);
+  $('#btnBdExpand').addEventListener('click', board.toggleEditSize);
   $('#btnSaveProject').addEventListener('click', drawer.saveProject);
   $('#dCmtInput').addEventListener('keydown', e => { if (e.key === 'Enter') drawer.postComment(); });
   $('#btnAdopt').addEventListener('click', drawer.requestAdopt);
