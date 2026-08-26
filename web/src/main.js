@@ -26,6 +26,7 @@ import * as tagfilter from './views/tagfilter.js';
 import * as importer from './views/importer.js';
 import * as dashboard from './views/dashboard.js';
 import * as learning from './views/learning.js';
+import { initMotion } from './motion.js';
 
 let view = 'home';
 
@@ -106,6 +107,7 @@ function createForCurrentView() {
 }
 
 async function boot() {
+  initMotion();
   // HTML 里只放了 data-ico 占位，图标本体在 icons.js（模块，HTML 直接取不到）
   for (const el of document.querySelectorAll('[data-ico]')) {
     el.innerHTML = ICON[el.dataset.ico] || '';
