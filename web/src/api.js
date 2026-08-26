@@ -16,6 +16,13 @@ export const state = { mode: 'live' };   // live | mock
 
 /** 启动时探一次后端。探不到就整场用 mock。 */
 export async function probe() {
+  // 生产环境的静态页面和 /api 都由同一个 Node 进程提供：index.html 能打开，
+  // 就没必要再串行请求一次 /api/health 后才去拿登录用户。跨洋网络下这会白等
+  // 一个完整 RTT。本地 5173 才需要探测 3000 端口并决定是否降级到 mock。
+  if (!BASE) {
+    state.mode = 'live';
+    return state.mode;
+  }
   try {
     const r = await fetch(BASE + '/api/health', {
       signal: AbortSignal.timeout(2500), credentials: 'include',

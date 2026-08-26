@@ -1133,6 +1133,10 @@ tr.sk-row td{padding:15px 16px}
 }
 .chatbtn:active{transform:scale(.94);transition-duration:.06s}
 .btn-primary:active{transform:translateY(1px) scale(.98)}
+.dash-quick button:active,.dash-action-grid>button:active,.dash-focus-item:active,
+.dash-pipeline-list button:active,.dash-library button:active,.board-tool:active{
+  transform:scale(.985);opacity:.84;transition-duration:.05s
+}
 
 /* ---- 悬停：进快出慢 ----
    基础规则里的 transition 是 --t-out（.32s，离开时用），这里在 hover 上把时长压到

@@ -11,8 +11,35 @@ import { toast } from '../toast.js';
 
 let me = null;
 let lastAt = 0;
+let loadSeq = 0;
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 
-export function setMe(user) { me = user; }
+export function setMe(user) {
+  me = user;
+  // 同一浏览器换账号时，不保留上一位用户的工作台摘要。
+  try {
+    const keep = `ideahub-dashboard-v2:${user.id}`;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('ideahub-dashboard-v2:') && key !== keep) localStorage.removeItem(key);
+    }
+  } catch { /* 存储不可用时忽略 */ }
+}
+
+const cacheKey = () => me?.id ? `ideahub-dashboard-v2:${me.id}` : '';
+function readCache() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(cacheKey()) || 'null');
+    return saved?.at && Date.now() - saved.at < CACHE_TTL ? saved.data : null;
+  } catch { return null; }
+}
+function writeCache(data) {
+  try { localStorage.setItem(cacheKey(), JSON.stringify({ at: Date.now(), data })); }
+  catch { /* 隐私模式或空间不足时只是不缓存，不影响首页 */ }
+}
+export function clearCache() {
+  try { if (cacheKey()) localStorage.removeItem(cacheKey()); } catch {}
+}
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -42,7 +69,12 @@ function focusItem({ tone = 'blue', eyebrow, title, meta, board, entity, id }) {
 export async function render({ force = false } = {}) {
   if (!force && lastAt && Date.now() - lastAt < 30_000) return;
   const root = $('#v-home');
-  root.innerHTML = `<div class="dash-loading"><i></i><span>正在整理今天的工作…</span></div>`;
+  const cached = root.querySelector('.dash-hero') ? null : readCache();
+  if (cached) paintDashboard(root, cached);
+  else if (!root.querySelector('.dash-hero')) {
+    root.innerHTML = `<div class="dash-loading"><i></i><span>正在整理今天的工作…</span></div>`;
+  }
+  const requestId = ++loadSeq;
 
   let stats, ideas, clients, reports, demands;
   try {
@@ -51,13 +83,24 @@ export async function render({ force = false } = {}) {
       api.reports({ scope: 'review' }), api.demands(),
     ]);
   } catch (e) {
+    if (requestId !== loadSeq) return;
     if (e.message === '请先登录') return;
+    if (root.querySelector('.dash-hero')) {
+      toast('info', '网络暂时较慢，当前显示上次同步的数据');
+      return;
+    }
     root.innerHTML = `<div class="empty"><b>工作台暂时没有加载出来</b><span>${esc(e.message || '请稍后刷新')}</span></div>`;
     toast('info', e.message || '工作台加载失败');
     return;
   }
+  if (requestId !== loadSeq) return;
   lastAt = Date.now();
+  const data = { stats, ideas, clients, reports, demands };
+  writeCache(data);
+  paintDashboard(root, data);
+}
 
+function paintDashboard(root, { stats, ideas, clients, reports, demands }) {
   const ideaItems = ideas.items || [];
   const clientItems = clients.items || [];
   const reportItems = reports.items || [];

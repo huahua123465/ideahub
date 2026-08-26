@@ -5,13 +5,13 @@
  */
 
 :root {
-  --duration-stagger: 40ms;
-  --duration-micro: 80ms;
-  --duration-quick: 150ms;
-  --duration-fast: 250ms;
-  --duration-medium: 350ms;
-  --duration-slow: 400ms;
-  --duration-very-slow: 500ms;
+  --duration-stagger: 28ms;
+  --duration-micro: 60ms;
+  --duration-quick: 110ms;
+  --duration-fast: 170ms;
+  --duration-medium: 220ms;
+  --duration-slow: 260ms;
+  --duration-very-slow: 320ms;
   --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: ease-in-out;
   --distance-micro: 4px;

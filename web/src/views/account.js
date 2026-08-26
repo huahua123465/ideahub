@@ -4,6 +4,7 @@
 import { api } from '../api.js';
 import { $, avatarColor, initial, esc } from '../util.js';
 import { toast } from '../toast.js';
+import { clearCache as clearDashboardCache } from './dashboard.js';
 
 const ROLE_CN = { admin: '管理员', reviewer: '评审委员', member: '成员' };
 
@@ -40,6 +41,7 @@ export function bindMenu() {
 
 async function logout() {
   try { await api.logout(); } catch { /* 就算请求失败也照样送回登录页 */ }
+  clearDashboardCache();
   location.replace('/login.html');
 }
 
