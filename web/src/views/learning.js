@@ -59,6 +59,7 @@ let section = 'framework';
 let currentId = null;
 let query = '';
 let openGeneration = 0;
+let pdfController = null;
 
 export function setSection(next) {
   if (CATALOG[next]) section = next;
@@ -96,6 +97,7 @@ function paintList() {
 
 async function openDocument(id) {
   const own = ++openGeneration;
+  pdfController = null;
   const item = findItem(id);
   currentId = item[0];
   remember(currentId);
@@ -113,8 +115,10 @@ async function openDocument(id) {
   loading.querySelector('span').textContent = '正在打开学习资料…';
   loading.hidden = false;
   $('#learningPageStatus').textContent = '准备中';
+  const zoomButtons = ['#learningZoomOut', '#learningZoomFit', '#learningZoomIn'].map($);
+  zoomButtons.forEach(btn => { btn.disabled = true; });
   try {
-    await openPdf(pageContainer, PATHS[currentId], {
+    const controller = await openPdf(pageContainer, PATHS[currentId], {
       onProgress: p => {
         if (own === openGeneration) loading.querySelector('span').textContent = `正在打开学习资料… ${p}%`;
       },
@@ -127,7 +131,17 @@ async function openDocument(id) {
       onPageChange: (page, total) => {
         if (own === openGeneration) $('#learningPageStatus').textContent = `${page} / ${total}`;
       },
+      onZoomChange: zoom => {
+        if (own !== openGeneration) return;
+        $('#learningZoomFit').textContent = zoom === 1 ? '适宽' : `${Math.round(zoom * 100)}%`;
+        $('#learningZoomOut').disabled = zoom <= 1;
+        $('#learningZoomIn').disabled = zoom >= 2.5;
+      },
     });
+    if (own !== openGeneration) return;
+    pdfController = controller;
+    zoomButtons.forEach(btn => { btn.disabled = false; });
+    $('#learningZoomOut').disabled = controller.zoom <= 1;
   } catch (e) {
     if (own !== openGeneration) return;
     loading.hidden = false;
@@ -178,7 +192,15 @@ export function render() {
           <div><span id="learningDocMeta"></span><h2 id="learningDocTitle"></h2><p id="learningDocDesc"></p></div>
           <div class="learning-nav"><button class="btn btn-ghost" id="learningPrev">上一份</button><button class="btn btn-ghost" id="learningNext">下一份</button></div>
         </header>
-        <div class="learning-reader-status"><span>连续阅读</span><b id="learningPageStatus">准备中</b></div>
+        <div class="learning-reader-status">
+          <span class="learning-page-count">连续阅读 · <b id="learningPageStatus">准备中</b></span>
+          <span class="learning-zoom-hint">双指或双击放大</span>
+          <div class="learning-zoom" role="group" aria-label="PDF 缩放">
+            <button id="learningZoomOut" type="button" aria-label="缩小 PDF">−</button>
+            <button id="learningZoomFit" type="button" aria-label="恢复适合屏幕宽度">适宽</button>
+            <button id="learningZoomIn" type="button" aria-label="放大 PDF">＋</button>
+          </div>
+        </div>
         <div class="learning-pdf-shell">
           <div class="learning-loading" id="learningLoading"><i></i><span>正在打开学习资料…</span></div>
           <div class="learning-pages" id="learningPages" role="document" aria-label="PDF 连续阅读区" tabindex="0"></div>
@@ -207,5 +229,8 @@ export function render() {
     const i = currentItems().findIndex(x => x[0] === currentId);
     if (i < currentItems().length - 1) openDocument(currentItems()[i + 1][0]);
   };
+  $('#learningZoomOut').onclick = () => pdfController?.zoomOut();
+  $('#learningZoomIn').onclick = () => pdfController?.zoomIn();
+  $('#learningZoomFit').onclick = () => pdfController?.fit();
   openDocument(currentId);
 }
