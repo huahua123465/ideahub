@@ -25,6 +25,7 @@ import * as tagadmin from './views/tagadmin.js';
 import * as tagfilter from './views/tagfilter.js';
 import * as importer from './views/importer.js';
 import * as dashboard from './views/dashboard.js';
+import * as learning from './views/learning.js';
 
 let view = 'home';
 
@@ -50,6 +51,7 @@ const CHROME = {
   tagadmin:     { group: '团队', title: '标签与对接' },
   funnel:       { group: '数据', title: '数据漏斗' },
   stats:        { group: '数据', title: '统计看板' },
+  learning:     { group: '学习中心', title: '站内学习' },
 };
 
 function paintChrome(next = view) {
@@ -217,7 +219,7 @@ function syncDrawerVote(d) {
 /** 所有一级视图。
     clientDetail 没有对应的导航按钮 —— 它是从客户档案点进去的二级页面，
     所以下面切视图时要单独处理它的 tab 高亮（客户档案那颗仍然亮着）。 */
-const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'clientDetail', 'tagadmin', ...BOARD_ORDER];
+const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
 
 function go(next) {
   if (next === view) return;
@@ -254,6 +256,7 @@ function go(next) {
   if (BOARD_ORDER.includes(next)) board.render(next);
   if (next === 'funnel') funnel.render();
   if (next === 'tagadmin') tagadmin.render();
+  if (next === 'learning') learning.render();
 }
 
 /**
@@ -295,6 +298,13 @@ function bind() {
 
   // 工作台快捷入口：先切到目标板块，再复用该页面自己的新增逻辑。
   $('#v-home').addEventListener('click', e => {
+    const study = e.target.closest('[data-dash-learning]');
+    if (study) {
+      e.preventDefault();
+      learning.setSection(study.dataset.dashLearning);
+      go('learning');
+      return;
+    }
     const create = e.target.closest('[data-dash-create]');
     if (create) {
       e.preventDefault();
@@ -307,6 +317,7 @@ function bind() {
       importer.open();
     }
   });
+  learning.events.addEventListener('back', () => go('home'));
 
   // 客户档案的行点击进详情页，不是直接弹编辑框 —— 
   // 任务 9 要的是「查看一个客户不用在多个模块来回找」，那得先有个能看的页面

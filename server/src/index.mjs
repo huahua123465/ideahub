@@ -139,6 +139,7 @@ const MIME = {
   '.webp': 'image/webp',
   '.avif': 'image/avif',
   '.gif':  'image/gif',
+  '.pdf':  'application/pdf',
   '.ico':  'image/x-icon',
   '.woff2':'font/woff2',
   '.woff': 'font/woff',
@@ -171,13 +172,16 @@ async function serveStatic(req, pathname, res) {
     }
 
     const buf = await readFile(file);
-    res.writeHead(200, {
+    const headers = {
       'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream',
       'content-length': buf.length,
       'cache-control': 'no-cache',
       etag,
       'last-modified': lastMod,
-    });
+    };
+    // 学习中心需要在 iframe 内直接阅读，不能让浏览器把 PDF 当附件下载。
+    if (extname(file).toLowerCase() === '.pdf') headers['content-disposition'] = 'inline';
+    res.writeHead(200, headers);
     res.end(buf);
     return true;
   } catch {

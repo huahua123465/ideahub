@@ -100,9 +100,11 @@ export async function render({ force = false } = {}) {
         <p>先处理需要判断的事，再把结果沉淀成团队资产。</p>
       </div>
       <div class="dash-quick" aria-label="快捷操作">
-        <button data-dash-action="import">${ICON.sparkle}<span><b>AI 整理</b><small>粘贴原始内容</small></span></button>
-        <button data-dash-create="pool">${ICON.bulb}<span><b>记一条灵感</b><small>发起团队讨论</small></span></button>
-        <button data-dash-create="clients">${ICON.users}<span><b>新增客户</b><small>记录跟进信息</small></span></button>
+        <button data-dash-action="import">${ICON.sparkle}<span><b>AI 整理</b><small>粘贴内容</small></span></button>
+        <button data-dash-create="pool">${ICON.bulb}<span><b>记一条灵感</b><small>发起讨论</small></span></button>
+        <button data-dash-create="clients">${ICON.users}<span><b>新增客户</b><small>跟进信息</small></span></button>
+        <button data-dash-learning="framework">${ICON.layers}<span><b>框架学习</b><small>判断链路</small></span></button>
+        <button data-dash-learning="detail">${ICON.book}<span><b>详细学习</b><small>专业详解</small></span></button>
       </div>
     </section>
 
