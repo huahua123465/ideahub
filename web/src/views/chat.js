@@ -12,6 +12,7 @@ import { toast } from '../toast.js';
 import { ICON } from '../icons.js';
 import * as alertBox from './alert.js';
 import { confirmAction } from '../confirm.js';
+import { openLightbox } from '../lightbox.js';
 
 let peers = [], groups = [], unreadTotal = 0, lastUnread = 0;
 let openPanel = false;
@@ -25,6 +26,26 @@ export const setMe = u => { me = u; };
 
 const FMT = n => (n > 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB'
                : n > 1024 ? Math.round(n / 1024) + ' KB' : n + ' B');
+
+/** 浏览器能直接显示的图片。HEIC/HEIF 虽然服务端收得下，但多数浏览器画不出来，
+    所以继续按普通文件展示，避免聊天里出现一块打不开的空白。 */
+const isChatImage = f => /^image\/(png|jpe?g|gif|webp|bmp|avif)$/i.test(f?.mime || '');
+
+/** 多图上传最多同时跑 3 个。完全串行会让十张截图等十次网络往返，
+    一口气全并发又可能把手机网络和服务端连接占满。 */
+async function sendFilesLimited(files, task, limit = 3) {
+  let next = 0;
+  const failed = [];
+  const worker = async () => {
+    while (next < files.length) {
+      const file = files[next++];
+      try { await task(file); }
+      catch (error) { failed.push({ file, error }); }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, files.length) }, worker));
+  return failed;
+}
 
 /* ---------------- 取数 ---------------- */
 
@@ -181,10 +202,16 @@ function paintConv() {
       return `${sep}<div class="chatrecall">${esc(mine ? '你' : m.fromName)} 撤回了一条消息</div>`;
     }
 
-    const file = m.file ? `
+    const image = isChatImage(m.file);
+    const file = image ? `
+      <button class="chatimage" type="button" data-chat-image="${m.id}"
+              aria-label="查看大图：${esc(m.file.name)}">
+        <img src="${esc(m.file.url)}" alt="${esc(m.file.name)}" loading="lazy">
+        <span><b>${esc(m.file.name)}</b><i>${FMT(m.file.size)}</i></span>
+      </button>` : (m.file ? `
       <a class="chatfile" href="${esc(m.file.url)}" target="_blank" rel="noopener">
         ${ICON.file}<span class="fname">${esc(m.file.name)}</span>
-        <span class="dim">${FMT(m.file.size)}</span></a>` : '';
+        <span class="dim">${FMT(m.file.size)}</span></a>` : '');
 
     // 已读回执：一对一看对方读没读，群里看几个人读过
     let receipt = '';
@@ -198,7 +225,7 @@ function paintConv() {
       ${conv.kind === 'group' && !mine ? `<div class="mfrom">${esc(m.fromName)}</div>` : ''}
       <div class="brow">
         ${mine && !m.pending ? `<button class="mmore" data-more="${m.id}">${ICON.more}</button>` : ''}
-        <div class="bubble">${m.body ? renderBody(m.body) : ''}${file}</div>
+        <div class="bubble${image ? ' has-image' : ''}">${m.body ? renderBody(m.body) : ''}${file}</div>
         ${mine || m.pending ? '' : `<button class="mmore" data-more="${m.id}">${ICON.more}</button>`}
       </div>
       <div class="mtime">${esc(fromNow(m.createdAt))}${m.edited ? ' · 已编辑' : ''}${
@@ -552,6 +579,13 @@ export function bind() {
   });
 
   $('#chatMsgs').addEventListener('click', e => {
+    const image = e.target.closest('[data-chat-image]');
+    if (image) {
+      const pictures = msgs.filter(m => !m.recalled && isChatImage(m.file));
+      const at = pictures.findIndex(m => String(m.id) === image.dataset.chatImage);
+      openLightbox(pictures.map(m => ({ url: m.file.url, name: m.file.name })), at);
+      return;
+    }
     const more = e.target.closest('[data-more]');
     if (more) { e.stopPropagation(); showMenu(Number(more.dataset.more), more); }
   });
@@ -584,12 +618,32 @@ export function bind() {
     const files = [...(e.target.files || [])];
     e.target.value = '';
     if (!files.length || !conv) return;
-    for (const f of files) {
-      try { await api.chatSendFile(conv.kind, conv.id, f); }
-      catch (err) { toast('info', `${f.name}：${err.message || '发送失败'}`); }
+    // 上传期间用户仍然可以切换会话；目标要在选文件这一刻锁住，
+    // 不能让后面的图片因为 conv 已变化而误发给另一个人。
+    const target = { kind: conv.kind, id: conv.id };
+    const input = e.target;
+    const clip = input.closest('.chatclip');
+    const oldTitle = clip.title;
+    let done = 0;
+    input.disabled = true;
+    clip.classList.add('uploading');
+    clip.title = `正在发送 0/${files.length}`;
+
+    const failed = await sendFilesLimited(files, async f => {
+      try { await api.chatSendFile(target.kind, target.id, f); }
+      finally { clip.title = `正在发送 ${++done}/${files.length}`; }
+    });
+
+    input.disabled = false;
+    clip.classList.remove('uploading');
+    clip.title = oldTitle;
+    for (const { file, error } of failed) {
+      toast('info', `${file.name}：${error.message || '发送失败'}`);
     }
     await loadMsgs();
     scrollToEnd();
     refresh();
+    const sent = files.length - failed.length;
+    if (sent > 1) toast('ok', `已发送 ${sent} 个文件`);
   });
 }

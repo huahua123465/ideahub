@@ -566,6 +566,21 @@ tr:hover .bd-del{color:var(--crit)}
 .msg.mine .chatfile:hover{background:rgba(255,255,255,.28)}
 .msg.mine .chatfile,.msg.mine .chatfile .dim{color:#fff;opacity:.92}
 
+/* 聊天图片直接显示。以前所有附件都只画成文件名链接，收图的人必须逐张点开；
+   现在缩略图就在消息里，点任意一张还能在灯箱里连续翻看当前会话的图片。 */
+.bubble.has-image{max-width:none;padding:4px;line-height:1;background:transparent;border-color:transparent}
+.chatimage{display:block;width:min(260px,68vw);max-width:100%;padding:0;overflow:hidden;
+  border-radius:10px;background:var(--surface);color:var(--ink2);text-align:left;
+  box-shadow:0 1px 3px rgba(26,31,44,.14);cursor:zoom-in}
+.chatimage img{display:block;width:100%;height:auto;max-height:270px;object-fit:cover;
+  background:var(--line-soft)}
+.chatimage span{display:flex;align-items:center;gap:8px;padding:7px 9px;font-size:11.5px;line-height:1.25}
+.chatimage b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550}
+.chatimage i{margin-left:auto;flex:none;color:var(--muted);font-style:normal;font-variant-numeric:tabular-nums}
+.chatimage:hover img{filter:brightness(.96)}
+.msg.mine .chatimage{background:rgba(255,255,255,.96);color:var(--ink2)}
+.msg.mine .chatimage i{color:var(--muted)}
+
 /* 输入区 */
 .chatfoot{flex:none;display:flex;align-items:flex-end;gap:8px;padding:10px 12px;
   border-top:1px solid var(--line-soft);background:var(--surface-2)}
@@ -574,6 +589,9 @@ tr:hover .bd-del{color:var(--crit)}
   border-radius:9px;font-size:17px;flex:none}
 .chatclip:hover{background:var(--line-soft)}
 .chatclip input{display:none}
+.chatclip.uploading{pointer-events:none;color:var(--blue)}
+.chatclip.uploading .ico{animation:chat-upload-pulse .8s ease-in-out infinite alternate}
+@keyframes chat-upload-pulse{to{opacity:.35;transform:translateY(-2px)}}
 
 /* 会话列表的分组标题 */
 .chatsec{font-size:11.5px;color:var(--muted);font-weight:600;padding:10px 16px 4px}
