@@ -65,7 +65,11 @@ export async function openPdf(container, url, { onProgress, onReady, onPageChang
   if (own !== session) return;
   const base = first.getViewport({ scale: 1 });
   const ratio = `${base.width} / ${base.height}`;
-  const fitWidth = Math.max(280, Math.min(container.clientWidth - 24, 1080));
+  const availableWidth = () => {
+    const style = getComputedStyle(container);
+    return container.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  };
+  let fitWidth = Math.max(280, Math.min(availableWidth(), 1080));
   let zoom = 1;
   let qualityTimer = 0;
   const shells = [];
@@ -137,14 +141,8 @@ export async function openPdf(container, url, { onProgress, onReady, onPageChang
     }, 180);
   }
 
-  function setZoom(next, anchorX = container.clientWidth / 2, anchorY = container.clientHeight / 2) {
-    const value = Math.max(1, Math.min(2.5, Math.round(next * 20) / 20));
-    if (value === zoom) return;
-    const factor = value / zoom;
-    const oldLeft = container.scrollLeft;
-    const oldTop = container.scrollTop;
-    zoom = value;
-    const displayWidth = Math.round(fitWidth * zoom);
+  function sizePages(width) {
+    const displayWidth = Math.round(width);
     for (const shell of shells) {
       shell.style.width = `${displayWidth}px`;
       const canvas = shell.querySelector('canvas');
@@ -153,11 +151,38 @@ export async function openPdf(container, url, { onProgress, onReady, onPageChang
         canvas.style.height = `${Math.round(displayWidth * canvas.height / canvas.width)}px`;
       }
     }
+  }
+
+  function setZoom(next, anchorX = container.clientWidth / 2, anchorY = container.clientHeight / 2) {
+    const value = Math.max(1, Math.min(2.5, Math.round(next * 20) / 20));
+    if (value === zoom) return;
+    const factor = value / zoom;
+    const oldLeft = container.scrollLeft;
+    const oldTop = container.scrollTop;
+    zoom = value;
+    sizePages(fitWidth * zoom);
     requestAnimationFrame(() => {
       container.scrollLeft = (oldLeft + anchorX) * factor - anchorX;
       container.scrollTop = (oldTop + anchorY) * factor - anchorY;
     });
     onZoomChange?.(zoom);
+    refreshVisibleQuality();
+  }
+
+  function resize() {
+    const nextWidth = Math.max(280, Math.min(availableWidth(), 1080));
+    if (Math.abs(nextWidth - fitWidth) < 2) return;
+    const factor = nextWidth / fitWidth;
+    const anchorX = container.clientWidth / 2;
+    const anchorY = container.clientHeight / 2;
+    const oldLeft = container.scrollLeft;
+    const oldTop = container.scrollTop;
+    fitWidth = nextWidth;
+    sizePages(fitWidth * zoom);
+    requestAnimationFrame(() => {
+      container.scrollLeft = (oldLeft + anchorX) * factor - anchorX;
+      container.scrollTop = (oldTop + anchorY) * factor - anchorY;
+    });
     refreshVisibleQuality();
   }
 
@@ -216,5 +241,6 @@ export async function openPdf(container, url, { onProgress, onReady, onPageChang
     zoomIn: () => setZoom(zoom + .25),
     zoomOut: () => setZoom(zoom - .25),
     fit: () => setZoom(1),
+    resize,
   };
 }

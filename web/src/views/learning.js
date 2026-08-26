@@ -60,6 +60,61 @@ let currentId = null;
 let query = '';
 let openGeneration = 0;
 let pdfController = null;
+let readerFullscreen = false;
+let nativeFullscreen = false;
+let fullscreenTransition = false;
+
+function paintFullscreen() {
+  const reader = $('#learningReader');
+  const button = $('#learningFullscreen');
+  reader?.classList.toggle('learning-reader-fullscreen', readerFullscreen);
+  document.body.classList.toggle('learning-fullscreen-open', readerFullscreen);
+  if (button) {
+    button.setAttribute('aria-pressed', String(readerFullscreen));
+    button.setAttribute('aria-label', readerFullscreen ? '退出全屏阅读' : '进入全屏阅读');
+    button.title = readerFullscreen ? '退出全屏阅读（Esc）' : '全屏阅读';
+    button.innerHTML = `${readerFullscreen ? ICON.collapse : ICON.expand}<span>${readerFullscreen ? '退出' : '全屏'}</span>`;
+  }
+  requestAnimationFrame(() => pdfController?.resize());
+}
+
+async function setReaderFullscreen(enabled) {
+  const reader = $('#learningReader');
+  if (!reader || enabled === readerFullscreen || fullscreenTransition) return;
+  fullscreenTransition = true;
+  const button = $('#learningFullscreen');
+  if (button) button.disabled = true;
+  try {
+    readerFullscreen = enabled;
+    paintFullscreen();
+    if (enabled) {
+      if (reader.requestFullscreen) {
+        try {
+          await reader.requestFullscreen();
+          nativeFullscreen = document.fullscreenElement === reader;
+        } catch { nativeFullscreen = false; /* CSS 沉浸模式仍然可用 */ }
+      }
+    } else if (document.fullscreenElement === reader && document.exitFullscreen) {
+      try { await document.exitFullscreen(); } catch { /* CSS 全屏已经退出 */ }
+      nativeFullscreen = false;
+      requestAnimationFrame(() => pdfController?.resize());
+    }
+  } finally {
+    fullscreenTransition = false;
+    if ($('#learningFullscreen')) $('#learningFullscreen').disabled = false;
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (nativeFullscreen && !document.fullscreenElement) {
+    nativeFullscreen = false;
+    readerFullscreen = false;
+    paintFullscreen();
+  } else if (readerFullscreen) requestAnimationFrame(() => pdfController?.resize());
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && readerFullscreen && !document.fullscreenElement) setReaderFullscreen(false);
+});
 
 export function setSection(next) {
   if (CATALOG[next]) section = next;
@@ -161,6 +216,10 @@ function switchSection(next) {
 }
 
 export function render() {
+  if (readerFullscreen) {
+    readerFullscreen = false;
+    document.body.classList.remove('learning-fullscreen-open');
+  }
   openGeneration++;
   closePdf();
   const root = $('#v-learning');
@@ -187,7 +246,7 @@ export function render() {
         <label class="learning-search">${ICON.search}<input id="learningSearch" placeholder="搜索当前板块" value="${esc(query)}"></label>
         <div class="learning-list" id="learningList"></div>
       </aside>
-      <article class="learning-reader">
+      <article class="learning-reader" id="learningReader">
         <header class="learning-reader-head">
           <div><span id="learningDocMeta"></span><h2 id="learningDocTitle"></h2><p id="learningDocDesc"></p></div>
           <div class="learning-nav"><button class="btn btn-ghost" id="learningPrev">上一份</button><button class="btn btn-ghost" id="learningNext">下一份</button></div>
@@ -200,6 +259,7 @@ export function render() {
             <button id="learningZoomFit" type="button" aria-label="恢复适合屏幕宽度">适宽</button>
             <button id="learningZoomIn" type="button" aria-label="放大 PDF">＋</button>
           </div>
+          <button class="learning-fullscreen" id="learningFullscreen" type="button" aria-label="进入全屏阅读" aria-pressed="false" title="全屏阅读">${ICON.expand}<span>全屏</span></button>
         </div>
         <div class="learning-pdf-shell">
           <div class="learning-loading" id="learningLoading"><i></i><span>正在打开学习资料…</span></div>
@@ -209,6 +269,7 @@ export function render() {
     </div>`;
 
   root.querySelector('[data-learning-back]').onclick = () => {
+    setReaderFullscreen(false);
     openGeneration++;
     closePdf();
     events.dispatchEvent(new Event('back'));
@@ -232,5 +293,6 @@ export function render() {
   $('#learningZoomOut').onclick = () => pdfController?.zoomOut();
   $('#learningZoomIn').onclick = () => pdfController?.zoomIn();
   $('#learningZoomFit').onclick = () => pdfController?.fit();
+  $('#learningFullscreen').onclick = () => setReaderFullscreen(!readerFullscreen);
   openDocument(currentId);
 }

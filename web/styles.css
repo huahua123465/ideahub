@@ -2225,6 +2225,11 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
 .learning-zoom button:hover:not(:disabled){background:var(--violet-bg);color:var(--violet)}
 .learning-zoom button:focus-visible{outline:2px solid var(--violet);outline-offset:1px}
 .learning-zoom button:disabled{opacity:.34;cursor:default}
+.learning-fullscreen{height:34px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;
+  border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink2);font-size:11px;font-weight:700;cursor:pointer}
+.learning-fullscreen .ic{width:15px;height:15px}.learning-fullscreen:hover{border-color:var(--violet-line);background:var(--violet-bg);color:var(--violet)}
+.learning-fullscreen:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+.learning-fullscreen:disabled{opacity:.55;cursor:wait}
 .learning-pdf-shell{position:relative;min-height:620px;background:#dfdcd8}
 .learning-pages{width:100%;height:clamp(620px,72vh,920px);overflow:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;padding:12px;background:#dfdcd8;scrollbar-gutter:stable}
@@ -2241,6 +2246,14 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
   background:#f4f1ed;color:var(--muted);font-size:12.5px}.learning-loading[hidden]{display:none}
 .learning-loading i{width:9px;height:9px;border-radius:50%;background:var(--violet);box-shadow:0 0 0 5px var(--violet-bg);animation:dash-pulse 1.2s ease-in-out infinite}
 .learning-loading.error i{background:var(--crit);box-shadow:0 0 0 5px var(--crit-bg);animation:none}
+body.learning-fullscreen-open{overflow:hidden}
+.learning-reader.learning-reader-fullscreen{position:fixed;inset:0;z-index:180;display:flex;flex-direction:column;
+  width:100vw;height:100dvh;min-width:0;border:0;border-radius:0;background:var(--surface);box-shadow:none}
+.learning-reader-fullscreen .learning-reader-head{flex:none;align-items:center;padding:10px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left))}
+.learning-reader-fullscreen .learning-reader-head p{display:none}
+.learning-reader-fullscreen .learning-reader-status{position:relative;top:auto;z-index:4;flex:none;padding-right:max(10px,env(safe-area-inset-right))}
+.learning-reader-fullscreen .learning-pdf-shell{flex:1;min-height:0;padding-bottom:env(safe-area-inset-bottom)}
+.learning-reader-fullscreen .learning-pages{height:100%;min-height:0}
 
 @media (max-width:1180px){
   .dash-quick{grid-template-columns:repeat(5,minmax(0,1fr))}
@@ -2259,7 +2272,13 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
   .learning-reader-status{position:sticky;top:0;z-index:3;min-height:48px;padding:4px 7px 4px 11px;gap:7px}
   .learning-zoom-hint{display:none}.learning-page-count{white-space:nowrap}
   .learning-zoom button{min-width:40px;height:38px}.learning-zoom button:nth-child(2){min-width:54px}
+  .learning-fullscreen{width:42px;height:42px;padding:0}.learning-fullscreen span{display:none}.learning-fullscreen .ic{width:18px;height:18px}
   .learning-pages{height:70dvh;min-height:540px;padding:7px}.learning-pdf-page{max-width:none;margin-bottom:9px}
+  .learning-reader-fullscreen .learning-reader-head{min-height:54px;display:flex;flex-direction:row;padding:calc(8px + env(safe-area-inset-top)) 10px 8px}
+  .learning-reader-fullscreen .learning-reader-head>div:first-child{flex:1}.learning-reader-fullscreen .learning-reader-head span,
+  .learning-reader-fullscreen .learning-reader-head p,.learning-reader-fullscreen .learning-nav{display:none}
+  .learning-reader-fullscreen .learning-reader-head h2{margin:0;font-size:15px}
+  .learning-reader-fullscreen .learning-reader-status{min-height:50px;padding:4px max(7px,env(safe-area-inset-right)) 4px max(9px,env(safe-area-inset-left))}
 }
 @media (prefers-reduced-motion:reduce){.learning-page-wait{animation:none}}
 
