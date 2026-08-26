@@ -60,8 +60,11 @@ function syncDrawer(drawer) {
 }
 
 function activeTab(bar) {
-  return [...bar.querySelectorAll(':scope > button')].find(tab =>
-    tab.classList.contains('on') || tab.getAttribute('aria-selected') === 'true');
+  const tabs = [...bar.querySelectorAll(':scope > button')];
+  // 业务渲染器以 .on 为唯一真值。切换时旧按钮可能还留着 aria-selected=true，
+  // 如果把两者放在同一个 find 里，排在前面的旧按钮会永远抢走滑块。
+  return tabs.find(tab => tab.classList.contains('on'))
+    || tabs.find(tab => tab.getAttribute('aria-selected') === 'true');
 }
 
 function movePill(bar, animate = true) {

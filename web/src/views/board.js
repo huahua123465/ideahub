@@ -23,6 +23,7 @@ const stateOf = key => (st[key] ||= {
   tab: BOARDS[key].tabs[0].key, renderedTab: null,
   items: [], accounts: [], clients: [], people: [], showAccounts: false,
   showFilters: false,
+  requestSeq: 0,
   // 统一标签筛选（任务 6）。放在板块状态里，切走再切回来筛选还在
   tagIds: [], sourceType: '',
   // 从统计漏斗跳进来时携带的业务筛选。单独保存，避免和页面自己的等级 tab 混在一起。
@@ -62,7 +63,7 @@ function paramsOf(key) {
   return p;
 }
 
-async function fetchItems(key) {
+async function fetchItems(key, commit = true) {
   const b = BOARDS[key];
   const s = stateOf(key);
   const [main, accounts, clients, people] = await Promise.all([
@@ -77,11 +78,13 @@ async function fetchItems(key) {
   if (b.fields.some(f => f.type === 'tags')) {
     await tagDict().then(setDict).catch(() => {});
   }
-  s.items = main.items;
-  s.accounts = accounts.items;
-  s.clients = clients.items;
-  s.people = people.items;
+  const data = { items: main.items, accounts: accounts.items, clients: clients.items, people: people.items };
+  if (commit) Object.assign(s, data);
+  return data;
 }
+
+const boardSkeleton = () => `<div class="board-sk-grid">${Array.from({ length: 4 }, () => `
+  <div class="record-card board-sk-card"><i></i><b></b><span></span><span></span><em></em></div>`).join('')}</div>`;
 
 /** 已经缓存好的标签字典。fetchItems 保证了打开弹窗时它一定在（拉失败则为 null） */
 let dictCache = null;
@@ -116,27 +119,34 @@ export async function render(key) {
 
   const body = root.querySelector('.bd-body');
   const cached = s.items.length > 0 && s.renderedTab === s.tab;
+  const requestedTab = s.tab;
+  const requestId = ++s.requestSeq;
 
   if (cached) {
     // 旧数据先上屏，一眼就有东西看
     paintHead(key, root);
     paintRows(key, root);
     paintAccounts(key, root);
-  } else if (!body.children.length) {
-    body.innerHTML = `<div class="board-sk-grid">${Array.from({ length: 4 }, () => `
-      <div class="record-card board-sk-card">
-        <i></i><b></b><span></span><span></span><em></em>
-      </div>`).join('')}</div>`;
+  } else {
+    body.innerHTML = boardSkeleton();
+    body.setAttribute('aria-busy', 'true');
   }
 
+  let fresh;
   try {
-    await fetchItems(key);
+    fresh = await fetchItems(key, false);
   } catch (e) {
+    if (requestId !== s.requestSeq || requestedTab !== s.tab) return;
+    body.removeAttribute('aria-busy');
     if (e.message === '请先登录') return;
     // 已经有旧数据顶着的话，拉失败就别弹提示打扰人 —— 屏幕上不是空的
     if (!cached) toast('info', e.message || '加载失败');
     return;
   }
+  // 用户可能快速切了两次标签。较早请求即使最后才返回，也不能覆盖较新的选择。
+  if (requestId !== s.requestSeq || requestedTab !== s.tab) return;
+  Object.assign(s, fresh);
+  body.removeAttribute('aria-busy');
   s.renderedTab = s.tab;
 
   // 小板块 tab 的选中态
@@ -187,9 +197,17 @@ function build(key, root) {
     const t = e.target.closest('.bd-tab');
     if (!t) return;
     const st_ = stateOf(key);
+    if (st_.tab === t.dataset.tab) return;
     st_.tab = t.dataset.tab;
     st_.items = [];            // 换了筛选，旧数据不能拿来顶，否则会闪一下别的内容
     st_.renderedTab = null;
+    // 点击这一刻就切换选中态；不能等网络请求回来后才给视觉反馈。
+    for (const button of root.querySelectorAll('.bd-tab')) {
+      const selected = button === t;
+      button.classList.toggle('on', selected);
+      button.setAttribute('aria-selected', String(selected));
+    }
+    root.querySelector('.bd-count').textContent = '…';
     render(key);
   });
   root.querySelector('.bd-add').addEventListener('click', () => openEdit(key, null));
