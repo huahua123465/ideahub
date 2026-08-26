@@ -32,6 +32,7 @@ import * as links from './routes/links.mjs';
 import * as search from './routes/search.mjs';
 import * as ingest from './routes/ingest.mjs';
 import * as smartImport from './routes/smart-import.mjs';
+import * as learning from './routes/learning.mjs';
 import { archiveStaleIdeas } from './routes/status.mjs';
 import { publish, closeAll, clientCount } from './lib/bus.mjs';
 
@@ -95,6 +96,7 @@ links.mount(router);
 search.mount(router);
 ingest.mount(router);
 smartImport.mount(router);
+learning.mount(router);
 
 
 /* ---------- 登录闸门 ---------- */

@@ -38,20 +38,20 @@ const CATALOG = {
 };
 
 const PATHS = {
-  'security-foundation': '/learning/files/framework/security-foundation.pdf',
-  'relationship-posture': '/learning/files/framework/relationship-posture.pdf',
-  'attachment-chain': '/learning/files/framework/attachment-chain.pdf',
-  'control-needs': '/learning/files/framework/control-needs.pdf',
-  'aggression-chain': '/learning/files/framework/aggression-chain.pdf',
-  'coquetry': '/learning/files/framework/coquetry.pdf',
-  'coquetry-chain': '/learning/files/framework/coquetry-chain.pdf',
-  'security-foundation-detail': '/learning/files/detail/security-foundation-detail.pdf',
-  'self-worth-detail': '/learning/files/detail/self-worth-detail.pdf',
-  'relationship-posture-detail': '/learning/files/detail/relationship-posture-detail.pdf',
-  'attachment-detail': '/learning/files/detail/attachment-detail.pdf',
-  'control-needs-detail': '/learning/files/detail/control-needs-detail.pdf',
-  'aggression-detail': '/learning/files/detail/aggression-detail.pdf',
-  'coquetry-detail': '/learning/files/detail/coquetry-detail.pdf',
+  'security-foundation': '/api/learning/framework/security-foundation.pdf',
+  'relationship-posture': '/api/learning/framework/relationship-posture.pdf',
+  'attachment-chain': '/api/learning/framework/attachment-chain.pdf',
+  'control-needs': '/api/learning/framework/control-needs.pdf',
+  'aggression-chain': '/api/learning/framework/aggression-chain.pdf',
+  'coquetry': '/api/learning/framework/coquetry.pdf',
+  'coquetry-chain': '/api/learning/framework/coquetry-chain.pdf',
+  'security-foundation-detail': '/api/learning/detail/security-foundation-detail.pdf',
+  'self-worth-detail': '/api/learning/detail/self-worth-detail.pdf',
+  'relationship-posture-detail': '/api/learning/detail/relationship-posture-detail.pdf',
+  'attachment-detail': '/api/learning/detail/attachment-detail.pdf',
+  'control-needs-detail': '/api/learning/detail/control-needs-detail.pdf',
+  'aggression-detail': '/api/learning/detail/aggression-detail.pdf',
+  'coquetry-detail': '/api/learning/detail/coquetry-detail.pdf',
 };
 
 let section = 'framework';

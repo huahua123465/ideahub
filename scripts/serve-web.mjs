@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, extname } from 'node:path';
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
+const LEARNING = join(dirname(fileURLToPath(import.meta.url)), '..', 'server', 'content', 'learning');
 const PORT = Number(process.env.WEB_PORT || 5173);
 const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8', '.json':'application/json; charset=utf-8',
@@ -16,6 +17,19 @@ const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; chars
 
 http.createServer(async (req, res) => {
   let rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^([/\\])+/, '');
+  // 本地只看界面时没有后端；为学习中心模拟同一路径。只允许两个目录和纯文件名，
+  // 生产环境由需登录的 /api/learning 路由负责。
+  const learn = /^api[\\/]learning[\\/](framework|detail)[\\/]([^\\/]+\.pdf)$/.exec(rel);
+  if (learn) {
+    const file = join(LEARNING, learn[1], learn[2]);
+    try {
+      const buf = await readFile(file);
+      res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'inline',
+        'content-length': buf.length, 'cache-control': 'no-cache' });
+      res.end(buf);
+    } catch { res.writeHead(404).end('Not Found'); }
+    return;
+  }
   if (!rel || rel.endsWith('/')) rel += 'index.html';
   const file = join(WEB, rel);
   if (!file.startsWith(WEB)) { res.writeHead(403).end('Forbidden'); return; }
