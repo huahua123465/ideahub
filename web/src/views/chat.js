@@ -486,6 +486,7 @@ async function confirmPick() {
 export function bind() {
   $('#chatBtn').addEventListener('click', () => toggle());
   $('#chatClose').addEventListener('click', () => close());
+  $('#chatSideClose').addEventListener('click', () => close());
 
   // 点面板以外的地方就收起。之前刻意没做这条，理由是「关掉正在打的字很烦」——
   // 现在草稿会留着，那个理由不成立了，而点外面关掉才是大家对浮层的预期。

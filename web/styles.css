@@ -531,6 +531,8 @@ tr:hover .bd-del{color:var(--crit)}
 #chatNewGroup{font-size:12.5px;font-weight:600;color:var(--blue)}
 #chatNewGroup .ic{width:15px;height:15px}
 #chatNewGroup:hover{background:var(--blue-100)}
+.chat-exit{display:none}
+.chat-exit-label{display:none;font-size:13px;font-weight:600}
 .chatback:hover,.chatx:hover{background:var(--line-soft)}
 .chatmsgs{flex:1;overflow-y:auto;padding:8px 0}
 
@@ -648,6 +650,9 @@ tr:hover .bd-del{color:var(--crit)}
   .chatpanel{width:100%}
   .chatside{width:100%;border-right:none}
   .chatback{display:grid}
+  .chat-exit{display:inline-flex;color:var(--ink2);font-size:13px;font-weight:600}
+  .chat-exit-main{display:inline-flex;width:auto;gap:4px;padding:0 10px}
+  .chat-exit-label{display:inline}
   .chatpanel.has-conv .chatside{display:none}
   .chatpanel:not(.has-conv) .chatmain{display:none}
 }
@@ -657,6 +662,7 @@ tr:hover .bd-del{color:var(--crit)}
 @media (pointer:coarse){
   .peer{padding:13px 16px}
   .chatback,.chatx{width:40px;height:40px}
+  .chat-exit,.chat-exit-main{width:auto;min-width:64px}
 }
 
 /* ---------- formal table ---------- */
