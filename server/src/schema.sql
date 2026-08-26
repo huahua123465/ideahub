@@ -399,9 +399,12 @@ CREATE TABLE IF NOT EXISTS attachments (
   mime        TEXT NOT NULL,
   size        BIGINT NOT NULL,
   note        TEXT,
+  source_url  TEXT,
   uploaded_by BIGINT REFERENCES users(id),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- CREATE TABLE IF NOT EXISTS 不会给旧表补字段，现有库也要幂等补上。
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS source_url TEXT;
 CREATE INDEX IF NOT EXISTS idx_attachments ON attachments(scope, ref_id, created_at DESC);
 
 -- 把已经传上来的客户档案附件搬过来（幂等：搬过就不再搬）

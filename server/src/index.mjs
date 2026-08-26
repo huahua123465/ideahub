@@ -119,6 +119,7 @@ const PUBLIC_API = new Set([
   '/api/ingest/analysis',
   '/api/ingest/client',
   '/api/ingest/client/delivery',
+  '/api/ingest/client/file',
 ]);
 
 /* ---------- 静态文件 ---------- */

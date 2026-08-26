@@ -54,6 +54,21 @@ async function call(method, path, body, userId = ADMIN) {
   return { status: r.status, data };
 }
 
+/** 对接接口走 Bearer API Key；raw=true 时 body 是文件字节，不做 JSON 序列化。 */
+async function keyCall(method, path, body, key, raw = false) {
+  const r = await fetch(BASE + path, {
+    method,
+    headers: {
+      authorization: `Bearer ${key}`,
+      ...(raw ? {} : { 'content-type': 'application/json' }),
+    },
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await r.json(); } catch { /* 空响应 */ }
+  return { status: r.status, data };
+}
+
 /** 走真实 cookie 的请求，用于测登录本身。cookie 自己收自己带。 */
 function makeClient() {
   let cookie = '';
@@ -415,6 +430,56 @@ console.log('\n角色与权限');
   }
 }
 
+/* ---------- 技术2按 externalId 上传客户附件 ---------- */
+console.log('\n技术2客户附件接入');
+let tech2TestKeyId = null;
+let tech2TestClientId = null;
+{
+  const noKey = await keyCall('POST',
+    '/api/ingest/client/file?externalId=missing&name=test.txt',
+    new TextEncoder().encode('no key'), '', true);
+  ok(noKey.status === 401, `附件接入口没有 API Key 返回 401（实际 ${noKey.status}）`);
+
+  const made = await call('POST', '/api/admin/api-keys',
+    { scope: 'tech2', name: '技术2附件接口自测' });
+  ok(made.status === 201 && /^ih_tech2_/.test(made.data?.key || ''),
+    '管理员能生成技术2附件自测 Key', made.data);
+  tech2TestKeyId = made.data?.id || null;
+
+  const externalId = `tech2-file-test-${stamp}`;
+  const client = await keyCall('POST', '/api/ingest/client',
+    { externalId, alias: '技术2附件接口自测客户' }, made.data.key);
+  ok(client.status === 200 && client.data?.id, '技术2先按 externalId 建立客户', client.data);
+  tech2TestClientId = client.data?.id || null;
+
+  const sourceUrl = 'https://tech2.example/documents/test-report';
+  const path = '/api/ingest/client/file?'
+    + new URLSearchParams({ externalId, name: '接口自测报告.txt', sourceUrl, note: '自动化测试' });
+  const uploaded = await keyCall('POST', path,
+    new TextEncoder().encode('IdeaHub tech2 attachment integration test'), made.data.key, true);
+  ok(uploaded.status === 201 && uploaded.data?.id,
+    `技术2附件上传返回 201 和附件 ID（实际 ${uploaded.status}）`, uploaded.data);
+  ok(uploaded.data?.externalId === externalId && uploaded.data?.sourceUrl === sourceUrl,
+    '返回值包含 externalId 和 sourceUrl', uploaded.data);
+
+  if (uploaded.data?.id) {
+    const { rows } = await dbq(
+      'SELECT scope, ref_id, source_url FROM attachments WHERE id = $1', [uploaded.data.id]);
+    ok(rows[0]?.scope === 'client'
+       && Number(rows[0]?.ref_id) === Number(tech2TestClientId)
+       && rows[0]?.source_url === sourceUrl,
+    '附件已关联到 externalId 对应客户并保存 sourceUrl', rows[0]);
+
+    const removed = await call('DELETE', `/api/files/${uploaded.data.id}`);
+    ok(removed.status === 200, '自测附件及磁盘文件已清理', removed.data);
+  }
+
+  const missingClient = await keyCall('POST',
+    '/api/ingest/client/file?externalId=not-created&name=test.txt',
+    new TextEncoder().encode('missing client'), made.data.key, true);
+  ok(missingClient.status === 404, `未建档 externalId 返回 404（实际 ${missingClient.status}）`);
+}
+
 /* ---------- 清理 ---------- */
 console.log('\n清理测试数据');
 {
@@ -425,6 +490,12 @@ console.log('\n清理测试数据');
   const { rows: gone } = await query(
     `DELETE FROM users WHERE username LIKE 'zt%' AND name LIKE '自测账号%' RETURNING id`);
   ok(gone.length === 2, `自测账号已删除（${gone.length} 个）`);
+  if (tech2TestClientId) {
+    await query('DELETE FROM clients WHERE id = $1', [tech2TestClientId]);
+  }
+  if (tech2TestKeyId) {
+    await query('DELETE FROM api_keys WHERE id = $1', [tech2TestKeyId]);
+  }
   await query('SELECT recalc_hot_scores()');
   const { rows } = await query(`SELECT count(*)::int AS n FROM ideas WHERE title LIKE '自测用灵感%'`);
   ok(rows[0].n === 0, '测试数据已清理干净');

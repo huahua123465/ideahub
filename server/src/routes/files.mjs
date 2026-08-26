@@ -26,6 +26,7 @@ import { pipeline } from 'node:stream/promises';
 import { query } from '../db/index.mjs';
 import { sendJson, q, badRequest, notFound, forbidden } from '../lib/http.mjs';
 import { currentUser } from '../lib/auth.mjs';
+import { requireKey } from '../lib/apikey.mjs';
 import { publish } from '../lib/bus.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/data/uploads';
@@ -71,7 +72,7 @@ function fileRow(r) {
     id: Number(r.id),
     scope: r.scope, refId: Number(r.ref_id), side: r.side,
     name: r.orig_name, mime: r.mime, size: Number(r.size),
-    note: r.note,
+    note: r.note, sourceUrl: r.source_url || null,
     uploaderName: r.uploader_name || null,
     createdAt: r.created_at,
     url: `/api/files/${r.id}`,
@@ -120,6 +121,48 @@ async function saveBody(req, dest) {
     所以把它们导出去给 routes/work.mjs 复用，而不是复制一份。 */
 export { kindOf, saveBody, fileRow, UPLOAD_DIR, MAX_SIZE, KINDS };
 
+function uploadParams(url) {
+  const origName = String(q(url, 'name', '') || '').trim();
+  if (!origName) throw badRequest('缺少文件名 name');
+  if (origName.length > 200) throw badRequest('文件名太长了');
+
+  const note = String(q(url, 'note', '') || '').trim();
+  if (note.length > 2000) throw badRequest('附件备注太长了');
+
+  const sourceUrl = String(q(url, 'sourceUrl', '') || '').trim();
+  if (sourceUrl.length > 2000) throw badRequest('sourceUrl 太长了');
+  if (sourceUrl) {
+    let parsed;
+    try { parsed = new URL(sourceUrl); }
+    catch { throw badRequest('sourceUrl 不是合法网址'); }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw badRequest('sourceUrl 只支持 http 或 https 地址');
+    }
+  }
+
+  return { origName, note: note || null, sourceUrl: sourceUrl || null, kind: kindOf(origName) };
+}
+
+async function storeClientFile(req, clientId, params, uploadedBy = null) {
+  const storedName = randomBytes(16).toString('hex') + params.kind.ext;
+  const diskPath = join(UPLOAD_DIR, storedName);
+  const size = await saveBody(req, diskPath);
+
+  try {
+    const { rows } = await query(
+      `INSERT INTO attachments(scope, ref_id, side, orig_name, stored_name, mime, size,
+                               note, source_url, uploaded_by)
+       VALUES('client',$1,'submit',$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [clientId, basename(params.origName), storedName, params.kind.mime, size,
+       params.note, params.sourceUrl, uploadedBy]);
+    return rows[0];
+  } catch (e) {
+    // 数据库写入失败时同步清理文件，避免磁盘留下永远查不到的孤儿附件。
+    await unlink(diskPath).catch(() => {});
+    throw e;
+  }
+}
+
 export function mount(router) {
 
   /* ---------- 列出某个客户的附件 ---------- */
@@ -143,22 +186,33 @@ export function mount(router) {
       'SELECT id FROM clients WHERE id = $1 AND deleted_at IS NULL', [clientId]);
     if (!c[0]) throw notFound('没有这个客户');
 
-    const origName = String(q(url, 'name', '') || '').trim();
-    if (!origName) throw badRequest('缺少文件名');
-    if (origName.length > 200) throw badRequest('文件名太长了');
-    const kind = kindOf(origName);
+    const row = await storeClientFile(req, clientId, uploadParams(url), me.id);
 
-    // 磁盘上用随机名，原始名只进数据库
-    const storedName = randomBytes(16).toString('hex') + kind.ext;
-    const size = await saveBody(req, join(UPLOAD_DIR, storedName));
+    sendJson(res, 201, fileRow({ ...row, uploader_name: me.name }));
+    publish('board:updated', { board: 'clients' });
+  });
 
-    const { rows } = await query(
-      `INSERT INTO attachments(scope, ref_id, side, orig_name, stored_name, mime, size, note, uploaded_by)
-       VALUES('client',$1,'submit',$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [clientId, basename(origName), storedName, kind.mime, size,
-       q(url, 'note') || null, me.id]);
+  /* ---------- 技术2：按 externalId 上传客户附件 ----------
+     POST /api/ingest/client/file?externalId=t2-8891&name=分析报告.pdf&sourceUrl=https%3A%2F%2F...
+     Authorization: Bearer ih_tech2_...
+     请求体是一个文件的原始字节；多文件逐文件调用，可并发。 */
+  router.post('/api/ingest/client/file', async (req, res, _params, url) => {
+    const key = await requireKey(req, 'tech2');
+    const externalId = String(q(url, 'externalId', '') || '').trim();
+    if (!externalId) throw badRequest('externalId 必填');
+    if (externalId.length > 300) throw badRequest('externalId 太长了');
 
-    sendJson(res, 201, fileRow({ ...rows[0], uploader_name: me.name }));
+    const { rows: clients } = await query(
+      'SELECT id FROM clients WHERE external_id = $1 AND deleted_at IS NULL', [externalId]);
+    if (!clients[0]) throw notFound('这个客户还没建档，先调 /api/ingest/client');
+
+    const row = await storeClientFile(req, Number(clients[0].id), uploadParams(url), null);
+    sendJson(res, 201, {
+      ok: true,
+      externalId,
+      ...fileRow({ ...row, uploader_name: key.name }),
+      by: key.name,
+    });
     publish('board:updated', { board: 'clients' });
   });
 

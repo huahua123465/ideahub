@@ -451,6 +451,38 @@ curl -H <span class="s">"Authorization: Bearer $KEY"</span> \
         </div>
       </div>
 
+      <div class="ep" id="client-file">
+        <div class="ep-hd">
+          <span class="verb">POST</span>
+          <span class="path">/api/ingest/client/file</span>
+          <span class="ep-note">技术2按 externalId 上传客户附件</span>
+        </div>
+        <div class="ep-body">
+          <p>沿用技术2现有 Bearer Key。查询参数使用 <code>externalId</code>、<code>name</code>，可选 <code>sourceUrl</code> 和 <code>note</code>；请求体直接发送一个文件的原始字节，不使用 JSON 或 multipart。</p>
+          <div class="tw">
+            <table>
+              <thead><tr><th>字段</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td><code>externalId</code></td><td><b>必填。</b>技术2侧客户 ID；客户需先通过 <code>/api/ingest/client</code> 建档</td></tr>
+                <tr><td><code>name</code></td><td><b>必填。</b>带扩展名的原始文件名</td></tr>
+                <tr><td><code>sourceUrl</code></td><td>可选。附件在上游系统中的原始 HTTP/HTTPS 地址</td></tr>
+                <tr><td><code>note</code></td><td>可选。附件备注</td></tr>
+              </tbody>
+            </table>
+          </div>
+<pre>curl -X POST <span class="s">"https://xm.xingxingqule.com:9443/api/ingest/client/file"</span> \
+  -H <span class="s">"Authorization: Bearer $KEY"</span> \
+  --url-query <span class="s">"externalId=t2-8891"</span> \
+  --url-query <span class="s">"name=客户分析报告.pdf"</span> \
+  --url-query <span class="s">"sourceUrl=https://tech2.example/documents/report-8891"</span> \
+  --data-binary @客户分析报告.pdf</pre>
+          <div class="note">
+            <p>成功返回 HTTP 201；返回中的 <code>id</code> 是附件/文档 ID，<code>refId</code> 是 IdeaHub 内部客户 ID，<code>sourceUrl</code> 原样返回。</p>
+            <p><b>多文件：</b>一次请求上传一个文件；多个文件分别调用，可并行，使用相同 <code>externalId</code> 即关联到同一客户。单个文件最大 20MB。</p>
+          </div>
+        </div>
+      </div>
+
       <div class="ep" id="delivery">
         <div class="ep-hd">
           <span class="verb">POST</span>
