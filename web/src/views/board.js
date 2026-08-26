@@ -796,7 +796,7 @@ function openEdit(key, id) {
     fbox.dataset.clientId = id || '';
     if (id) {
       fbox.innerHTML = '<div class="sec-title">附件</div><div class="filelist dim">加载中…</div>';
-      loadFiles(id, key, fbox.dataset.scope);
+      loadFiles(id, key, fbox.dataset.scope, { seed: row?.files });
     } else {
       // 新建时记录还没有 id，文件挂不上去。以前是让用户「先保存再回来传」——
       // 多一步来回，而且很多人保存完就走了，附件永远补不上。
@@ -887,20 +887,40 @@ function paintPending() {
 }
 
 /** 附件列表 + 上传框。挂在编辑弹窗底部。 */
-async function loadFiles(clientId, boardKey, scope = 'clients') {
+const fileListCache = new Map();
+const FILE_CACHE_TTL = 5 * 60 * 1000;
+const fileListKey = (scope, id) => `${scope}:${id}`;
+
+async function loadFiles(clientId, boardKey, scope = 'clients', { seed, force = false } = {}) {
   const API = scope === 'reports'
     ? { list: api.reportFiles, up: api.reportUpload }
     : { list: api.clientFiles, up: api.fileUpload };
   const fbox = $('#bdFiles');
+  const cacheKey = fileListKey(scope, clientId);
+  const cached = fileListCache.get(cacheKey);
+  const immediate = Array.isArray(seed) ? seed
+    : (!force && cached && Date.now() - cached.at < FILE_CACHE_TTL ? cached.items : null);
+  if (immediate) {
+    fileListCache.set(cacheKey, { at: Date.now(), items: immediate });
+    paintLoadedFiles(clientId, boardKey, scope, immediate, API);
+  }
   let items = [];
   try {
     ({ items } = await API.list(clientId));
   } catch (e) {
+    if (immediate) return; // 已有可用清单时保持显示，网络恢复后下次打开会再校准
     fbox.innerHTML = `<div class="sec-title">附件 · 分析报告</div><div class="dim">读取失败：${esc(e.message)}</div>`;
     return;
   }
   // 弹窗可能已经被关掉或换了一条记录，别把结果画到错的地方
-  if (fbox.dataset.clientId !== String(clientId)) return;
+  if (fbox.dataset.clientId !== String(clientId) || fbox.dataset.scope !== scope) return;
+  fileListCache.set(cacheKey, { at: Date.now(), items });
+  paintLoadedFiles(clientId, boardKey, scope, items, API);
+}
+
+function paintLoadedFiles(clientId, boardKey, scope, items, API) {
+  const fbox = $('#bdFiles');
+  if (fbox.dataset.clientId !== String(clientId) || fbox.dataset.scope !== scope) return;
 
   // 图片和普通文件分开画。审核人打开一条提交，要的是「一眼看到图里干了什么」，
   // 而不是一串叫 IMG_2381.jpg 的链接 —— 那等于逼他一个个下载。
@@ -949,7 +969,8 @@ async function loadFiles(clientId, boardKey, scope = 'clients') {
     }
     msg.textContent = '';
     toast('ok', files.length > 1 ? `已上传 ${files.length} 个` : '已上传');
-    await loadFiles(clientId, boardKey, scope);
+    fileListCache.delete(fileListKey(scope, clientId));
+    await loadFiles(clientId, boardKey, scope, { force: true });
     // 直接 render 而不是 refresh()：refresh 里有「弹窗开着就跳过」的守卫，
     // 而上传的那一刻弹窗正开着，走 refresh 会被自己挡掉 ——
     // 用户看到的就是「传上去了但表格里的计数没变」。
@@ -980,7 +1001,8 @@ async function loadFiles(clientId, boardKey, scope = 'clients') {
       try {
         await api.fileDelete(Number(btn.dataset.fid));
         toast('ok', '已删除');
-        await loadFiles(clientId, boardKey, scope);
+        fileListCache.delete(fileListKey(scope, clientId));
+        await loadFiles(clientId, boardKey, scope, { force: true });
         if (boardKey) await render(boardKey);
       } catch (err) { toast('info', err.message || '删除失败'); }
     });

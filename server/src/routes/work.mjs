@@ -37,9 +37,25 @@ function reportRow(r) {
     reviewedByName: r.reviewed_by_name || null,
     status: r.feedback ? '已反馈' : '待审核',
     fileCount: Number(r.file_count) || 0,
+    // 只随列表带轻量元数据，不带文件本体。打开编辑/审核弹窗时可以立即画附件，
+    // 不必为了几个文件名再跨洋等一个请求；图片字节仍由 /api/files/:id 懒加载。
+    files: Array.isArray(r.files) ? r.files : [],
     createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }
+
+/** 工作提交列表顺带聚合附件元数据，避免打开弹窗后再串行等一次附件清单。 */
+const reportFilesJoin = alias => `
+  LEFT JOIN LATERAL (
+    SELECT count(*)::int AS file_count,
+           coalesce(jsonb_agg(jsonb_build_object(
+             'id', f.id, 'name', f.orig_name, 'mime', f.mime, 'size', f.size,
+             'side', f.side, 'uploaderName', u.name,
+             'createdAt', f.created_at, 'url', '/api/files/' || f.id
+           ) ORDER BY f.created_at), '[]'::jsonb) AS files
+      FROM attachments f LEFT JOIN users u ON u.id = f.uploaded_by
+     WHERE f.scope='report' AND f.ref_id=${alias}.id
+  ) rf ON TRUE`;
 
 /** 能不能看这一条 */
 const canSee = (r, me) =>
@@ -48,11 +64,12 @@ const canSee = (r, me) =>
 async function loadReport(id) {
   const { rows } = await query(`
     SELECT r.*, a.name AS author_name, v.name AS reviewer_name, b.name AS reviewed_by_name,
-           (SELECT count(*) FROM attachments f WHERE f.scope='report' AND f.ref_id=r.id)::int AS file_count
+           rf.file_count, rf.files
       FROM work_reports r
       JOIN users a ON a.id = r.author_id
       LEFT JOIN users v ON v.id = r.reviewer_id
       LEFT JOIN users b ON b.id = r.reviewed_by
+      ${reportFilesJoin('r')}
      WHERE r.id = $1`, [id]);
   return rows[0];
 }
@@ -77,11 +94,12 @@ export function mount(router) {
 
     const { rows } = await query(`
       SELECT r.*, a.name AS author_name, v.name AS reviewer_name, b.name AS reviewed_by_name,
-             (SELECT count(*) FROM attachments f WHERE f.scope='report' AND f.ref_id=r.id)::int AS file_count
+             rf.file_count, rf.files
         FROM work_reports r
         JOIN users a ON a.id = r.author_id
         LEFT JOIN users v ON v.id = r.reviewer_id
         LEFT JOIN users b ON b.id = r.reviewed_by
+        ${reportFilesJoin('r')}
        WHERE ${where.join(' AND ')}
        ORDER BY r.report_date DESC, r.id DESC`, args);
     sendJson(res, 200, { items: rows.map(reportRow) });
