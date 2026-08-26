@@ -19,7 +19,8 @@ COPY scripts ./scripts
 # esbuild 只在构建时用，不进最终镜像的运行时依赖 —— 装完就删。
 RUN npm install --no-save esbuild@0.28.2 \
  && node scripts/build-web.mjs \
- && rm -rf node_modules/esbuild node_modules/@esbuild \
+ && rm -rf node_modules/esbuild node_modules/@esbuild node_modules/pdfjs-dist \
+              node_modules/@napi-rs node_modules/node-readable-to-web-readable-stream \
  && npm cache clean --force
 
 ENV NODE_ENV=production

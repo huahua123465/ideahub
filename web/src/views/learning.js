@@ -5,6 +5,7 @@
  */
 import { $, esc } from '../util.js';
 import { ICON } from '../icons.js';
+import { openPdf, closePdf } from '../pdf-reader.js';
 
 export const events = new EventTarget();
 
@@ -57,6 +58,7 @@ const PATHS = {
 let section = 'framework';
 let currentId = null;
 let query = '';
+let openGeneration = 0;
 
 export function setSection(next) {
   if (CATALOG[next]) section = next;
@@ -92,29 +94,46 @@ function paintList() {
   $('#learningList').innerHTML = listHTML();
 }
 
-function openDocument(id) {
+async function openDocument(id) {
+  const own = ++openGeneration;
   const item = findItem(id);
   currentId = item[0];
   remember(currentId);
   paintList();
 
-  const [_, title, pages, desc] = item;
+  const [_, title, pageCount, desc] = item;
   $('#learningDocTitle').textContent = title;
-  $('#learningDocMeta').textContent = `${CATALOG[section].short} · ${pages} 页`;
+  $('#learningDocMeta').textContent = `${CATALOG[section].short} · ${pageCount} 页`;
   $('#learningDocDesc').textContent = desc;
-  const frame = $('#learningPdf');
+  const pageContainer = $('#learningPages');
   const loading = $('#learningLoading');
   const main = $('#main');
   const keepScroll = main.scrollTop;
+  loading.classList.remove('error');
+  loading.querySelector('span').textContent = '正在打开学习资料…';
   loading.hidden = false;
-  frame.title = `${title} · 站内阅读`;
-  frame.onload = () => {
-    loading.hidden = true;
-    // Chromium 的内置 PDF 查看器加载时会尝试把 iframe 滚进视口。
-    // 保留打开前的位置，首次进入就仍从学习中心标题开始，切资料也不会整页跳动。
-    requestAnimationFrame(() => { main.scrollTop = keepScroll; });
-  };
-  frame.src = `${PATHS[currentId]}#toolbar=0&navpanes=0&view=FitH`;
+  $('#learningPageStatus').textContent = '准备中';
+  try {
+    await openPdf(pageContainer, PATHS[currentId], {
+      onProgress: p => {
+        if (own === openGeneration) loading.querySelector('span').textContent = `正在打开学习资料… ${p}%`;
+      },
+      onReady: total => {
+        if (own !== openGeneration) return;
+        loading.hidden = true;
+        $('#learningPageStatus').textContent = `1 / ${total}`;
+        requestAnimationFrame(() => { main.scrollTop = keepScroll; });
+      },
+      onPageChange: (page, total) => {
+        if (own === openGeneration) $('#learningPageStatus').textContent = `${page} / ${total}`;
+      },
+    });
+  } catch (e) {
+    if (own !== openGeneration) return;
+    loading.hidden = false;
+    loading.classList.add('error');
+    loading.querySelector('span').textContent = e?.message || '学习资料打开失败，请稍后重试';
+  }
 
   const index = currentItems().findIndex(x => x[0] === currentId);
   $('#learningPrev').disabled = index <= 0;
@@ -128,6 +147,8 @@ function switchSection(next) {
 }
 
 export function render() {
+  openGeneration++;
+  closePdf();
   const root = $('#v-learning');
   const group = CATALOG[section];
   currentId = currentId && findItem(currentId)?.[0] === currentId
@@ -157,14 +178,19 @@ export function render() {
           <div><span id="learningDocMeta"></span><h2 id="learningDocTitle"></h2><p id="learningDocDesc"></p></div>
           <div class="learning-nav"><button class="btn btn-ghost" id="learningPrev">上一份</button><button class="btn btn-ghost" id="learningNext">下一份</button></div>
         </header>
+        <div class="learning-reader-status"><span>连续阅读</span><b id="learningPageStatus">准备中</b></div>
         <div class="learning-pdf-shell">
           <div class="learning-loading" id="learningLoading"><i></i><span>正在打开学习资料…</span></div>
-          <iframe class="learning-pdf" id="learningPdf" loading="eager"></iframe>
+          <div class="learning-pages" id="learningPages" role="document" aria-label="PDF 连续阅读区" tabindex="0"></div>
         </div>
       </article>
     </div>`;
 
-  root.querySelector('[data-learning-back]').onclick = () => events.dispatchEvent(new Event('back'));
+  root.querySelector('[data-learning-back]').onclick = () => {
+    openGeneration++;
+    closePdf();
+    events.dispatchEvent(new Event('back'));
+  };
   root.querySelectorAll('[data-learning-section]').forEach(btn => {
     btn.onclick = () => switchSection(btn.dataset.learningSection);
   });

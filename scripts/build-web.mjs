@@ -70,6 +70,15 @@ await writeFile(html, s);
 // 镜像里只 COPY 了 server / web / scripts，没有 docs —— 也就是说在容器内跑这一步时
 // 源文件根本不存在。而那时候 web/ 里已经带着宿主机同步好的副本了，跳过正是对的。
 const fsp = (await import('node:fs')).promises;
+// PDF.js 只在浏览器里使用。复制最小运行文件到 web/vendor，避免把 35MB 的完整 npm 包
+// 当静态资源发布；Worker 必须同源，否则手机浏览器容易因跨域而退化失败。
+const pdfVendor = join(root, 'web', 'vendor', 'pdfjs');
+await fsp.mkdir(pdfVendor, { recursive: true });
+await Promise.all([
+  fsp.copyFile(join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'), join(pdfVendor, 'pdf.min.mjs')),
+  fsp.copyFile(join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'), join(pdfVendor, 'pdf.worker.min.mjs')),
+  fsp.copyFile(join(root, 'node_modules', 'pdfjs-dist', 'LICENSE'), join(pdfVendor, 'LICENSE.txt')),
+]);
 const 同步 = async (从, 到, 说明) => {
   try {
     await fsp.copyFile(join(root, ...从), join(root, 'web', 到));
@@ -86,4 +95,5 @@ const 已同步 = (await Promise.all([
 ])).filter(Boolean);
 
 console.log(`打包完成：web/dist/app.js  ${Math.round(size / 1024)} KB  版本 ${stamp}`);
+console.log('PDF.js 浏览器运行文件已同步到 web/vendor/pdfjs/');
 if (已同步.length) console.log('对接方资料已同步到 web/：' + 已同步.join('、'));

@@ -21,6 +21,7 @@
     "setup": "node scripts/setup.mjs"
   },
   "dependencies": {
+    "pdfjs-dist": "5.4.624",
     "pg": "^8.13.1"
   },
   "devDependencies": {
