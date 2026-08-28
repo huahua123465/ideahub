@@ -45,8 +45,10 @@ def _probe_downloaded_duration(video_path: str) -> float:
     return duration
 
 
-def _cookie_args(url: str) -> list[str]:
+def _cookie_args(url: str, *, use_login: bool = True) -> list[str]:
     """Use a local, git-ignored cookie file for sites that require browser state."""
+    if not use_login:
+        return []
     for host, cookie_file in COOKIE_FILES.items():
         if host in url.lower() and cookie_file.exists():
             return ["--cookies", str(cookie_file)]
@@ -63,12 +65,17 @@ def url_declares_video(url: str) -> bool:
     return bool(path_parts & {"video", "videos"})
 
 
-def download_video(url: str, output_dir: str, metadata: dict | None = None) -> dict | None:
+def download_video(
+    url: str, output_dir: str, metadata: dict | None = None, *,
+    use_login: bool = True,
+) -> dict | None:
     validate_public_url(url)
     os.makedirs(output_dir, exist_ok=True)
     output_template = os.path.join(output_dir, "%(title).80s_%(id)s.%(ext)s")
 
-    meta = metadata if metadata is not None else extract_video_metadata(url)
+    meta = metadata if metadata is not None else extract_video_metadata(
+        url, use_login=use_login,
+    )
     meta = meta or {}
     if float(meta.get("duration") or 0) > MAX_VIDEO_DURATION:
         raise ValueError(f"视频时长超过 {MAX_VIDEO_DURATION} 秒限制")
@@ -79,7 +86,7 @@ def download_video(url: str, output_dir: str, metadata: dict | None = None) -> d
 
     cmd = [
         "yt-dlp", "--no-playlist",
-        *_cookie_args(url),
+        *_cookie_args(url, use_login=use_login),
         # Caption extraction does not benefit from downloading the largest
         # rendition. A native 720px portrait stream keeps text clear while
         # reducing CDN stalls and temporary processing time substantially.
@@ -167,11 +174,15 @@ def _metadata_from_payload(data: dict, url: str) -> dict:
 
 
 def extract_video_metadata(
-    url: str, attempts: int = METADATA_PROBE_ATTEMPTS
+    url: str, attempts: int = METADATA_PROBE_ATTEMPTS, *,
+    use_login: bool = True,
 ) -> dict | None:
     """Read platform metadata with bounded retries for transient extractor failures."""
     validate_public_url(url)
-    cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", *_cookie_args(url), url]
+    cmd = [
+        "yt-dlp", "--dump-json", "--no-playlist", "--quiet",
+        *_cookie_args(url, use_login=use_login), url,
+    ]
     attempts = max(1, int(attempts))
     for attempt in range(attempts):
         try:

@@ -5,10 +5,15 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from media.downloader import download_video, extract_video_metadata, url_declares_video
+from media.downloader import _cookie_args, download_video, extract_video_metadata, url_declares_video
 
 
 class VideoMetadataTests(unittest.TestCase):
+    def test_public_mode_never_passes_cookie_file_to_downloader(self):
+        self.assertEqual([], _cookie_args(
+            "https://www.xiaohongshu.com/explore/note-id", use_login=False,
+        ))
+
     def test_explicit_video_signals_survive_a_metadata_miss(self):
         self.assertTrue(url_declares_video("https://www.xiaohongshu.com/discovery/item/n1?type=video"))
         self.assertTrue(url_declares_video("https://www.douyin.com/video/123456"))

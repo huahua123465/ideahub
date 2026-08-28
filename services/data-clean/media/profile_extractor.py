@@ -334,13 +334,13 @@ def _cookie_header(platform: str) -> str:
     return "; ".join(f"{item['name']}={item['value']}" for item in _netscape_cookies(platform))
 
 
-async def _http_html(url: str, platform: str) -> str:
+async def _http_html(url: str, platform: str, *, use_login: bool = True) -> str:
     host = (urlsplit(str(url or "")).hostname or "").rstrip(".").casefold()
     suffixes = PLATFORM_HOST_SUFFIXES.get(platform, ())
     if not any(host == suffix or host.endswith("." + suffix) for suffix in suffixes):
         return ""
     headers = dict(HEADERS)
-    cookie_header = _cookie_header(platform)
+    cookie_header = _cookie_header(platform) if use_login else ""
     if cookie_header:
         headers["Cookie"] = cookie_header
     try:
@@ -354,7 +354,7 @@ async def _http_html(url: str, platform: str) -> str:
         return ""
 
 
-async def _browser_html(url: str, platform: str) -> str:
+async def _browser_html(url: str, platform: str, *, use_login: bool = True) -> str:
     """Use the saved local session only as a bounded fallback for SSR hydration."""
     host = (urlsplit(str(url or "")).hostname or "").rstrip(".").casefold()
     suffixes = PLATFORM_HOST_SUFFIXES.get(platform, ())
@@ -369,10 +369,10 @@ async def _browser_html(url: str, platform: str) -> str:
                 "user_agent": HEADERS["User-Agent"],
                 "service_workers": "block",
             }
-            if platform == "xiaohongshu" and XHS_STORAGE_STATE.exists():
+            if use_login and platform == "xiaohongshu" and XHS_STORAGE_STATE.exists():
                 context_options["storage_state"] = str(XHS_STORAGE_STATE)
             context = await browser.new_context(**context_options)
-            if "storage_state" not in context_options:
+            if use_login and "storage_state" not in context_options:
                 cookies = _netscape_cookies(platform)
                 if cookies:
                     await context.add_cookies(cookies)
@@ -402,11 +402,12 @@ async def _retry_http_account(
     platform: str,
     *,
     require_profile_details: bool,
+    use_login: bool = True,
 ) -> dict[str, str]:
     """Retry empty platform snapshots without multiplying browser instances."""
     best = empty_account()
     for attempt in range(ACCOUNT_HTTP_ATTEMPTS):
-        page_html = await _http_html(url, platform)
+        page_html = await _http_html(url, platform, use_login=use_login)
         best = merge_accounts(best, extract_account_from_html(page_html, platform))
         ready = _has_profile_details(best) if require_profile_details else bool(best["profile_url"])
         if ready:
@@ -416,7 +417,10 @@ async def _retry_http_account(
     return best
 
 
-async def hydrate_account(source_url: str, platform: str, seed: Any = None) -> dict[str, str]:
+async def hydrate_account(
+    source_url: str, platform: str, seed: Any = None, *,
+    use_login: bool = True,
+) -> dict[str, str]:
     """Resolve a creator page and fill only values actually returned by the platform."""
     account = normalize_account(seed)
     if platform not in {"xiaohongshu", "douyin"}:
@@ -424,11 +428,14 @@ async def hydrate_account(source_url: str, platform: str, seed: Any = None) -> d
 
     if not account["profile_url"]:
         source_account = await _retry_http_account(
-            source_url, platform, require_profile_details=False
+            source_url, platform, require_profile_details=False,
+            use_login=use_login,
         )
         account = merge_accounts(account, source_account)
         if not account["profile_url"]:
-            browser_source = await _browser_html(source_url, platform)
+            browser_source = await _browser_html(
+                source_url, platform, use_login=use_login,
+            )
             account = merge_accounts(account, extract_account_from_html(browser_source, platform))
 
     profile_url = account["profile_url"]
@@ -436,10 +443,13 @@ async def hydrate_account(source_url: str, platform: str, seed: Any = None) -> d
         return account
 
     profile_account = await _retry_http_account(
-        profile_url, platform, require_profile_details=True
+        profile_url, platform, require_profile_details=True,
+        use_login=use_login,
     )
     account = merge_accounts(profile_account, account)
     if not _has_profile_details(account):
-        browser_profile = await _browser_html(profile_url, platform)
+        browser_profile = await _browser_html(
+            profile_url, platform, use_login=use_login,
+        )
         account = merge_accounts(extract_account_from_html(browser_profile, platform), account)
     return normalize_account(account)

@@ -13,12 +13,15 @@ from .text_ocr import (extract_video_text, download_post_images, extract_images_
 from .video_transcriber import transcribe_video_with_model
 from .comment_extractor import extract_hot_comments
 from .platform_login import (
+    clear_xhs_login_session,
     friendly_xhs_login_error,
     has_saved_xhs_login,
     invalidate_xhs_login,
     login_xiaohongshu,
     persist_xhs_login_session,
+    read_xhs_login_label,
     read_xhs_login_profile,
+    save_xhs_login_label,
     sync_saved_xhs_account,
     XHS_QR_FILE,
 )

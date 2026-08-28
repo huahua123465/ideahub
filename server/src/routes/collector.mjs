@@ -285,6 +285,10 @@ export function createCollectorHandlers({
       jsonCall('/api/login/xiaohongshu/status', ctx)),
     loginAccount: admin(async (req, _params, _url, ctx) =>
       jsonCall('/api/login/xiaohongshu/account', { ...ctx, method: 'POST', body: await readJson(req, 2 * 1024) })),
+    loginLabel: admin(async (req, _params, _url, ctx) =>
+      jsonCall('/api/login/xiaohongshu/label', { ...ctx, method: 'POST', body: await readJson(req, 2 * 1024) })),
+    loginLogout: admin(async (_req, _params, _url, ctx) =>
+      jsonCall('/api/login/xiaohongshu/logout', { ...ctx, method: 'POST', body: {} })),
     loginQr: async (req, res) => {
       const ctx = await context(req);
       if (ctx.user.role !== 'admin') throw forbidden('只有管理员可以查看平台登录二维码');
@@ -409,6 +413,8 @@ export function mount(router, options) {
   router.get('/api/collector/login/xiaohongshu/status', h.loginStatus);
   router.get('/api/collector/login/xiaohongshu/qr', h.loginQr);
   router.post('/api/collector/login/xiaohongshu/account', h.loginAccount);
+  router.post('/api/collector/login/xiaohongshu/label', h.loginLabel);
+  router.post('/api/collector/login/xiaohongshu/logout', h.loginLogout);
   router.post('/api/collector/tasks', h.createTask);
   router.get('/api/collector/tasks', h.listTasks);
   router.post('/api/collector/tasks/batch-push', h.pushBatch);

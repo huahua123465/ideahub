@@ -2689,14 +2689,17 @@ body.learning-fullscreen-open{overflow:hidden}
 .collector-start{height:46px;min-width:128px;gap:7px}.collector-start .ic{width:16px}
 .collector-form-note{display:flex;justify-content:space-between;gap:12px;margin-top:10px;color:var(--muted);font-size:10.5px}
 .collector-form-note b{color:#8a7280;font-weight:600}
+.collector-public-mode{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;border:1px solid var(--violet-line);border-radius:12px;background:rgba(255,255,255,.7);cursor:pointer}.collector-public-mode input{width:16px;height:16px;accent-color:var(--violet)}.collector-public-mode>span{min-width:0;flex:1}.collector-public-mode b{display:block;font-size:11px}.collector-public-mode small{display:block;margin-top:2px;color:var(--muted);font-size:9.5px;line-height:1.45}.collector-public-mode em{padding:3px 7px;border-radius:999px;background:var(--violet-bg);color:var(--violet);font-size:9px;font-style:normal;font-weight:750}
 
-.collector-account{min-height:174px;display:flex;align-items:center;gap:12px;padding:18px;border-radius:18px}
+.collector-account{min-height:174px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:18px;border-radius:18px}
 .collector-account-icon,.collector-account-avatar{flex:none;width:46px;height:46px;display:grid;place-items:center;border-radius:14px;background:var(--violet-bg);color:var(--violet)}
 .collector-account-icon.bad{background:var(--crit-bg);color:var(--crit)}.collector-account-icon .ic{width:20px}.collector-account-avatar{border-radius:50%;font-size:16px;font-weight:800}
+.collector-account-avatar.unverified{border:1px dashed var(--violet-line);background:#f7f2f6;color:#9a8294}
 .collector-account-copy{min-width:0;flex:1}.collector-account-copy small,.collector-account>div small{display:block;color:var(--muted);font-size:10.5px}
 .collector-account-copy b,.collector-account>div b{display:block;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
 .collector-account-copy span,.collector-account>div span{display:block;margin-top:4px;color:var(--muted);font-size:10.5px;line-height:1.45}
 .collector-account-actions{display:flex;flex-direction:column;gap:6px}.collector-account-actions button,.collector-login-btn{min-height:34px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:11px;font-weight:650}
+.collector-account-minor{display:flex;gap:9px;margin-top:7px}.collector-account-minor button{border:0;background:transparent;color:var(--violet);font-size:9.5px}.collector-account-minor button[data-account-logout]{color:var(--crit)}.collector-label-editor{flex:0 0 100%;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;margin-top:4px;padding-top:10px;border-top:1px solid var(--line-soft)}.collector-label-editor input{min-width:0;height:34px;padding:0 9px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:11px;outline:0}.collector-label-editor input:focus{border-color:var(--violet-line);box-shadow:0 0 0 3px var(--violet-bg)}.collector-label-editor button{padding:0 9px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:10px}.collector-label-editor small{grid-column:1/-1;color:var(--muted);font-size:9px}
 .collector-mini-skeleton{width:100%;height:72px;border-radius:12px;background:linear-gradient(100deg,#f5f2ef 25%,#ebe6e2 45%,#f5f2ef 65%);background-size:220% 100%;animation:learning-shimmer 1.5s linear infinite}
 
 .collector-workspace{display:grid;grid-template-columns:310px minmax(0,1fr);align-items:start;gap:14px}

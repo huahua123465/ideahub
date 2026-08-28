@@ -56,7 +56,9 @@ class CollectionModeTests(unittest.TestCase):
         with TemporaryDirectory() as root:
             task_dir = Path(root) / "task-1"
             task_dir.mkdir()
-            (task_dir / "content.json").write_text('{"task_id":"task-1"}', encoding="utf-8")
+            (task_dir / "content.json").write_text(
+                '{"task_id":"task-1","session_mode":"public"}', encoding="utf-8",
+            )
             with (
                 patch.object(app_module, "OUTPUT_DIR", Path(root)),
                 patch.object(app_module, "db", fake_db),
@@ -69,6 +71,7 @@ class CollectionModeTests(unittest.TestCase):
         self.assertTrue(response.get_json()["manual_refresh"])
         self.assertIs(app_module._run_pipeline_in_slot, thread.call_args.kwargs["target"])
         self.assertEqual(("task-1", "https://example.com/post", True), thread.call_args.kwargs["args"])
+        self.assertEqual({"session_mode": "public"}, thread.call_args.kwargs["kwargs"])
         fake_db.create_task.assert_not_called()
 
 
@@ -154,7 +157,7 @@ class TechnicalAuditDownloadTests(unittest.TestCase):
 
 class PipelineStorageTests(unittest.TestCase):
     @staticmethod
-    async def _page(_url):
+    async def _page(_url, **_kwargs):
         return {
             "title": "示例图文",
             "description": "描述",
@@ -167,11 +170,11 @@ class PipelineStorageTests(unittest.TestCase):
         }
 
     @staticmethod
-    async def _account(_url, _platform, seed):
+    async def _account(_url, _platform, seed, **_kwargs):
         return seed
 
     @staticmethod
-    async def _comments(_url, _platform):
+    async def _comments(_url, _platform, **_kwargs):
         return {"comments": [], "comment_summary": {"status": "ok", "threshold": 20}}
 
     @staticmethod
@@ -191,7 +194,7 @@ class PipelineStorageTests(unittest.TestCase):
             })
         return result
 
-    def _run(self, root, manual_refresh=False):
+    def _run(self, root, manual_refresh=False, session_mode="saved"):
         if manual_refresh:
             task_dir = Path(root) / "task-1"
             task_dir.mkdir(parents=True, exist_ok=True)
@@ -203,10 +206,10 @@ class PipelineStorageTests(unittest.TestCase):
             patch.object(app_module, "OUTPUT_DIR", Path(root)),
             patch.object(app_module, "db", _FakeDB()),
             patch.object(app_module, "detect_platform", return_value="xiaohongshu"),
-            patch.object(app_module, "extract_video_metadata", return_value=None),
-            patch.object(app_module, "extract_page", side_effect=self._page),
-            patch.object(app_module, "hydrate_account", side_effect=self._account),
-            patch.object(app_module, "extract_hot_comments", side_effect=self._comments),
+            patch.object(app_module, "extract_video_metadata", return_value=None) as metadata,
+            patch.object(app_module, "extract_page", side_effect=self._page) as page,
+            patch.object(app_module, "hydrate_account", side_effect=self._account) as account,
+            patch.object(app_module, "extract_hot_comments", side_effect=self._comments) as comments,
             patch.object(app_module, "analyze_content_with_audit", return_value=_analysis_with_audit()),
             patch.object(app_module, "download_post_images", side_effect=self._download_images),
             patch.object(
@@ -224,7 +227,13 @@ class PipelineStorageTests(unittest.TestCase):
         ):
             app_module._run_pipeline(
                 "task-1", "https://example.com/post", manual_refresh=manual_refresh,
+                session_mode=session_mode,
             )
+            if session_mode == "public":
+                self.assertFalse(metadata.call_args.kwargs["use_login"])
+                self.assertFalse(page.call_args.kwargs["use_login"])
+                self.assertFalse(account.call_args.kwargs["use_login"])
+                self.assertFalse(comments.call_args.kwargs["use_login"])
         return json.loads((Path(root) / "task-1" / "content.json").read_text(encoding="utf-8"))
 
     def test_image_posts_retain_downloaded_images_for_evidence(self):
@@ -242,6 +251,13 @@ class PipelineStorageTests(unittest.TestCase):
             self.assertNotIn("technical_audit", content)
             self.assertTrue((task_dir / "ai_analysis.technical.json").exists())
             self.assertTrue((task_dir / "ai_analysis.technical.md").exists())
+
+    def test_public_mode_never_passes_saved_login_to_collectors(self):
+        with TemporaryDirectory() as root:
+            content = self._run(root, session_mode="public")
+
+        self.assertEqual("public", content["session_mode"])
+        self.assertEqual("公开无登录", content["session_mode_label"])
 
     def test_successful_manual_refresh_atomically_replaces_the_old_result(self):
         with TemporaryDirectory() as root:
@@ -285,7 +301,7 @@ class PipelineStorageTests(unittest.TestCase):
             self.assertFalse((root_path / ".refresh-task-1").exists())
 
     def test_explicit_video_url_is_not_downgraded_when_metadata_probe_misses(self):
-        async def page(_url):
+        async def page(_url, **_kwargs):
             return {
                 "title": "明确的视频",
                 "post_title": "明确的视频",
@@ -295,7 +311,7 @@ class PipelineStorageTests(unittest.TestCase):
                 "account": {},
             }
 
-        def download(_url, output_dir, metadata=None):
+        def download(_url, output_dir, metadata=None, **_kwargs):
             self.assertIsNone(metadata)
             path = Path(output_dir) / "temporary.mp4"
             path.write_bytes(b"video")
@@ -368,7 +384,7 @@ class PipelineStorageTests(unittest.TestCase):
             "media_assets": {"video": {"source_url": "https://source"}},
         }
 
-        async def page(_url):
+        async def page(_url, **_kwargs):
             return {
                 "topics": ["话题"],
                 "post_description": "",
@@ -376,7 +392,7 @@ class PipelineStorageTests(unittest.TestCase):
                 "account": {"name": "作者", "profile_url": "https://profile"},
             }
 
-        async def account(_url, _platform, seed):
+        async def account(_url, _platform, seed, **_kwargs):
             return {**app_module.empty_account(), **seed, "follower_count": "100"}
 
         with (
@@ -427,21 +443,26 @@ class PipelineStorageTests(unittest.TestCase):
         ):
             response = app_module.app.test_client().post(
                 "/api/convert",
-                json={"url": "https://www.xiaohongshu.com/explore/test", "collection_mode": "quick"},
+                json={
+                    "url": "https://www.xiaohongshu.com/explore/test",
+                    "collection_mode": "quick", "session_mode": "public",
+                },
                 headers={"X-IdeaHub-User-Id": "test-user"},
             )
         self.assertEqual(200, response.status_code)
         payload = response.get_json()
         self.assertEqual("analyze", payload["collection_mode"])
+        self.assertEqual("public", payload["session_mode"])
         self.assertEqual("pending", payload["status"])
         self.assertEqual(1, payload["max_concurrent"])
         self.assertIs(app_module._run_pipeline_in_slot, thread.call_args.kwargs["target"])
         self.assertEqual(("task-api", "https://www.xiaohongshu.com/explore/test"), thread.call_args.kwargs["args"])
+        self.assertEqual({"session_mode": "public"}, thread.call_args.kwargs["kwargs"])
 
     def test_video_is_temporary_and_result_keeps_source_link(self):
         cover_bytes = []
 
-        async def page(_url):
+        async def page(_url, **_kwargs):
             return {
                 "title": "页面标题",
                 "post_title": "页面标题",
@@ -458,10 +479,10 @@ class PipelineStorageTests(unittest.TestCase):
                 },
             }
 
-        async def account(_url, _platform, seed):
+        async def account(_url, _platform, seed, **_kwargs):
             return {**app_module.empty_account(), **seed, "follower_count": "123"}
 
-        def download(_url, output_dir, metadata=None):
+        def download(_url, output_dir, metadata=None, **_kwargs):
             path = Path(output_dir) / "temporary.mp4"
             path.write_bytes(b"temporary-video")
             return {"video_path": str(path)}

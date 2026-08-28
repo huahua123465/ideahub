@@ -8,12 +8,19 @@ from media.content_extractor import (
     _extract_images,
     _extract_topics,
     _near_duplicate,
+    _page_headers,
     _parse_html,
     strip_topics_from_description,
 )
 
 
 class ContentDeduplicationTests(unittest.TestCase):
+    def test_public_mode_never_builds_a_cookie_header(self):
+        headers = _page_headers(
+            "https://www.xiaohongshu.com/explore/note-id", use_login=False,
+        )
+        self.assertNotIn("Cookie", headers)
+
     def test_xhs_structured_image_list_keeps_extensionless_cdn_urls(self):
         first = "https://sns-webpic-qc.xhscdn.com/202608281234/first-image"
         second = "https://sns-webpic-qc.xhscdn.com/202608281234/second-image"

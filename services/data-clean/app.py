@@ -38,8 +38,10 @@ from utils import (url_to_id, detect_platform, resolve_share_url,
 from media import (download_video, extract_video_text,
                    download_post_images, extract_images_text, extract_hot_comments,
                    extract_video_metadata, has_saved_xhs_login, invalidate_xhs_login,
+                   clear_xhs_login_session,
                    login_xiaohongshu, read_xhs_login_profile,
-                   persist_xhs_login_session,
+                   persist_xhs_login_session, read_xhs_login_label,
+                   save_xhs_login_label,
                    sync_saved_xhs_account, friendly_xhs_login_error,
                    extract_cover_title_from_path,
                    download_video_cover, reconcile_cover_title,
@@ -103,12 +105,15 @@ def _publish_login_qr(generation: int, temp_path: Path) -> bool:
 
 
 def _commit_login_session(
-    generation: int, cookies: list[dict], storage_state: dict, profile: dict
+    generation: int, cookies: list[dict], storage_state: dict, profile: dict, *,
+    clear_label: bool = False,
 ) -> bool:
     with _login_state_lock:
         if generation != _login_generation:
             return False
-        persist_xhs_login_session(cookies, storage_state, profile)
+        persist_xhs_login_session(
+            cookies, storage_state, profile, clear_label=clear_label,
+        )
         return True
 
 
@@ -627,11 +632,17 @@ def disable_page_cache(response):
     return response
 
 
-def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
+def _run_pipeline(
+    vid: str, url: str, manual_refresh: bool = False, *,
+    session_mode: str = "saved",
+):
     collection_mode = COLLECTION_MODE
+    session_mode = "public" if session_mode == "public" else "saved"
+    use_login = session_mode == "saved"
     _running[vid] = {
         "status": "running", "progress": 0, "message": "开始采集...",
         "collection_mode": collection_mode,
+        "session_mode": session_mode,
         "manual_refresh": manual_refresh,
     }
 
@@ -662,7 +673,7 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
     working_dir = task_dir / "_working_media"
     last_good_path = task_dir / "comments.last_good.json"
     last_good = {}
-    if last_good_path.exists():
+    if use_login and last_good_path.exists():
         try:
             last_good = json.loads(last_good_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -713,7 +724,7 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
 
         progress(8, "正在读取账号、标题和媒体元数据...")
         video_url_hint = url_declares_video(url)
-        meta = extract_video_metadata(url)
+        meta = extract_video_metadata(url, use_login=use_login)
         media_probe = {
             "status": "ok" if meta else ("hint" if video_url_hint else "not_video"),
             "method": "downloader_metadata" if meta else ("source_url" if video_url_hint else "page"),
@@ -726,7 +737,7 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
 
         if meta or video_url_hint:
             meta = meta or {}
-            page = _run_async(extract_page(url)) or {}
+            page = _run_async(extract_page(url, use_login=use_login)) or {}
             title = page.get("post_title") or page.get("title") or meta.get("title") or "未命名内容"
             topics = page.get("topics") or meta.get("tags") or []
             raw_description = (
@@ -768,7 +779,8 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
             )
             video_asset.update(cover_asset)
             downloaded = download_video(
-                url, str(working_dir), metadata=meta if meta else None
+                url, str(working_dir), metadata=meta if meta else None,
+                use_login=use_login,
             )
             if downloaded:
                 video_path = downloaded["video_path"]
@@ -822,7 +834,7 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
         else:
             media_type = "image_post"
             progress(20, "正在解析图文页面与原始素材链接...")
-            page = _run_async(extract_page(url))
+            page = _run_async(extract_page(url, use_login=use_login))
 
             if not page:
                 raise RuntimeError("无法提取内容。该链接可能需要登录 Cookie，或已失效。")
@@ -870,7 +882,9 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
             })
 
         progress(70, "正在获取博主账号基础数据...")
-        account = _run_async(hydrate_account(url, platform, account))
+        account = _run_async(hydrate_account(
+            url, platform, account, use_login=use_login,
+        ))
         if manual_refresh:
             account = merge_accounts(account, previous_content.get("account"))
             previous_engagement = previous_content.get("engagement") or {}
@@ -885,11 +899,14 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
         update_running_status(account_name=author)
 
         progress(80, "正在筛选高赞评论与回复...")
-        comment_result = _run_async(extract_hot_comments(url, platform))
+        comment_result = _run_async(extract_hot_comments(
+            url, platform, use_login=use_login,
+        ))
 
         fresh_summary = comment_result.get("comment_summary") or {}
         fresh_comments = comment_result.get("comments") or []
-        if platform == "xiaohongshu" and fresh_summary.get("status") == "login_required":
+        if (use_login and platform == "xiaohongshu"
+                and fresh_summary.get("status") == "login_required"):
             invalidate_xhs_login()
             _cancel_login_attempt("idle", "登录态已失效，请重新扫码")
         comment_result = _preserve_last_good_comments(comment_result, last_good)
@@ -909,6 +926,8 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
             "platform": platform,
             "collection_mode": collection_mode,
             "collection_mode_label": COLLECTION_MODE_LABEL,
+            "session_mode": session_mode,
+            "session_mode_label": "公开无登录" if session_mode == "public" else "使用采集账号",
             "storage": {
                 "policy": STORAGE_POLICY,
                 "local_media_retained": media_type == "image_post" and bool(image_results),
@@ -1024,10 +1043,15 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
             shutil.rmtree(task_dir, ignore_errors=True)
 
 
-def _run_pipeline_in_slot(vid: str, url: str, manual_refresh: bool = False):
+def _run_pipeline_in_slot(
+    vid: str, url: str, manual_refresh: bool = False, *,
+    session_mode: str = "saved",
+):
     """Run one collection pipeline within the configured single-VPS bound."""
     with _pipeline_slots:
-        _run_pipeline(vid, url, manual_refresh=manual_refresh)
+        _run_pipeline(
+            vid, url, manual_refresh=manual_refresh, session_mode=session_mode,
+        )
 
 
 @app.route("/")
@@ -1048,7 +1072,7 @@ def _run_xhs_login(generation: int, force_fresh=False):
             is_current=lambda: _login_generation_is_current(generation),
             publish_qr=lambda temp_path: _publish_login_qr(generation, temp_path),
             commit_session=lambda cookies, state, profile: _commit_login_session(
-                generation, cookies, state, profile
+                generation, cookies, state, profile, clear_label=force_fresh,
             ),
             cleanup_qr=lambda: _cleanup_login_qr(generation),
             qr_file=XHS_QR_FILE,
@@ -1065,7 +1089,12 @@ def _xhs_login_payload():
             for key in ("status", "message", "qr_available", "expires_at")
         }
         state["saved"] = has_saved_xhs_login()
-        state["account"] = read_xhs_login_profile()
+        account = read_xhs_login_profile()
+        state["account"] = account
+        state["account_label"] = read_xhs_login_label()
+        state["identity_verified"] = any(
+            account.get(key) for key in ("nickname", "red_id", "user_id")
+        )
         return state
 
 
@@ -1155,6 +1184,41 @@ def api_login_xiaohongshu_account():
     return jsonify(payload)
 
 
+@app.route("/api/login/xiaohongshu/label", methods=["POST"])
+def api_login_xiaohongshu_label():
+    if not has_saved_xhs_login():
+        return jsonify({"error": "请先登录采集账号"}), 409
+    body = request.get_json(silent=True) or {}
+    try:
+        label = save_xhs_login_label(body.get("label", ""))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    with _login_state_lock:
+        _login_state.update(
+            status="saved",
+            message="采集账号备注已保存" if label else "采集账号备注已清除",
+        )
+    return jsonify(_xhs_login_payload())
+
+
+@app.route("/api/login/xiaohongshu/logout", methods=["POST"])
+def api_logout_xiaohongshu():
+    with _login_state_lock:
+        if any(
+            state.get("status") in {"pending", "running"}
+            for state in _running.values()
+        ):
+            return jsonify({"error": "有采集任务正在运行，请完成后再退出账号"}), 409
+    _cancel_login_attempt("idle", "采集账号已退出")
+    clear_xhs_login_session(clear_label=True)
+    with _login_state_lock:
+        _login_state.update(
+            status="idle", message="采集账号已退出", qr_available=False,
+            expires_at=None,
+        )
+    return jsonify(_xhs_login_payload())
+
+
 @app.route("/api/convert", methods=["POST"])
 def api_convert():
     data = request.get_json() or {}
@@ -1166,6 +1230,7 @@ def api_convert():
     except UnsafeUrl as exc:
         return jsonify({"error": str(exc)}), 400
     collection_mode = COLLECTION_MODE
+    session_mode = "public" if data.get("session_mode") == "public" else "saved"
     owner_id = str(request.headers.get("X-IdeaHub-User-Id") or "").strip()[:128]
     if not owner_id:
         return jsonify({"error": "缺少任务创建者身份"}), 400
@@ -1180,8 +1245,10 @@ def api_convert():
         except (OSError, json.JSONDecodeError):
             cached_content = {}
         summary = cached_content.get("comment_summary") or {}
+        cached_session_mode = cached_content.get("session_mode") or "saved"
         needs_login_retry = (
-            cached_content.get("platform") == "xiaohongshu"
+            session_mode == "saved"
+            and cached_content.get("platform") == "xiaohongshu"
             and has_saved_xhs_login()
             and (summary.get("status") in {"login_required", "unavailable"}
                  or summary.get("likes_obscured"))
@@ -1192,10 +1259,12 @@ def api_convert():
                 and "comments" in cached_content
                 and "ai_analysis" in cached_content
                 and cached_mode == collection_mode
+                and cached_session_mode == session_mode
                 and not needs_login_retry):
             return jsonify({
                 "task_id": vid, "status": "done", "cached": True,
                 "collection_mode": cached_mode,
+                "session_mode": cached_session_mode,
                 "owner_id": existing.get("owner_id") or owner_id,
             })
 
@@ -1209,6 +1278,7 @@ def api_convert():
             return jsonify({
                 "task_id": vid, "status": active.get("status"), "coalesced": True,
                 "collection_mode": active_mode,
+                "session_mode": active.get("session_mode") or session_mode,
                 "max_concurrent": MAX_CONCURRENT_TASKS,
                 "owner_id": existing.get("owner_id") if existing else owner_id,
             })
@@ -1221,15 +1291,18 @@ def api_convert():
         _running[vid] = {
             "status": "pending", "progress": 0, "message": "等待并发槽位...",
             "collection_mode": collection_mode,
+            "session_mode": session_mode,
         }
         db.create_task(vid, url, detect_platform(url), owner_id=owner_id)
         threading.Thread(
-            target=_run_pipeline_in_slot, args=(vid, url), daemon=True
+            target=_run_pipeline_in_slot, args=(vid, url),
+            kwargs={"session_mode": session_mode}, daemon=True,
         ).start()
     return jsonify({
         "task_id": vid,
         "status": "pending",
         "collection_mode": collection_mode,
+        "session_mode": session_mode,
         "max_concurrent": MAX_CONCURRENT_TASKS,
         "owner_id": owner_id,
     })
@@ -1257,6 +1330,15 @@ def api_refresh_task(vid):
         return jsonify({"error": "任务不存在"}), 404
     if task.get("status") != "done" or not (task_dir / "content.json").is_file():
         return jsonify({"error": "仅已完成且有结果的作品可以更新"}), 409
+    try:
+        previous_content = json.loads(
+            (task_dir / "content.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        previous_content = {}
+    session_mode = (
+        "public" if previous_content.get("session_mode") == "public" else "saved"
+    )
 
     with _task_state_lock:
         active = _running.get(vid) or {}
@@ -1273,17 +1355,20 @@ def api_refresh_task(vid):
             "progress": 0,
             "message": "等待更新并发槽位...",
             "collection_mode": COLLECTION_MODE,
+            "session_mode": session_mode,
             "manual_refresh": True,
         }
         threading.Thread(
             target=_run_pipeline_in_slot,
             args=(vid, task["url"], True),
+            kwargs={"session_mode": session_mode},
             daemon=True,
         ).start()
     return jsonify({
         "task_id": vid,
         "status": "pending",
         "manual_refresh": True,
+        "session_mode": session_mode,
         "max_concurrent": MAX_CONCURRENT_TASKS,
     })
 
@@ -1361,9 +1446,10 @@ def _backfill_video_evidence(content, task_dir=None):
 
     source_url = content["source_url"]
     platform = content.get("platform") or detect_platform(source_url)
-    meta = extract_video_metadata(source_url) or {}
+    use_login = content.get("session_mode") != "public"
+    meta = extract_video_metadata(source_url, use_login=use_login) or {}
     try:
-        page = _run_async(extract_page(source_url)) or {}
+        page = _run_async(extract_page(source_url, use_login=use_login)) or {}
     except Exception:
         page = {}
 
@@ -1379,7 +1465,9 @@ def _backfill_video_evidence(content, task_dir=None):
     description = strip_topics_from_description(raw_description, topics)
     account = merge_accounts(account, page.get("account"), account_from_downloader(meta))
     try:
-        account = _run_async(hydrate_account(source_url, platform, account))
+        account = _run_async(hydrate_account(
+            source_url, platform, account, use_login=use_login,
+        ))
     except Exception:
         pass
 

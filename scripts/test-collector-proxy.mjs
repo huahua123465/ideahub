@@ -35,6 +35,7 @@ async function readBody(req) {
 const TOKEN = 'collector-proxy-test-token-at-least-32-bytes';
 let delayCreate = false;
 let lastUpstreamHeaders = {};
+let lastUpstreamBody = {};
 let resultHits = 0;
 
 const upstream = http.createServer(async (req, res) => {
@@ -52,6 +53,13 @@ const upstream = http.createServer(async (req, res) => {
   if (url.pathname === '/api/login/xiaohongshu/status') {
     return json(200, { status: 'waiting_scan', qr_available: true, cookie: 'must-not-leak' });
   }
+  if (url.pathname === '/api/login/xiaohongshu/label' && req.method === 'POST') {
+    lastUpstreamBody = await readBody(req);
+    return json(200, { saved: true, account_label: lastUpstreamBody.label, identity_verified: false });
+  }
+  if (url.pathname === '/api/login/xiaohongshu/logout' && req.method === 'POST') {
+    return json(200, { saved: false, status: 'idle' });
+  }
   if (url.pathname === '/api/login/xiaohongshu/qr') {
     const png = Buffer.from('89504e470d0a1a0a', 'hex');
     res.writeHead(200, { 'content-type': 'image/png', 'content-length': png.length });
@@ -59,6 +67,7 @@ const upstream = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/convert') {
     const body = await readBody(req);
+    lastUpstreamBody = body;
     if (delayCreate) await new Promise(resolve => setTimeout(resolve, 1_200));
     return json(200, { task_id: 'own-task', status: 'pending', owner_id: req.headers['x-ideahub-user-id'], url: body.url });
   }
@@ -167,8 +176,18 @@ try {
   check(response.status === 200 && response.headers.get('content-type') === 'image/png', '二维码按 image/png 安全转发', response.status);
   check(response.headers.get('cache-control') === 'no-store' && response.headers.get('x-content-type-options') === 'nosniff', '二维码禁止缓存与 MIME 嗅探');
 
-  response = await call('POST', '/api/collector/tasks', { body: { url: 'https://www.xiaohongshu.com/explore/test' } });
+  response = await call('POST', '/api/collector/login/xiaohongshu/label', { body: { label: '专用采集号' } });
+  check(response.status === 403, '普通成员不能修改采集账号备注', response);
+  response = await call('POST', '/api/collector/login/xiaohongshu/label', { role: 'admin', body: { label: '专用采集号' } });
+  check(response.status === 200 && lastUpstreamBody.label === '专用采集号', '管理员可以保存采集账号备注', response);
+  response = await call('POST', '/api/collector/login/xiaohongshu/logout');
+  check(response.status === 403, '普通成员不能退出采集账号', response);
+  response = await call('POST', '/api/collector/login/xiaohongshu/logout', { role: 'admin', body: {} });
+  check(response.status === 200 && response.data.saved === false, '管理员可以退出采集账号', response);
+
+  response = await call('POST', '/api/collector/tasks', { body: { url: 'https://www.xiaohongshu.com/explore/test', session_mode: 'public' } });
   check(response.status === 200 && response.data.owner_id === '11', '创建任务注入当前用户身份', response.data);
+  check(lastUpstreamBody.session_mode === 'public', '公开无登录模式会原样传给 Collector', lastUpstreamBody);
   check(lastUpstreamHeaders['x-collector-token'] === TOKEN, '内部请求由 Node 注入 Collector 令牌');
   check(lastUpstreamHeaders['x-ideahub-user-role'] === 'member', '内部请求由 Node 注入角色');
   check(!JSON.stringify(response.data).includes(TOKEN), '浏览器响应不含内部令牌');

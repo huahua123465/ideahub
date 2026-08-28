@@ -428,7 +428,9 @@ async def _click_reply_threads(page: Page, max_threads: int) -> int:
     return clicked
 
 
-async def extract_hot_comments(url: str, platform: str) -> dict:
+async def extract_hot_comments(
+    url: str, platform: str, *, use_login: bool = True,
+) -> dict:
     """Return bounded high-like comments and coverage metadata.
 
     Failures are intentionally contained so comment extraction never fails the
@@ -457,7 +459,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
     pool = HotCommentPool()
     observer = BrowserCommentCollector(platform, pool)
     browser = None
-    session_evidence = "not_applicable"
+    session_evidence = "not_applicable" if use_login else "public_mode"
     try:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
@@ -468,11 +470,11 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
                                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"),
                 "service_workers": "block",
             }
-            storage_state_path = STORAGE_STATE_FILES.get(platform)
+            storage_state_path = STORAGE_STATE_FILES.get(platform) if use_login else None
             if storage_state_path and storage_state_path.exists():
                 context_options["storage_state"] = str(storage_state_path)
             context = await browser.new_context(**context_options)
-            cookies = _netscape_cookies(COOKIE_FILES[platform])
+            cookies = _netscape_cookies(COOKIE_FILES[platform]) if use_login else []
             if cookies and not context_options.get("storage_state"):
                 await context.add_cookies(cookies)
             page = await context.new_page()
@@ -482,7 +484,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
             # Let the SPA restore the authenticated session and mount its
             # comment panel before driving the hot stream.
             await page.wait_for_timeout(1_800)
-            if platform == "xiaohongshu":
+            if platform == "xiaohongshu" and use_login:
                 session_evidence = await _xhs_session_evidence(page)
 
             deadline = asyncio.get_running_loop().time() + COMMENT_TIMEOUT_SEC

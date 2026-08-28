@@ -23,6 +23,7 @@ let result = null;
 let resultLoading = false;
 let analysisEditing = false;
 let qrDismissed = false;
+let labelEditing = false;
 
 const ACTIVE = new Set(['pending', 'running', 'downloading', 'processing']);
 const LOGIN_ACTIVE = new Set(['opening', 'waiting_scan', 'syncing']);
@@ -71,6 +72,11 @@ function scaffold() {
             autocomplete="off" spellcheck="false" placeholder="粘贴小红书 / 抖音分享链接或分享文案"></div>
           <button class="btn btn-primary collector-start" id="collectorStart" type="submit">${ICON.sparkle}<span>开始采集</span></button>
         </form>
+        <label class="collector-public-mode" for="collectorPublicMode">
+          <input id="collectorPublicMode" type="checkbox" checked>
+          <span><b>公开无登录模式</b><small>不使用 VPS 保存的小红书登录态；正文和图片照常尝试，评论及部分数据可能受限。</small></span>
+          <em>推荐</em>
+        </label>
         <div class="collector-form-note"><span>支持 xiaohongshu.com、xhslink.com、douyin.com</span><b>单任务运行，避免占满 VPS 资源</b></div>
       </div>
       <aside class="collector-account" id="collectorAccount"><div class="collector-mini-skeleton"></div></aside>
@@ -154,10 +160,20 @@ function paintAccount() {
   const loginPending = status === 'opening' || status === 'waiting_scan';
   if (login.saved && !loginPending) {
     const syncing = status === 'syncing';
-    const hasAccount = Object.values(account).some(Boolean);
-    el.innerHTML = `<div class="collector-account-avatar">${esc([...accountName(account)][0] || '小')}</div>
-      <div class="collector-account-copy"><small>${syncing ? '正在同步账号' : '小红书已登录'}</small><b>${esc(accountName(account))}</b><span>${esc(login.message || (account.red_id ? `小红书号 ${account.red_id}` : (hasAccount ? '登录态已保存' : '登录有效，账号资料待同步')))}</span></div>
+    const verified = login.identity_verified === true;
+    const label = String(login.account_label || '').trim();
+    const displayName = verified ? accountName(account) : (label || '账号身份未确认');
+    const accountMessage = verified
+      ? (account.red_id ? `小红书号 ${account.red_id}` : '已确认平台返回的账号资料')
+      : (label ? `内部备注：${label} · 未经平台验证` : '登录有效，但平台未返回昵称或小红书号');
+    el.innerHTML = `<div class="collector-account-avatar ${verified ? '' : 'unverified'}">${esc([...displayName][0] || '小')}</div>
+      <div class="collector-account-copy"><small>${syncing ? '正在同步账号' : (verified ? '小红书已登录' : '登录有效 · 身份未确认')}</small><b>${esc(displayName)}</b><span>${esc(syncing ? '正在读取当前账号资料…' : accountMessage)}</span>
+        <div class="collector-account-minor"><button type="button" data-account-label ${syncing ? 'disabled' : ''}>${label ? '修改备注' : '添加备注'}</button><button type="button" data-account-logout ${syncing ? 'disabled' : ''}>退出采集账号</button></div></div>
       <div class="collector-account-actions"><button type="button" data-account-sync ${syncing ? 'disabled' : ''}>${syncing ? '同步中…' : '同步'}</button><button type="button" data-login-switch ${syncing ? 'disabled' : ''}>切换</button></div>`;
+    if (labelEditing) {
+      el.insertAdjacentHTML('beforeend', `<div class="collector-label-editor"><input id="collectorAccountLabel" maxlength="32" value="${esc(label)}" placeholder="例如：VPS 采集专用号"><button type="button" data-account-label-save>保存</button><button type="button" data-account-label-cancel>取消</button><small>备注只在 IdeaHub 内显示，不代表平台已验证身份。</small></div>`);
+      requestAnimationFrame(() => $('#collectorAccountLabel')?.focus());
+    }
     return;
   }
   const busy = LOGIN_ACTIVE.has(status);
@@ -185,7 +201,7 @@ function taskCard(task) {
   const progress = Math.max(0, Math.min(100, Number(task.refresh_progress ?? task.progress ?? 0)));
   const selected = String(task.id) === String(selectedId);
   return `<article class="collector-task ${selected ? 'on' : ''}" data-collector-task="${esc(task.id)}" tabindex="0" role="button" aria-pressed="${selected}">
-    <div class="collector-task-top"><span class="collector-platform ${esc(task.source || '')}">${task.source === 'douyin' ? '抖音' : '小红书'}</span><span class="collector-status ${info[1]}"><i></i>${esc(info[0])}</span></div>
+    <div class="collector-task-top"><span class="collector-platform ${esc(task.source || '')}">${task.source === 'douyin' ? '抖音' : '小红书'}${task.session_mode === 'public' ? ' · 公开' : ''}</span><span class="collector-status ${info[1]}"><i></i>${esc(info[0])}</span></div>
     <h3>${esc(task.title || (activeTask ? '正在识别内容…' : '未命名内容'))}</h3>
     <p>${esc(task.account_name || (task.error_msg ? task.error_msg : task.message || '等待服务器返回账号信息'))}</p>
     ${activeTask ? `<div class="collector-progress"><i style="width:${Math.max(4, progress)}%"></i></div><small>${progress ? `${progress}% · ` : ''}${esc(task.message || '正在处理…')}</small>` : ''}
@@ -232,7 +248,10 @@ async function loadResult(id, silent = false) {
   try {
     const data = await api.collectorResult(id);
     if (!active || own !== loadGeneration || String(selectedId) !== String(id)) return;
-    result = data; resultLoading = false; paintDetail();
+    result = data; resultLoading = false;
+    const task = tasks.find(item => String(item.id) === String(id));
+    if (task && data.session_mode) task.session_mode = data.session_mode;
+    paintTasks(); paintDetail();
   } catch (error) {
     if (!active || own !== loadGeneration) return;
     resultLoading = false; paintDetail();
@@ -261,7 +280,7 @@ function resultHTML(task, data) {
   const refreshing = !!task.refresh_status;
   return `<div class="collector-result">
     <header class="collector-result-head">
-      <div><span>${data.platform === 'douyin' ? '抖音' : '小红书'} · 采集结果</span><h2>${esc(data.display_title || data.title || task.title || '未命名内容')}</h2>
+      <div><span>${data.platform === 'douyin' ? '抖音' : '小红书'} · ${data.session_mode === 'public' ? '公开无登录' : '使用采集账号'} · 采集结果</span><h2>${esc(data.display_title || data.title || task.title || '未命名内容')}</h2>
         <p>${esc(accountName(account))}${data.data_updated_at ? ` · 更新于 ${esc(fromNow(data.data_updated_at))}` : ''}</p></div>
       <a href="${esc(safeHref(data.source_url || task.url))}" target="_blank" rel="noopener noreferrer">查看原内容 ↗</a>
     </header>
@@ -332,6 +351,10 @@ function bind() {
     if (target.closest('[data-login-switch]')) return startLogin(true, target.closest('button'));
     if (target.closest('[data-qr-open]')) { qrDismissed = false; openQr(); return; }
     if (target.closest('[data-account-sync]')) return syncAccount(target.closest('button'));
+    if (target.closest('[data-account-label]')) { labelEditing = true; paintAccount(); return; }
+    if (target.closest('[data-account-label-cancel]')) { labelEditing = false; paintAccount(); return; }
+    if (target.closest('[data-account-label-save]')) return saveAccountLabel(target.closest('button'));
+    if (target.closest('[data-account-logout]')) return logoutAccount(target.closest('button'));
     if (target.closest('#collectorReload')) return reloadTasks(target.closest('button'));
     const taskEl = target.closest('[data-collector-task]');
     if (target.closest('[data-task-delete]')) return removeTask(taskEl?.dataset.collectorTask, target.closest('button'));
@@ -348,19 +371,21 @@ function bind() {
 
 function validShareText(value) { return /(xiaohongshu\.com|xhslink\.(?:com|cn)|douyin\.com|v\.douyin\.com)/i.test(value); }
 
-async function submitTask(value, button = $('#collectorStart')) {
+async function submitTask(value, button = $('#collectorStart'), preferredMode = '') {
   const url = String(value || '').trim();
   if (!url) { toast('info', '请先粘贴分享链接'); $('#collectorUrl').focus(); return; }
   if (!validShareText(url)) { toast('info', '目前只支持小红书或抖音分享链接'); $('#collectorUrl').focus(); return; }
+  const sessionMode = preferredMode || ($('#collectorPublicMode')?.checked ? 'public' : 'saved');
   busy(button, true, '正在提交…');
   try {
-    const created = await api.collectorCreate(url);
+    const created = await api.collectorCreate(url, sessionMode);
     const id = created.task_id || created.id;
     tasks = [{ id, url, source:/douyin/i.test(url) ? 'douyin' : 'xiaohongshu', title:'正在识别内容…', owner_id:created.owner_id || me?.id,
-      status:created.status || 'pending', progress:0, message:'等待服务器处理…', created_at:new Date().toISOString() }, ...tasks.filter(task => String(task.id) !== String(id))];
+      status:created.status || 'pending', session_mode:created.session_mode || sessionMode,
+      progress:0, message:'等待服务器处理…', created_at:new Date().toISOString() }, ...tasks.filter(task => String(task.id) !== String(id))];
     selectedId = id; result = null; $('#collectorUrl').value = '';
     paintTasks(); paintDetail(); scheduleTaskPoll(true);
-    toast('ok', created.status === 'done' ? '已有采集结果，正在为你打开' : '任务已提交，服务器会继续处理');
+    toast('ok', created.status === 'done' ? '已有采集结果，正在为你打开' : (sessionMode === 'public' ? '公开无登录任务已提交' : '任务已提交，服务器会继续处理'));
     if (created.status === 'done') loadResult(id);
   } catch (error) { toast('info', error.message || '任务提交失败'); }
   finally { busy(button, false); paintService(); }
@@ -369,7 +394,7 @@ async function submitTask(value, button = $('#collectorStart')) {
 async function retryTask(id, button) {
   const task = tasks.find(item => String(item.id) === String(id));
   if (!task) return;
-  await submitTask(task.url, button);
+  await submitTask(task.url, button, task.session_mode || '');
 }
 
 async function reloadTasks(button) {
@@ -486,6 +511,35 @@ async function syncAccount(button) {
   busy(button, true, '同步中…');
   try { login = { ...login, status:'syncing', message:'正在读取当前账号…' }; paintAccount(); login = await api.collectorAccountSync(); paintAccount(); toast('ok', '小红书账号信息已同步'); }
   catch (error) { toast('info', error.message || '账号同步失败'); try { login = await api.collectorLoginStatus(); paintAccount(); } catch { /* 保留原状态 */ } }
+  finally { busy(button, false); }
+}
+
+async function saveAccountLabel(button) {
+  if (!isAdmin()) return;
+  const label = String($('#collectorAccountLabel')?.value || '').trim();
+  busy(button, true, '保存中…');
+  try {
+    login = await api.collectorAccountLabel(label);
+    labelEditing = false; paintAccount();
+    toast('ok', label ? '采集账号备注已保存' : '采集账号备注已清除');
+  } catch (error) { toast('info', error.message || '账号备注保存失败'); }
+  finally { busy(button, false); }
+}
+
+async function logoutAccount(button) {
+  if (!isAdmin()) return;
+  const ok = await confirmAction({
+    eyebrow:'采集账号', title:'退出 VPS 上的小红书账号？',
+    message:'这只会删除服务器保存的小红书 Cookie、登录状态和账号备注。',
+    note:'历史采集记录、正文图片和 IdeaHub 数据不会被删除。', confirmLabel:'确认退出',
+  });
+  if (!ok) return;
+  busy(button, true, '退出中…');
+  try {
+    login = await api.collectorAccountLogout();
+    labelEditing = false; qrDismissed = true; closeQr(); paintAccount();
+    toast('ok', '采集账号已退出；公开无登录模式仍可继续使用');
+  } catch (error) { toast('info', error.message || '退出采集账号失败'); }
   finally { busy(button, false); }
 }
 

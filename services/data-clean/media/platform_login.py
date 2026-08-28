@@ -32,6 +32,7 @@ XHS_LOGIN_MARKER = DATA_DIR / "xiaohongshu.cookies.txt.validated"
 XHS_LOGIN_URL = "https://www.xiaohongshu.com/explore"
 XHS_STORAGE_STATE_FILE = STORAGE_STATE_FILES["xiaohongshu"]
 XHS_LOGIN_PROFILE_FILE = DATA_DIR / "xiaohongshu.login_profile.json"
+XHS_LOGIN_LABEL_FILE = DATA_DIR / "xiaohongshu.account_label.json"
 XHS_QR_FILE = DATA_DIR / "xiaohongshu.login_qr.png"
 
 XHS_PUBLIC_PROFILE_FIELDS = (
@@ -57,6 +58,48 @@ def invalidate_xhs_login() -> None:
     """Mark the saved session unvalidated after the API obscures like counts."""
     XHS_LOGIN_MARKER.unlink(missing_ok=True)
     XHS_LOGIN_PROFILE_FILE.unlink(missing_ok=True)
+
+
+def clear_xhs_login_session(*, clear_label: bool = True) -> None:
+    """Remove only Xiaohongshu authentication state, never task/media data."""
+    paths = [
+        XHS_COOKIE_FILE,
+        XHS_LOGIN_MARKER,
+        XHS_STORAGE_STATE_FILE,
+        XHS_LOGIN_PROFILE_FILE,
+        XHS_QR_FILE,
+    ]
+    if clear_label:
+        paths.append(XHS_LOGIN_LABEL_FILE)
+    for path in paths:
+        path.unlink(missing_ok=True)
+        path.with_suffix(path.suffix + ".tmp").unlink(missing_ok=True)
+
+
+def read_xhs_login_label() -> str:
+    if not XHS_LOGIN_LABEL_FILE.is_file():
+        return ""
+    try:
+        value = json.loads(XHS_LOGIN_LABEL_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    return str(value.get("label") or "").strip() if isinstance(value, dict) else ""
+
+
+def save_xhs_login_label(label: str) -> str:
+    label = re.sub(r"[\x00-\x1f\x7f]+", " ", str(label or ""))
+    label = re.sub(r"\s+", " ", label).strip()
+    if len(label) > 32:
+        raise ValueError("账号备注最多 32 个字符")
+    if not label:
+        XHS_LOGIN_LABEL_FILE.unlink(missing_ok=True)
+        return ""
+    temp_path = XHS_LOGIN_LABEL_FILE.with_suffix(XHS_LOGIN_LABEL_FILE.suffix + ".tmp")
+    temp_path.write_text(
+        json.dumps({"label": label}, ensure_ascii=False), encoding="utf-8"
+    )
+    temp_path.replace(XHS_LOGIN_LABEL_FILE)
+    return label
 
 
 def _public_scalar(mapping, *keys: str) -> str:
@@ -137,9 +180,12 @@ def _save_xhs_login_profile(profile: dict[str, str]) -> None:
 
 
 def persist_xhs_login_session(
-    cookies: list[dict], storage_state: dict, profile: dict[str, str]
+    cookies: list[dict], storage_state: dict, profile: dict[str, str], *,
+    clear_label: bool = False,
 ) -> None:
     """Publish a verified session while the caller holds its generation lock."""
+    if clear_label:
+        XHS_LOGIN_LABEL_FILE.unlink(missing_ok=True)
     _save_netscape_cookies(cookies, XHS_COOKIE_FILE)
     temp_state = XHS_STORAGE_STATE_FILE.with_suffix(
         XHS_STORAGE_STATE_FILE.suffix + ".tmp"

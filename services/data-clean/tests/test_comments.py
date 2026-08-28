@@ -24,6 +24,7 @@ from media.platform_login import (
     _save_netscape_cookies,
     friendly_xhs_login_error,
 )
+import media.platform_login as platform_login_module
 
 
 class HotCommentPoolTests(unittest.TestCase):
@@ -153,6 +154,28 @@ class PlatformNormalizationTests(unittest.TestCase):
 
 
 class LoginCookieTests(unittest.TestCase):
+    def test_account_label_is_local_metadata_and_logout_clears_only_login_files(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            paths = {
+                "XHS_COOKIE_FILE": root / "cookies.txt",
+                "XHS_LOGIN_MARKER": root / "cookies.txt.validated",
+                "XHS_STORAGE_STATE_FILE": root / "storage.json",
+                "XHS_LOGIN_PROFILE_FILE": root / "profile.json",
+                "XHS_LOGIN_LABEL_FILE": root / "label.json",
+                "XHS_QR_FILE": root / "qr.png",
+            }
+            patches = [patch.object(platform_login_module, key, value) for key, value in paths.items()]
+            for item in patches: item.start()
+            try:
+                for value in paths.values(): value.write_text("state", encoding="utf-8")
+                self.assertEqual("采集专用号", platform_login_module.save_xhs_login_label("  采集专用号  "))
+                self.assertEqual("采集专用号", platform_login_module.read_xhs_login_label())
+                platform_login_module.clear_xhs_login_session(clear_label=True)
+                self.assertTrue(all(not value.exists() for value in paths.values()))
+            finally:
+                for item in reversed(patches): item.stop()
+
     def test_limited_comment_counts_do_not_invalidate_saved_login(self):
         pool = HotCommentPool(threshold=20, limit=5, max_scanned=20)
         observer = BrowserCommentCollector("xiaohongshu", pool)
@@ -232,6 +255,39 @@ class LoginCookieTests(unittest.TestCase):
 
         self.assertEqual(200, response.status_code)
         self.assertEqual(account, response.get_json()["account"])
+        self.assertTrue(response.get_json()["identity_verified"])
+
+    def test_login_status_marks_saved_session_without_profile_as_unverified(self):
+        with (
+            patch.object(app_module, "_login_state", {"status": "saved", "message": ""}),
+            patch.object(app_module, "has_saved_xhs_login", return_value=True),
+            patch.object(app_module, "read_xhs_login_profile", return_value={}),
+            patch.object(app_module, "read_xhs_login_label", return_value="VPS 专用号"),
+        ):
+            payload = app_module.app.test_client().get(
+                "/api/login/xiaohongshu/status"
+            ).get_json()
+
+        self.assertFalse(payload["identity_verified"])
+        self.assertEqual("VPS 专用号", payload["account_label"])
+
+    def test_logout_endpoint_clears_server_login_state(self):
+        state = {"status": "saved", "message": ""}
+        with (
+            patch.object(app_module, "_login_state", state),
+            patch.object(app_module, "_running", {}),
+            patch.object(app_module, "clear_xhs_login_session") as clear,
+            patch.object(app_module, "has_saved_xhs_login", return_value=False),
+            patch.object(app_module, "read_xhs_login_profile", return_value={}),
+            patch.object(app_module, "read_xhs_login_label", return_value=""),
+        ):
+            response = app_module.app.test_client().post(
+                "/api/login/xiaohongshu/logout"
+            )
+
+        self.assertEqual(200, response.status_code)
+        clear.assert_called_once_with(clear_label=True)
+        self.assertFalse(response.get_json()["saved"])
 
     def test_account_sync_endpoint_returns_current_public_account(self):
         account = {"nickname": "当前账号", "red_id": "red-2026"}

@@ -32,8 +32,10 @@ def _platform_for_url(url: str) -> str:
     return ""
 
 
-def _page_headers(url: str) -> dict[str, str]:
+def _page_headers(url: str, *, use_login: bool = True) -> dict[str, str]:
     headers = dict(BROWSER_HEADERS)
+    if not use_login:
+        return headers
     platform = _platform_for_url(url)
     host = (urlparse(str(url or "")).hostname or "").casefold()
     if platform == "xiaohongshu" and not (
@@ -73,7 +75,7 @@ def _merge_page_results(primary: dict, enriched: dict) -> dict:
     return merged
 
 
-async def extract_page(url: str) -> dict | None:
+async def extract_page(url: str, *, use_login: bool = True) -> dict | None:
     print(f"  [extract] {redact_url(url)[:120]}")
     partial_result = None
     browser_url = url
@@ -83,7 +85,7 @@ async def extract_page(url: str) -> dict | None:
         html, _headers, final_url = await fetch_safe_text(
             url,
             timeout=20,
-            headers=_page_headers(url),
+            headers=_page_headers(url, use_login=use_login),
         )
         browser_url = final_url
         if html and len(html) > 500:
@@ -110,11 +112,11 @@ async def extract_page(url: str) -> dict | None:
                 service_workers="block",
             )
             platform = _platform_for_url(browser_url)
-            storage_state_path = STORAGE_STATE_FILES.get(platform)
+            storage_state_path = STORAGE_STATE_FILES.get(platform) if use_login else None
             if storage_state_path and storage_state_path.exists():
                 context_options["storage_state"] = str(storage_state_path)
             context = await browser.new_context(**context_options)
-            if "storage_state" not in context_options:
+            if use_login and "storage_state" not in context_options:
                 cookie_path = COOKIE_FILES.get(platform)
                 if cookie_path and cookie_path.exists():
                     cookies = _netscape_cookies(cookie_path)

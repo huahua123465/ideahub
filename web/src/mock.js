@@ -275,8 +275,8 @@ const collectorAnalysis = () => ({
 });
 
 let collectorLogin = {
-  status:'saved', message:'当前登录账号可用', qr_available:false, expires_at:null, saved:true,
-  account:{ nickname:'关系研究所', red_id:'ideahub-demo', user_id:'demo-xhs-01', avatar_url:'', description:'关系判断与行动建议' },
+  status:'saved', message:'登录有效，但平台暂未返回账号资料', qr_available:false, expires_at:null, saved:true,
+  account:{}, account_label:'VPS 采集专用号', identity_verified:false,
 };
 let collectorLoginPolls = 0;
 let collectorTaskSeq = 3;
@@ -300,6 +300,7 @@ const analysisFor = id => {
 };
 const collectorResult = task => ({
   task_id:task.id, owner_id:task.owner_id, status:'done', schema_version:2,
+  session_mode:task.session_mode || 'saved',
   title:task.title, post_title:task.title, display_title:task.title, platform:task.source,
   source_url:task.url, author:'关系研究所', description:'从可验证的行动证据出发，减少在关系中的反复猜测。',
   topics:['关系判断','行动验证','停止内耗'], media_type:'image_post',
@@ -348,7 +349,8 @@ export async function handle(method, path, body) {
         expires_at:Math.floor(Date.now() / 1000) + 180, saved:false, account:{} };
     } else if (collectorLogin.status === 'waiting_scan' && ++collectorLoginPolls >= 3) {
       collectorLogin = { status:'saved', message:'扫码成功，登录态已安全保存', qr_available:false, expires_at:null, saved:true,
-        account:{ nickname:'关系研究所', red_id:'ideahub-demo', user_id:'demo-xhs-01', avatar_url:'', description:'关系判断与行动建议' } };
+        account:{ nickname:'关系研究所', red_id:'ideahub-demo', user_id:'demo-xhs-01', avatar_url:'', description:'关系判断与行动建议' },
+        account_label:'', identity_verified:true };
     }
     return { ...collectorLogin, account:{ ...(collectorLogin.account || {}) } };
   }
@@ -358,7 +360,7 @@ export async function handle(method, path, body) {
     }
     collectorLoginPolls = 0;
     collectorLogin = { status:'opening', message:body?.mode === 'switch' ? '正在准备切换账号…' : '正在打开登录页面…',
-      qr_available:false, expires_at:null, saved:false, account:{} };
+      qr_available:false, expires_at:null, saved:false, account:{}, account_label:'', identity_verified:false };
     return { ...collectorLogin };
   }
   if (p === '/api/collector/login/xiaohongshu/account' && method === 'POST') {
@@ -367,6 +369,18 @@ export async function handle(method, path, body) {
     await new Promise(resolve => setTimeout(resolve, 260));
     collectorLogin = { ...collectorLogin, status:'saved', message:'当前登录账号已同步' };
     return { ...collectorLogin, account:{ ...collectorLogin.account } };
+  }
+  if (p === '/api/collector/login/xiaohongshu/label' && method === 'POST') {
+    if (ME.role !== 'admin') throw Object.assign(new Error('只有管理员可以管理平台账号'), { status:403 });
+    if (!collectorLogin.saved) throw Object.assign(new Error('请先登录采集账号'), { status:409 });
+    collectorLogin = { ...collectorLogin, account_label:String(body?.label || '').trim().slice(0, 32) };
+    return { ...collectorLogin, account:{ ...(collectorLogin.account || {}) } };
+  }
+  if (p === '/api/collector/login/xiaohongshu/logout' && method === 'POST') {
+    if (ME.role !== 'admin') throw Object.assign(new Error('只有管理员可以管理平台账号'), { status:403 });
+    collectorLogin = { status:'idle', message:'采集账号已退出', qr_available:false, expires_at:null,
+      saved:false, account:{}, account_label:'', identity_verified:false };
+    return { ...collectorLogin };
   }
   if (p === '/api/collector/tasks' && method === 'GET') {
     if (q.get('scenario') === 'empty') return [];
@@ -382,10 +396,11 @@ export async function handle(method, path, body) {
     const id = `demo-new-${++collectorTaskSeq}`;
     const task = { id, url, source:/douyin/i.test(url) ? 'douyin' : 'xiaohongshu', title:'正在识别内容标题…',
       account_name:'', owner_id:String(ME.id), status:'pending', progress:0, message:'等待采集槽位…',
+      session_mode:body?.session_mode === 'public' ? 'public' : 'saved',
       created_at:new Date().toISOString(), updated_at:new Date().toISOString() };
     COLLECTOR_TASKS.unshift(task);
     collectorPolls.set(id, 0);
-    return { task_id:id, status:'pending', owner_id:String(ME.id), max_concurrent:1 };
+    return { task_id:id, status:'pending', session_mode:task.session_mode, owner_id:String(ME.id), max_concurrent:1 };
   }
   const collectorStatusMatch = p.match(/^\/api\/collector\/tasks\/([^/]+)\/status$/);
   if (collectorStatusMatch && method === 'GET') {
