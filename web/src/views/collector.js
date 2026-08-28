@@ -151,7 +151,8 @@ function paintAccount() {
   }
   const status = login.status || 'idle';
   const account = login.account || {};
-  if (login.saved) {
+  const loginPending = status === 'opening' || status === 'waiting_scan';
+  if (login.saved && !loginPending) {
     const syncing = status === 'syncing';
     const hasAccount = Object.values(account).some(Boolean);
     el.innerHTML = `<div class="collector-account-avatar">${esc([...accountName(account)][0] || '小')}</div>
