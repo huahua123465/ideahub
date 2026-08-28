@@ -24,6 +24,7 @@ from pathlib import Path
 from config import OUTPUT_DIR, FRAME_INTERVAL, MAX_FRAMES
 from db import TaskDB
 from utils import url_to_id, detect_platform
+from security import public_error_message, redact_sensitive_text, redact_url
 from media import download_video, extract_frames, describe_frames, extract_audio, transcribe
 from generators import create_characters, generate
 
@@ -38,7 +39,7 @@ def run_pipeline(video_url: str, *, analyze_audio: bool = True,
 
     print("=" * 60)
     print(f"  Video -> AI Animation Storyboard  [{vid}]")
-    print(f"  Source: {source} | {video_url[:60]}...")
+    print(f"  Source: {source} | {redact_url(video_url)[:100]}")
     print("=" * 60)
 
     task_dir = OUTPUT_DIR / vid
@@ -57,7 +58,11 @@ def run_pipeline(video_url: str, *, analyze_audio: bool = True,
             db.update_status(vid, "failed", error_msg="download failed")
             return None
     except Exception as e:
-        db.update_status(vid, "failed", error_msg=str(e))
+        db.update_status(
+            vid,
+            "failed",
+            error_msg=public_error_message(e, fallback="视频处理失败，请稍后重试"),
+        )
         raise
 
     db.update_status(vid, "downloaded",
@@ -136,12 +141,12 @@ def run_pipeline(video_url: str, *, analyze_audio: bool = True,
 
     print(f"\n{'='*60}")
     print(f"  Done! v{version}")
-    print(f"  Markdown: {md_path}")
-    print(f"  JSON:     {json_path}")
-    print(f"  Output:   {task_dir}")
+    print(f"  Markdown: {md_path.name}")
+    print(f"  JSON:     {json_path.name}")
+    print("  Output:   task output directory")
     print(f"{'='*60}")
 
-    preview = markdown[:800]
+    preview = redact_sensitive_text(markdown[:800], max_length=800)
     print(f"\n{preview}")
     if len(markdown) > 800:
         print(f"\n... ({len(markdown)} chars total)")

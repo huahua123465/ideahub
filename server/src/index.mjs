@@ -33,6 +33,7 @@ import * as search from './routes/search.mjs';
 import * as ingest from './routes/ingest.mjs';
 import * as smartImport from './routes/smart-import.mjs';
 import * as learning from './routes/learning.mjs';
+import * as collector from './routes/collector.mjs';
 import { archiveStaleIdeas } from './routes/status.mjs';
 import { publish, closeAll, clientCount } from './lib/bus.mjs';
 
@@ -97,6 +98,7 @@ search.mount(router);
 ingest.mount(router);
 smartImport.mount(router);
 learning.mount(router);
+collector.mount(router);
 
 
 /* ---------- 登录闸门 ---------- */
@@ -250,7 +252,9 @@ const server = http.createServer(async (req, res) => {
 function log(req, res, t0) {
   if (!req.url.startsWith('/api/')) return;
   const ms = Date.now() - t0;
-  console.log(`${String(req.method).padEnd(5)} ${res.statusCode} ${String(ms + 'ms').padStart(6)}  ${req.url}`);
+  // 查询串可能带平台分享 token、搜索词或其它内部参数；访问日志只需要路由路径。
+  const pathname = new URL(req.url, 'http://local').pathname;
+  console.log(`${String(req.method).padEnd(5)} ${res.statusCode} ${String(ms + 'ms').padStart(6)}  ${pathname}`);
 }
 
 /* ---------- 内置定时任务 ----------

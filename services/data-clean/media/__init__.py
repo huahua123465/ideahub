@@ -17,6 +17,8 @@ from .platform_login import (
     has_saved_xhs_login,
     invalidate_xhs_login,
     login_xiaohongshu,
+    persist_xhs_login_session,
     read_xhs_login_profile,
     sync_saved_xhs_account,
+    XHS_QR_FILE,
 )

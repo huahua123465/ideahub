@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Callable
 
 from playwright.async_api import async_playwright
+from security import install_playwright_request_guard
 
 from .comment_extractor import (
     STORAGE_STATE_FILES,
@@ -23,14 +24,14 @@ from .comment_extractor import (
     _save_netscape_cookies,
 )
 from .profile_extractor import extract_account_from_html
+from config import DATA_DIR, COLLECTOR_QR_TTL_SEC
 
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 XHS_COOKIE_FILE = DATA_DIR / "xiaohongshu.cookies.txt"
 XHS_LOGIN_MARKER = DATA_DIR / "xiaohongshu.cookies.txt.validated"
 XHS_LOGIN_URL = "https://www.xiaohongshu.com/explore"
 XHS_STORAGE_STATE_FILE = STORAGE_STATE_FILES["xiaohongshu"]
 XHS_LOGIN_PROFILE_FILE = DATA_DIR / "xiaohongshu.login_profile.json"
+XHS_QR_FILE = DATA_DIR / "xiaohongshu.login_qr.png"
 
 XHS_PUBLIC_PROFILE_FIELDS = (
     "nickname",
@@ -132,6 +133,23 @@ def _save_xhs_login_profile(profile: dict[str, str]) -> None:
     temp_path = XHS_LOGIN_PROFILE_FILE.with_suffix(XHS_LOGIN_PROFILE_FILE.suffix + ".tmp")
     temp_path.write_text(json.dumps(safe_profile, ensure_ascii=False, indent=2), encoding="utf-8")
     temp_path.replace(XHS_LOGIN_PROFILE_FILE)
+
+
+def persist_xhs_login_session(
+    cookies: list[dict], storage_state: dict, profile: dict[str, str]
+) -> None:
+    """Publish a verified session while the caller holds its generation lock."""
+    _save_netscape_cookies(cookies, XHS_COOKIE_FILE)
+    temp_state = XHS_STORAGE_STATE_FILE.with_suffix(
+        XHS_STORAGE_STATE_FILE.suffix + ".tmp"
+    )
+    temp_state.write_text(
+        json.dumps(storage_state, ensure_ascii=False), encoding="utf-8"
+    )
+    temp_state.replace(XHS_STORAGE_STATE_FILE)
+    XHS_LOGIN_MARKER.write_text("validated\n", encoding="utf-8")
+    if profile:
+        _save_xhs_login_profile(profile)
 
 
 def friendly_xhs_login_error(error, *, saved: bool = False) -> str:
@@ -279,6 +297,7 @@ async def sync_saved_xhs_account() -> dict[str, str]:
             context_options = {
                 "viewport": {"width": 1180, "height": 820},
                 "locale": "zh-CN",
+                "service_workers": "block",
                 "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"),
             }
@@ -290,6 +309,7 @@ async def sync_saved_xhs_account() -> dict[str, str]:
                 if cookies:
                     await context.add_cookies(cookies)
             page = await context.new_page()
+            await install_playwright_request_guard(page)
             await page.goto(XHS_LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(2_000)
             if not await _is_xhs_authenticated(page):
@@ -304,23 +324,48 @@ async def sync_saved_xhs_account() -> dict[str, str]:
 
 
 async def login_xiaohongshu(
-    progress: Callable[[str, str], None], *, timeout_sec: int = 180,
+    progress: Callable[..., None], *, timeout_sec: int = COLLECTOR_QR_TTL_SEC,
     force_fresh: bool = False,
+    is_current: Callable[[], bool] | None = None,
+    publish_qr: Callable[[Path], bool] | None = None,
+    commit_session: Callable[[list[dict], dict, dict[str, str]], bool] | None = None,
+    cleanup_qr: Callable[[], None] | None = None,
+    qr_file: Path = XHS_QR_FILE,
 ) -> None:
-    """Open a visible QR-login window and persist authenticated cookies.
+    """Run headless QR login and persist authenticated cookies server-side.
 
     ``force_fresh`` deliberately starts with an empty browser context so a user
     can switch accounts. Existing credentials stay on disk until the new login
     succeeds, which makes closing or timing out the window non-destructive.
     """
+    is_current = is_current or (lambda: True)
+
+    def default_publish(temp_path: Path) -> bool:
+        temp_path.replace(qr_file)
+        return True
+
+    def default_commit(cookies: list[dict], state: dict, profile: dict[str, str]) -> bool:
+        persist_xhs_login_session(cookies, state, profile)
+        return True
+
+    publish_qr = publish_qr or default_publish
+    commit_session = commit_session or default_commit
+    cleanup_qr = cleanup_qr or (lambda: qr_file.unlink(missing_ok=True))
+    qr_temp_file: Path | None = None
     opening_message = "正在打开小红书账号切换窗口…" if force_fresh else "正在打开小红书登录窗口…"
     progress("opening", opening_message)
+    if not is_current():
+        return
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=False)
+        browser = await playwright.chromium.launch(
+            headless=True,
+            args=["--disable-dev-shm-usage", "--no-sandbox"],
+        )
         try:
             context_options = {
                 "viewport": {"width": 1180, "height": 820},
                 "locale": "zh-CN",
+                "service_workers": "block",
                 "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"),
             }
@@ -331,13 +376,11 @@ async def login_xiaohongshu(
             if saved_cookies and not context_options.get("storage_state"):
                 await context.add_cookies(saved_cookies)
             page = await context.new_page()
+            await install_playwright_request_guard(page)
             await page.goto(XHS_LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
             # The SPA renders its guest login controls after DOMContentLoaded.
             # Checking earlier creates a false positive while the shell is blank.
             await page.wait_for_timeout(3_000)
-            waiting_message = "请扫码登录要切换的小红书账号" if force_fresh else "请在弹出窗口中使用小红书扫码登录"
-            progress("waiting_scan", waiting_message)
-
             # If the saved session is still valid, no scan is required.
             if not await _is_xhs_authenticated(page):
                 login_buttons = page.get_by_text(re.compile(r"^登录$"))
@@ -349,9 +392,48 @@ async def login_xiaohongshu(
                             break
                     except Exception:
                         continue
+                await page.wait_for_timeout(800)
+                qr = None
+                for selector in (
+                    ".login-container canvas",
+                    ".login-container img",
+                    "[class*='qrcode'] canvas",
+                    "[class*='qrcode'] img",
+                    "[class*='qr-code'] canvas",
+                    "[class*='qr-code'] img",
+                ):
+                    try:
+                        candidate = page.locator(selector).first
+                        if await candidate.count() and await candidate.is_visible():
+                            box = await candidate.bounding_box()
+                            if box and box["width"] >= 100 and box["height"] >= 100:
+                                qr = candidate
+                                break
+                    except Exception:
+                        continue
+                if qr is None:
+                    raise RuntimeError("平台登录页未找到二维码，请稍后重试")
+                if not is_current():
+                    return
+                qr_file.parent.mkdir(parents=True, exist_ok=True)
+                qr_temp_file = qr_file.with_name(
+                    f"{qr_file.name}.{time.time_ns()}.tmp"
+                )
+                await qr.screenshot(path=str(qr_temp_file), type="png")
+                if not is_current() or not publish_qr(qr_temp_file):
+                    return
+                qr_temp_file = None
+                progress(
+                    "waiting_scan",
+                    "请使用小红书手机端扫码登录",
+                    qr_available=True,
+                    expires_at=int(time.time()) + timeout_sec,
+                )
             deadline = time.monotonic() + timeout_sec
             authenticated_rounds = 0
             while time.monotonic() < deadline:
+                if not is_current():
+                    return
                 if page.is_closed():
                     raise RuntimeError("登录窗口已关闭，未检测到登录成功")
                 if await _is_xhs_authenticated(page):
@@ -359,15 +441,11 @@ async def login_xiaohongshu(
                     if authenticated_rounds >= 3:
                         profile = await _profile_from_page(page)
                         cookies = await context.cookies()
-                        _save_netscape_cookies(cookies, XHS_COOKIE_FILE)
-                        temp_state = XHS_STORAGE_STATE_FILE.with_suffix(
-                            XHS_STORAGE_STATE_FILE.suffix + ".tmp"
-                        )
-                        await context.storage_state(path=str(temp_state))
-                        temp_state.replace(XHS_STORAGE_STATE_FILE)
-                        XHS_LOGIN_MARKER.write_text("validated\n", encoding="utf-8")
-                        if profile:
-                            _save_xhs_login_profile(profile)
+                        storage_state = await context.storage_state()
+                        if not is_current() or not commit_session(
+                            cookies, storage_state, profile
+                        ):
+                            return
                         progress("done", "小红书登录成功，登录态已保存")
                         if not page.is_closed():
                             try:
@@ -380,4 +458,7 @@ async def login_xiaohongshu(
                 await page.wait_for_timeout(500)
             raise TimeoutError("扫码登录超时，请重新发起登录")
         finally:
+            if qr_temp_file is not None:
+                qr_temp_file.unlink(missing_ok=True)
+            cleanup_qr()
             await browser.close()

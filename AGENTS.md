@@ -89,6 +89,15 @@
 
 VPS 上 IdeaHub 使用宿主机端口 `18080`。公网 HTTPS 入口位于另一个项目的 `/opt/ai-stack/new-api/Caddyfile.canvas-media`，同一个前置 Caddy 还服务其他项目。不得在本地仓库改动的名义下擅自修改那个外部文件或重启 `canvas-media-https`。完整的 VPS 邻居服务与端口限制见 `CLAUDE.md`。
 
+### 内容采集 Collector 特别规则
+
+- `services/data-clean/` 通过 Git subtree 跟踪公司内部 `dataClean` 上游；不要改成 submodule，否则 VPS 单次 `git pull` 无法恢复完整代码。
+- Collector 只允许 `expose: 5000` 在 Docker 内网使用，严禁增加宿主机 `ports` 或让 Caddy 直接反代 Collector。所有浏览器请求必须经过 IdeaHub `/api/collector/*` 的登录与权限代理。
+- `COLLECTOR_INTERNAL_TOKEN`、平台 Cookie、storage state、SQLite、媒体和 AI 密钥不得进入前端或普通日志；真实 state/output 固定放仓库外 `/opt/ideahub-collector/`。
+- 4GB VPS 默认只允许采集并发 1、OCR/数值库线程 1；不得为了“更快”提高并发，除非先做真实峰值资源测试。
+- 修改 Collector、Compose 或采集环境变量属于 D 类部署。推送 main 前必须先在功能分支执行 `bash scripts/check-collector-vps.sh`，验证镜像构建、非 root、持久目录、健康、FFmpeg 和 Chromium；脚本未通过不得合并 main。
+- 不绕过平台风控、验证码或登录要求；二维码必须由管理员在 IdeaHub 内操作，Cookie 永不返回浏览器。
+
 ## 5. 默认禁止触碰的内容
 
 没有用户逐项明确授权时，不做以下操作：

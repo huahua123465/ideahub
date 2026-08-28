@@ -14,6 +14,7 @@ from typing import Any
 from openai import OpenAI
 
 from config import LLM_API_KEY, LLM_BASE_URL, MODEL_LLM
+from security import public_error_message
 
 
 VIDEO_FIELDS = (
@@ -358,14 +359,23 @@ def analyze_content_with_audit(content: dict) -> tuple[dict, dict]:
     try:
         video = _video_analysis(content)
     except Exception as exc:  # API/provider problems should not discard raw data.
-        video = {"status": "unavailable", "message": str(exc), "items": {}, "source_labels": []}
+        video = {
+            "status": "unavailable",
+            "message": public_error_message(
+                exc, fallback="AI 视频分析暂时不可用，请稍后重试"
+            ),
+            "items": {},
+            "source_labels": [],
+        }
 
     try:
         comments = _comment_analysis(content)
     except Exception as exc:
         comments = {
             "status": "unavailable",
-            "message": str(exc),
+            "message": public_error_message(
+                exc, fallback="AI 评论分析暂时不可用，请稍后重试"
+            ),
             "sample_size": len(content.get("comments") or []),
             "items": {},
         }

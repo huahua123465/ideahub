@@ -38,11 +38,18 @@ class _Client:
         return _Response()
 
 
+def _public_dns(_host, _port, type=0):
+    return [(2, type, 6, "", ("8.8.8.8", 443))]
+
+
 class ShareUrlTests(unittest.TestCase):
     def test_mobile_share_text_extracts_and_resolves_xhs_short_link(self):
         share_text = "NPD有一个藏不住的语言习惯 https://xhslink.cn/o/3BiMeyL4RcE 前往【小红书】看看"
         self.assertEqual("https://xhslink.cn/o/3BiMeyL4RcE", normalize_url(share_text))
-        with patch("utils.httpx.Client", _Client):
+        with (
+            patch("utils.httpx.Client", _Client),
+            patch("security.socket.getaddrinfo", _public_dns),
+        ):
             resolved = resolve_share_url(share_text)
         self.assertIn(f"/discovery/item/{NOTE_ID}", resolved)
         self.assertEqual("xiaohongshu", detect_platform(resolved))

@@ -12,10 +12,10 @@ import re
 import time
 from pathlib import Path
 from typing import Any, Iterable
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
-import httpx
 from playwright.async_api import async_playwright
+from security import fetch_safe_text, install_playwright_request_guard
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -27,6 +27,10 @@ COOKIE_FILES = {
 XHS_STORAGE_STATE = DATA_DIR / "xiaohongshu.storage_state.json"
 ACCOUNT_HTTP_ATTEMPTS = 3
 ACCOUNT_RETRY_BASE_SECONDS = 0.5
+PLATFORM_HOST_SUFFIXES = {
+    "xiaohongshu": ("xiaohongshu.com", "xhslink.com", "xhslink.cn"),
+    "douyin": ("douyin.com",),
+}
 
 ACCOUNT_FIELDS = (
     "name",
@@ -331,20 +335,31 @@ def _cookie_header(platform: str) -> str:
 
 
 async def _http_html(url: str, platform: str) -> str:
+    host = (urlsplit(str(url or "")).hostname or "").rstrip(".").casefold()
+    suffixes = PLATFORM_HOST_SUFFIXES.get(platform, ())
+    if not any(host == suffix or host.endswith("." + suffix) for suffix in suffixes):
+        return ""
     headers = dict(HEADERS)
     cookie_header = _cookie_header(platform)
     if cookie_header:
         headers["Cookie"] = cookie_header
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers, http2=True) as client:
-            response = await client.get(url)
-            return response.text if response.status_code < 500 else ""
+        page_html, _response_headers, _final_url = await fetch_safe_text(
+            url,
+            timeout=20,
+            headers=headers,
+        )
+        return page_html
     except Exception:
         return ""
 
 
 async def _browser_html(url: str, platform: str) -> str:
     """Use the saved local session only as a bounded fallback for SSR hydration."""
+    host = (urlsplit(str(url or "")).hostname or "").rstrip(".").casefold()
+    suffixes = PLATFORM_HOST_SUFFIXES.get(platform, ())
+    if not any(host == suffix or host.endswith("." + suffix) for suffix in suffixes):
+        return ""
     try:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
@@ -352,6 +367,7 @@ async def _browser_html(url: str, platform: str) -> str:
                 "viewport": {"width": 1280, "height": 800},
                 "locale": "zh-CN",
                 "user_agent": HEADERS["User-Agent"],
+                "service_workers": "block",
             }
             if platform == "xiaohongshu" and XHS_STORAGE_STATE.exists():
                 context_options["storage_state"] = str(XHS_STORAGE_STATE)
@@ -361,6 +377,7 @@ async def _browser_html(url: str, platform: str) -> str:
                 if cookies:
                     await context.add_cookies(cookies)
             page = await context.new_page()
+            await install_playwright_request_guard(page)
             await page.route(
                 "**/*.{png,jpg,jpeg,gif,svg,mp4,webm,mp3,woff2,css,ttf,woff}",
                 lambda route: route.abort(),

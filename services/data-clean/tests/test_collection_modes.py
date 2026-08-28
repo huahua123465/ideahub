@@ -8,6 +8,7 @@ from unittest.mock import patch
 from PIL import Image
 
 import app as app_module
+app_module.app.config.update(TESTING=True, COLLECTOR_AUTH_BYPASS_TESTS=True)
 from app import (
     COLLECTION_MODE,
     COLLECTION_MODE_LABEL,
@@ -413,20 +414,23 @@ class PipelineStorageTests(unittest.TestCase):
             patch.object(app_module, "db", fake_db),
             patch.object(app_module, "_running", {}),
             patch.object(app_module, "_find_equivalent_task", return_value=None),
+            patch.object(app_module, "resolve_share_url", return_value="https://www.xiaohongshu.com/explore/test"),
+            patch.object(app_module, "validate_public_url", side_effect=lambda value: value),
             patch.object(app_module, "url_to_id", return_value="task-api"),
             patch.object(app_module.threading, "Thread") as thread,
         ):
             response = app_module.app.test_client().post(
                 "/api/convert",
-                json={"url": "https://example.com/post", "collection_mode": "quick"},
+                json={"url": "https://www.xiaohongshu.com/explore/test", "collection_mode": "quick"},
+                headers={"X-IdeaHub-User-Id": "test-user"},
             )
         self.assertEqual(200, response.status_code)
         payload = response.get_json()
         self.assertEqual("analyze", payload["collection_mode"])
         self.assertEqual("pending", payload["status"])
-        self.assertEqual(3, payload["max_concurrent"])
+        self.assertEqual(1, payload["max_concurrent"])
         self.assertIs(app_module._run_pipeline_in_slot, thread.call_args.kwargs["target"])
-        self.assertEqual(("task-api", "https://example.com/post"), thread.call_args.kwargs["args"])
+        self.assertEqual(("task-api", "https://www.xiaohongshu.com/explore/test"), thread.call_args.kwargs["args"])
 
     def test_video_is_temporary_and_result_keeps_source_link(self):
         cover_bytes = []

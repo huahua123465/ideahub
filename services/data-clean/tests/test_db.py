@@ -39,6 +39,24 @@ class TaskDBRetryTests(unittest.TestCase):
             self.assertIsNone(db.get_task("task-1"))
             self.assertIsNone(db.get_task("task-2"))
 
+    def test_owner_is_persisted_and_restart_work_is_interrupted(self):
+        with TemporaryDirectory() as root:
+            db = TaskDB(Path(root) / "pipeline.db")
+            db.create_task(
+                "task-1",
+                "https://www.xiaohongshu.com/explore/1",
+                "xiaohongshu",
+                owner_id="user-7",
+            )
+            db.update_status("task-1", "running")
+            changed = db.recover_interrupted_tasks()
+            task = db.get_task("task-1")
+
+        self.assertEqual(1, changed)
+        self.assertEqual("user-7", task["owner_id"])
+        self.assertEqual("interrupted", task["status"])
+        self.assertIn("手动重试", task["error_msg"])
+
 
 if __name__ == "__main__":
     unittest.main()

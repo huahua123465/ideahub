@@ -4,6 +4,7 @@ import hashlib
 from urllib.parse import parse_qs, urlparse
 
 import httpx
+from security import UnsafeUrl, resolve_safe_redirects, validate_public_url
 
 
 _XHS_SHORT_HOSTS = {"xhslink.cn", "www.xhslink.cn", "xhslink.com", "www.xhslink.com"}
@@ -32,25 +33,14 @@ def resolve_share_url(url: str, timeout: float = 15.0) -> str:
         return ""
     host = (urlparse(url).hostname or "").lower()
     if host not in _XHS_SHORT_HOSTS:
-        return url
+        try:
+            return validate_public_url(url)
+        except UnsafeUrl:
+            return ""
     try:
-        with httpx.Client(
-            follow_redirects=True,
-            timeout=timeout,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 Chrome/125 Safari/537.36"
-                ),
-            },
-        ) as client:
-            response = client.get(url)
-            response.raise_for_status()
-        resolved = normalize_url(str(response.url))
-        resolved_host = (urlparse(resolved).hostname or "").lower()
-        return resolved if resolved_host in _XHS_HOSTS else url
-    except httpx.HTTPError:
-        return url
+        return resolve_safe_redirects(url, timeout=timeout, client_factory=httpx.Client)
+    except (httpx.HTTPError, UnsafeUrl):
+        return ""
 
 
 def canonical_content_key(url: str) -> str:

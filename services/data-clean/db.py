@@ -75,20 +75,23 @@ class TaskDB:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
             if "account_name" not in columns:
                 conn.execute("ALTER TABLE tasks ADD COLUMN account_name TEXT")
+            if "owner_id" not in columns:
+                conn.execute("ALTER TABLE tasks ADD COLUMN owner_id TEXT")
 
-    def create_task(self, vid, url, source="", title="", description=""):
+    def create_task(self, vid, url, source="", title="", description="", owner_id=""):
         with self._conn() as conn:
             cursor = conn.execute(
-                "INSERT OR IGNORE INTO tasks(id,url,source,title,description,status) VALUES(?,?,?,?,?,?)",
-                (vid, url, source, title, description, "pending")
+                "INSERT OR IGNORE INTO tasks(id,url,source,title,description,status,owner_id) VALUES(?,?,?,?,?,?,?)",
+                (vid, url, source, title, description, "pending", owner_id)
             )
             created = cursor.rowcount > 0
             if not created:
                 conn.execute(
                     """UPDATE tasks
-                       SET url=?, source=?, status='pending', error_msg=NULL, updated_at=?
+                       SET url=?, source=?, status='pending', error_msg=NULL,
+                           owner_id=CASE WHEN ?<>'' THEN ? ELSE owner_id END, updated_at=?
                        WHERE id=?""",
-                    (url, source, datetime.now(), vid),
+                    (url, source, owner_id, owner_id, datetime.now(), vid),
                 )
             return created
 
@@ -133,10 +136,23 @@ class TaskDB:
     def list_tasks(self, limit=20):
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT id,url,source,title,account_name,status,error_msg,created_at,updated_at FROM tasks ORDER BY created_at DESC LIMIT ?",
+                "SELECT id,url,source,title,account_name,owner_id,status,error_msg,created_at,updated_at FROM tasks ORDER BY created_at DESC LIMIT ?",
                 (limit,)
             ).fetchall()
             return [dict(r) for r in rows]
+
+    def recover_interrupted_tasks(self):
+        """Never silently re-run work after process/container restart."""
+        with self._conn() as conn:
+            cursor = conn.execute(
+                """UPDATE tasks
+                   SET status='interrupted',
+                       error_msg='服务重启导致任务中断，请手动重试',
+                       updated_at=?
+                   WHERE status IN ('pending','running','downloading','processing')""",
+                (datetime.now(),),
+            )
+            return cursor.rowcount
 
     def add_artifact(self, vid, art_type, path, meta=None):
         with self._conn() as conn:

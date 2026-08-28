@@ -51,10 +51,18 @@ export function sendJson(res, status, data) {
 
 export function sendError(res, err) {
   const status = err.status || 500;
-  if (status >= 500) console.error('[api] 未预期的错误:', err);
-  sendJson(res, status, {
-    error: err.message || '服务器内部错误',
+  const expected = err instanceof HttpError;
+  // HttpError 是路由主动映射的可预期失败（例如 Collector 超时 504），不该把
+  // 它的本地堆栈和绝对路径打印进生产日志。真正未知的异常也只记类型，详细
+  // 诊断应留在受控调试环境，不能让日志成为路径/密钥侧信道。
+  if (status >= 500 && !(err instanceof HttpError)) {
+    console.error('[api] 未预期的错误:', err?.name || 'Error');
+  }
+  sendJson(res, status, expected ? {
+    error: err.message || '请求处理失败',
     detail: err.detail,
+  } : {
+    error: '服务器内部错误',
   });
 }
 

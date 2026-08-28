@@ -8,6 +8,11 @@ from pathlib import Path
 import cv2
 import httpx
 from PIL import Image
+
+from config import COLLECTOR_MAX_DOWNLOAD_MB
+from security import UnsafeUrl, fetch_safe_bytes
+
+cv2.setNumThreads(1)
 from rapidocr_onnxruntime import RapidOCR
 
 
@@ -242,31 +247,34 @@ def download_post_images(urls: list[str], output_dir: str, referer: str, limit: 
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
         "Referer": referer,
     }
-    with httpx.Client(headers=headers, follow_redirects=True, timeout=20) as client:
-        for image_url in urls[:limit]:
-            try:
-                response = client.get(image_url)
-                content_type = response.headers.get("content-type", "")
-                if response.status_code != 200 or not content_type.startswith("image/") or len(response.content) < 1024:
-                    continue
-                with Image.open(BytesIO(response.content)) as image:
-                    width, height = image.size
-                # Social pages also expose logos, avatars, and share banners. Real post
-                # images are normally high resolution; do not present page chrome as content.
-                if max(width, height) < 800:
-                    continue
-                suffix = ".png" if "png" in content_type else ".webp" if "webp" in content_type else ".jpg"
-                path = image_dir / f"image_{len(paths) + 1:02d}{suffix}"
-                path.write_bytes(response.content)
-                paths.append({
-                    "path": str(path),
-                    "source_url": image_url,
-                    "width": width,
-                    "height": height,
-                    "size_bytes": len(response.content),
-                })
-            except Exception as exc:
-                print(f"  image download failed: {image_url[:80]} ({exc})")
+    for image_url in urls[:limit]:
+        try:
+            content, response_headers, final_url = fetch_safe_bytes(
+                image_url,
+                max_bytes=min(COLLECTOR_MAX_DOWNLOAD_MB, 25) * 1024 * 1024,
+                headers=headers,
+            )
+            content_type = response_headers.get("content-type", "")
+            if not content_type.startswith("image/") or len(content) < 1024:
+                continue
+            with Image.open(BytesIO(content)) as image:
+                width, height = image.size
+            # Social pages also expose logos, avatars, and share banners. Real post
+            # images are normally high resolution; do not present page chrome as content.
+            if max(width, height) < 800:
+                continue
+            suffix = ".png" if "png" in content_type else ".webp" if "webp" in content_type else ".jpg"
+            path = image_dir / f"image_{len(paths) + 1:02d}{suffix}"
+            path.write_bytes(content)
+            paths.append({
+                "path": str(path),
+                "source_url": final_url,
+                "width": width,
+                "height": height,
+                "size_bytes": len(content),
+            })
+        except (httpx.HTTPError, UnsafeUrl, OSError, ValueError) as exc:
+            print(f"  image download failed safely ({exc.__class__.__name__})")
     return paths
 
 

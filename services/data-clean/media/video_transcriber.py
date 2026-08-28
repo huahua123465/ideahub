@@ -32,6 +32,7 @@ from config import (
     VIDEO_MODEL_REQUEST_RETRIES,
     VIDEO_MODEL_WIDTH,
 )
+from security import redact_sensitive_text
 
 
 _PROMPT = """你是视频字幕逐字提取器。请完整观看这段视频，而不是按固定时间间隔抽图。
@@ -370,7 +371,8 @@ def _request_moxus_chunk(
             message = str((response.json().get("error") or {}).get("message") or "")
         except (ValueError, TypeError):
             pass
-        suffix = f"：{message[:160]}" if message else ""
+        safe_message = redact_sensitive_text(message, max_length=160)
+        suffix = f"：{safe_message}" if safe_message else ""
         return [], f"Moxus 请求失败（HTTP {response.status_code}）{suffix}"
     try:
         text = _gemini_message_text(response.json())

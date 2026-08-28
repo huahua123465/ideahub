@@ -55,14 +55,24 @@ IDEAHUB_DOC_URL = os.getenv(
 
 # -- Paths --
 ROOT_DIR = Path(__file__).parent
-DATA_DIR = ROOT_DIR / "data"
-OUTPUT_DIR = ROOT_DIR / "output"
+DATA_DIR = Path(os.getenv("COLLECTOR_STATE_DIR", str(ROOT_DIR / "data")))
+OUTPUT_DIR = Path(os.getenv("COLLECTOR_OUTPUT_DIR", str(ROOT_DIR / "output")))
 DB_PATH = DATA_DIR / "pipeline.db"
+
+# -- Internal service boundary and bounded VPS runtime --
+COLLECTOR_INTERNAL_TOKEN = os.getenv("COLLECTOR_INTERNAL_TOKEN", "").strip()
+COLLECTOR_MAX_CONCURRENT = max(1, int(os.getenv("COLLECTOR_MAX_CONCURRENT", "1")))
+COLLECTOR_MAX_QUEUE = max(0, int(os.getenv("COLLECTOR_MAX_QUEUE", "10")))
+COLLECTOR_OCR_WORKERS = max(1, int(os.getenv("COLLECTOR_OCR_WORKERS", "1")))
+COLLECTOR_MAX_DOWNLOAD_MB = max(1, int(os.getenv("COLLECTOR_MAX_DOWNLOAD_MB", "500")))
+COLLECTOR_DOWNLOAD_TIMEOUT_SEC = max(30, int(os.getenv("COLLECTOR_DOWNLOAD_TIMEOUT_SEC", "600")))
+COLLECTOR_PROCESS_TIMEOUT_SEC = max(30, int(os.getenv("COLLECTOR_PROCESS_TIMEOUT_SEC", "600")))
+COLLECTOR_QR_TTL_SEC = min(300, max(30, int(os.getenv("COLLECTOR_QR_TTL_SEC", "180"))))
 
 # -- Video processing --
 FRAME_INTERVAL = int(os.getenv("FRAME_INTERVAL", "5"))
 MAX_FRAMES = int(os.getenv("MAX_FRAMES", "20"))
-MAX_VIDEO_DURATION = int(os.getenv("MAX_VIDEO_DURATION", "600"))
+MAX_VIDEO_DURATION = int(os.getenv("COLLECTOR_MAX_VIDEO_SECONDS", os.getenv("MAX_VIDEO_DURATION", "600")))
 
 # -- Bounded hot-comment extraction --
 COMMENT_LIKE_THRESHOLD = int(os.getenv("COMMENT_LIKE_THRESHOLD", "20"))

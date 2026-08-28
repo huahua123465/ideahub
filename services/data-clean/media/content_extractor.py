@@ -4,8 +4,12 @@ import difflib
 import json
 import re
 from urllib.parse import urljoin
-import httpx
 from playwright.async_api import async_playwright
+from security import (
+    fetch_safe_text,
+    install_playwright_request_guard,
+    redact_url,
+)
 
 from .profile_extractor import extract_account_from_html
 
@@ -17,22 +21,23 @@ BROWSER_HEADERS = {
 
 
 async def extract_page(url: str) -> dict | None:
-    print(f"  [extract] {url[:80]}")
+    print(f"  [extract] {redact_url(url)[:120]}")
 
     # ---- Try httpx ----
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True,
-                                      headers=BROWSER_HEADERS, http2=True) as client:
-            resp = await client.get(url)
-            html = resp.text
+        html, _headers, final_url = await fetch_safe_text(
+            url,
+            timeout=20,
+            headers=BROWSER_HEADERS,
+        )
         if html and len(html) > 500:
-            result = _parse_html(html, str(resp.url))
+            result = _parse_html(html, final_url)
             if result:
                 print(f"  [httpx] OK: {len(result['text'])} chars")
                 return result
         print(f"  [httpx] Got {len(html)} chars, need browser")
     except Exception as e:
-        print(f"  [httpx] Failed: {e}")
+        print(f"  [httpx] Failed safely ({e.__class__.__name__})")
 
     # ---- Playwright: wait for anti-bot redirect ----
     print(f"  [pw] Launching browser...")
@@ -43,8 +48,10 @@ async def extract_page(url: str) -> dict | None:
                 viewport={"width": 1280, "height": 800},
                 locale="zh-CN",
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                service_workers="block",
             )
             page = await context.new_page()
+            await install_playwright_request_guard(page)
             # Block heavy resources
             await page.route("**/*.{png,jpg,jpeg,gif,svg,mp4,webm,mp3,woff2,css,ttf,woff}", lambda r: r.abort())
 
@@ -57,7 +64,7 @@ async def extract_page(url: str) -> dict | None:
                 await page.wait_for_timeout(2000)
                 title = (await page.title()) or ""
                 url_now = page.url
-                print(f"  [pw] Attempt {attempt+1}: title='{title[:60]}' url='{url_now[:80]}'")
+                print(f"  [pw] Attempt {attempt+1}: title='{title[:60]}' url='{redact_url(url_now)[:120]}'")
 
                 # Check if we got past the anti-bot wall
                 if "Visitor" not in title and "验证" not in title:
@@ -81,7 +88,7 @@ async def extract_page(url: str) -> dict | None:
             print(f"  [pw] Parse failed")
 
     except Exception as e:
-        print(f"  [pw] Error: {e}")
+        print(f"  [pw] Error ({e.__class__.__name__})")
 
     return None
 

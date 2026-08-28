@@ -1,5 +1,6 @@
 # 生产部署：docker compose up -d --build
-# 内存按你那台 VPS（约 4G，还跑着别的服务）配的，三个容器加起来 ≈ 900M。
+# 内存按约 4G VPS 配置。Collector 是按需使用的重任务，单独限制在 1.5G 内，
+# 即使 Chromium/OCR 异常也不能把数据库和主站一起拖垮。
 
 name: ideahub
 
@@ -48,6 +49,9 @@ services:
       SESSION_DAYS: ${SESSION_DAYS:-30}
       INVITE_CODE: ${INVITE_CODE:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-}
+      # Collector 仅走 Docker 内部网络；令牌只在服务端注入，永远不进入前端。
+      COLLECTOR_URL: http://collector:5000
+      COLLECTOR_INTERNAL_TOKEN: ${COLLECTOR_INTERNAL_TOKEN:-}
     volumes:
       # 附件必须落在挂载卷上。存容器里的话 docker compose up --build 一重建就没了，
       # 而重建是这个项目改前端的日常操作。
@@ -58,6 +62,72 @@ services:
     deploy:
       resources:
         limits: { memory: 320M }
+
+  collector:
+    build: ./services/data-clean
+    restart: unless-stopped
+    init: true
+    # 仅向 Compose 内部网络声明端口，严禁增加 ports 映射到宿主机或公网。
+    expose: ["5000"]
+    environment:
+      COLLECTOR_INTERNAL_TOKEN: ${COLLECTOR_INTERNAL_TOKEN:-}
+      COLLECTOR_STATE_DIR: /var/lib/collector/state
+      COLLECTOR_OUTPUT_DIR: /var/lib/collector/output
+      # 4GB VPS 的保守上限：昂贵流水线、OCR 和数值库线程全部单并发。
+      COLLECTOR_MAX_CONCURRENT: "1"
+      COLLECTOR_MAX_QUEUE: ${COLLECTOR_MAX_QUEUE:-10}
+      COLLECTOR_OCR_WORKERS: "1"
+      COLLECTOR_WEB_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      ORT_NUM_THREADS: "1"
+      COLLECTOR_MAX_VIDEO_SECONDS: ${COLLECTOR_MAX_VIDEO_SECONDS:-600}
+      COLLECTOR_MAX_DOWNLOAD_MB: ${COLLECTOR_MAX_DOWNLOAD_MB:-500}
+      COLLECTOR_DOWNLOAD_TIMEOUT_SEC: ${COLLECTOR_DOWNLOAD_TIMEOUT_SEC:-600}
+      COLLECTOR_PROCESS_TIMEOUT_SEC: ${COLLECTOR_PROCESS_TIMEOUT_SEC:-600}
+      COLLECTOR_QR_TTL_SEC: ${COLLECTOR_QR_TTL_SEC:-180}
+      COLLECTOR_HTTP_TIMEOUT_SEC: ${COLLECTOR_HTTP_TIMEOUT_SEC:-120}
+      VIDEO_MODEL_PROVIDER: ${VIDEO_MODEL_PROVIDER:-moxus}
+      MOXUS_API_KEY: ${MOXUS_API_KEY:-}
+      MOXUS_BASE_URL: ${MOXUS_BASE_URL:-https://moxus.ai}
+      MOXUS_VIDEO_MODEL: ${MOXUS_VIDEO_MODEL:-gemini-3.6-flash}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_VIDEO_MODEL: ${OPENROUTER_VIDEO_MODEL:-stealth/ox-alpha}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      OPENAI_WHISPER_KEY: ${OPENAI_WHISPER_KEY:-}
+      OPENAI_WHISPER_URL: ${OPENAI_WHISPER_URL:-https://api.openai.com/v1}
+      MODEL_WHISPER: ${MODEL_WHISPER:-whisper-1}
+      # Collector 推送结果时走同一个内部 api 容器，不再跨公网绕一圈。
+      IDEAHUB_API_KEY: ${IDEAHUB_API_KEY:-}
+      IDEAHUB_INGEST_URL: http://api:3000/api/ingest/analysis
+    volumes:
+      # 真实 SQLite、Cookie、二维码状态和媒体必须留在仓库外，避免被 Git 备份提交。
+      - ${COLLECTOR_STATE_PATH:-/opt/ideahub-collector/state}:/var/lib/collector/state
+      - ${COLLECTOR_OUTPUT_PATH:-/opt/ideahub-collector/output}:/var/lib/collector/output
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    shm_size: 256m
+    mem_limit: 1536m
+    cpus: 1.5
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.5"
+          pids: 256
 
   caddy:
     image: caddy:2-alpine

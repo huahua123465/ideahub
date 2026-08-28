@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import app as app_module
+app_module.app.config.update(TESTING=True, COLLECTOR_AUTH_BYPASS_TESTS=True)
 
 from media.comment_extractor import (
     BrowserCommentCollector,

@@ -1,15 +1,21 @@
 """yt-dlp video downloader + metadata extraction"""
 import subprocess
 import json
+import math
 import os
 import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import httpx
+from config import (
+    DATA_DIR,
+    COLLECTOR_DOWNLOAD_TIMEOUT_SEC,
+    COLLECTOR_MAX_DOWNLOAD_MB,
+    MAX_VIDEO_DURATION,
+)
+from security import UnsafeUrl, fetch_safe_bytes, safe_egress_proxy, validate_public_url
 
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 COOKIE_FILES = {
     "douyin.com": DATA_DIR / "douyin.cookies.txt",
     "xiaohongshu.com": DATA_DIR / "xiaohongshu.cookies.txt",
@@ -17,6 +23,26 @@ COOKIE_FILES = {
 }
 METADATA_PROBE_ATTEMPTS = 3
 METADATA_RETRY_BASE_SECONDS = 0.75
+
+
+def _probe_downloaded_duration(video_path: str) -> float:
+    """Return a finite positive duration from the bytes that were downloaded."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        duration = float(result.stdout.strip()) if result.returncode == 0 else 0.0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        duration = 0.0
+    if not math.isfinite(duration) or duration <= 0:
+        raise ValueError("下载后无法验证视频时长")
+    return duration
 
 
 def _cookie_args(url: str) -> list[str]:
@@ -38,14 +64,18 @@ def url_declares_video(url: str) -> bool:
 
 
 def download_video(url: str, output_dir: str, metadata: dict | None = None) -> dict | None:
+    validate_public_url(url)
     os.makedirs(output_dir, exist_ok=True)
     output_template = os.path.join(output_dir, "%(title).80s_%(id)s.%(ext)s")
 
     meta = metadata if metadata is not None else extract_video_metadata(url)
     meta = meta or {}
+    if float(meta.get("duration") or 0) > MAX_VIDEO_DURATION:
+        raise ValueError(f"视频时长超过 {MAX_VIDEO_DURATION} 秒限制")
+    if int(meta.get("filesize") or 0) > COLLECTOR_MAX_DOWNLOAD_MB * 1024 * 1024:
+        raise ValueError(f"媒体文件超过 {COLLECTOR_MAX_DOWNLOAD_MB}MB 限制")
 
-    title = meta.get("title", url)[:60]
-    print(f"  downloading: {title}...")
+    print("  downloading validated platform video...")
 
     cmd = [
         "yt-dlp", "--no-playlist",
@@ -54,18 +84,23 @@ def download_video(url: str, output_dir: str, metadata: dict | None = None) -> d
         # rendition. A native 720px portrait stream keeps text clear while
         # reducing CDN stalls and temporary processing time substantially.
         "--format", "best[width<=720][height<=1280]/best[width<=1080][height<=1920]/best",
-        "--downloader", "curl",
         "--socket-timeout", "20",
         "--retries", "3",
+        "--max-filesize", f"{COLLECTOR_MAX_DOWNLOAD_MB}M",
         "--merge-output-format", "mp4",
         "--output", output_template,
         "--quiet", "--no-warnings",
         url
     ]
     try:
-        subprocess.run(cmd, check=True, timeout=600)
+        with safe_egress_proxy() as proxy_url:
+            subprocess.run(
+                [*cmd[:-1], "--proxy", proxy_url, cmd[-1]],
+                check=True,
+                timeout=COLLECTOR_DOWNLOAD_TIMEOUT_SEC,
+            )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        print(f"  download failed: {e}")
+        print(f"  download failed ({e.__class__.__name__})")
         return None
 
     video_files = sorted(Path(output_dir).glob("*.mp4"), key=os.path.getmtime, reverse=True)
@@ -74,12 +109,23 @@ def download_video(url: str, output_dir: str, metadata: dict | None = None) -> d
         return None
 
     video_path = str(video_files[0])
-    print(f"  saved: {os.path.basename(video_path)}")
+    if Path(video_path).stat().st_size > COLLECTOR_MAX_DOWNLOAD_MB * 1024 * 1024:
+        Path(video_path).unlink(missing_ok=True)
+        raise ValueError(f"媒体文件超过 {COLLECTOR_MAX_DOWNLOAD_MB}MB 限制")
+    try:
+        verified_duration = _probe_downloaded_duration(video_path)
+    except ValueError:
+        Path(video_path).unlink(missing_ok=True)
+        raise
+    if verified_duration > MAX_VIDEO_DURATION:
+        Path(video_path).unlink(missing_ok=True)
+        raise ValueError(f"视频时长超过 {MAX_VIDEO_DURATION} 秒限制")
+    print("  video saved and verified")
     return {
         "video_path": video_path,
         "title": meta.get("title", ""),
         "description": meta.get("description", ""),
-        "duration": meta.get("duration", 0),
+        "duration": verified_duration,
         "width": meta.get("width", 0),
         "height": meta.get("height", 0),
         "format": meta.get("format", ""),
@@ -124,11 +170,18 @@ def extract_video_metadata(
     url: str, attempts: int = METADATA_PROBE_ATTEMPTS
 ) -> dict | None:
     """Read platform metadata with bounded retries for transient extractor failures."""
+    validate_public_url(url)
     cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", *_cookie_args(url), url]
     attempts = max(1, int(attempts))
     for attempt in range(attempts):
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            with safe_egress_proxy() as proxy_url:
+                result = subprocess.run(
+                    [*cmd[:-1], "--proxy", proxy_url, cmd[-1]],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
             if result.returncode == 0 and result.stdout.strip():
                 data = json.loads(result.stdout)
                 if isinstance(data, dict):
@@ -145,6 +198,10 @@ def download_video_cover(url: str, output_dir: str, referer: str = "") -> str | 
     """Download a platform-provided video cover for temporary OCR processing."""
     if not url:
         return None
+    try:
+        validate_public_url(url, media=True)
+    except UnsafeUrl:
+        return None
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     headers = {
@@ -155,16 +212,20 @@ def download_video_cover(url: str, output_dir: str, referer: str = "") -> str | 
         **({"Referer": referer} if referer else {}),
     }
     try:
-        response = httpx.get(url, headers=headers, follow_redirects=True, timeout=20)
-        content_type = response.headers.get("content-type", "").casefold()
-        if response.status_code != 200 or not content_type.startswith("image/") or len(response.content) < 1024:
+        content, response_headers, _ = fetch_safe_bytes(
+            url,
+            max_bytes=min(COLLECTOR_MAX_DOWNLOAD_MB, 25) * 1024 * 1024,
+            headers=headers,
+        )
+        content_type = response_headers.get("content-type", "").casefold()
+        if not content_type.startswith("image/") or len(content) < 1024:
             return None
         suffix = ".png" if "png" in content_type else ".webp" if "webp" in content_type else ".jpg"
         cover_path = output_path / f"video_cover{suffix}"
-        cover_path.write_bytes(response.content)
+        cover_path.write_bytes(content)
         return str(cover_path)
-    except Exception as exc:
-        print(f"  video cover download failed: {exc}")
+    except (httpx.HTTPError, UnsafeUrl, OSError, ValueError) as exc:
+        print(f"  video cover download failed safely ({exc.__class__.__name__})")
         return None
 
 

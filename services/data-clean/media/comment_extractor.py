@@ -15,8 +15,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from playwright.async_api import Page, Response, async_playwright
+from security import install_playwright_request_guard, public_error_message
 
 from config import (
+    DATA_DIR,
     COMMENT_LIKE_THRESHOLD,
     COMMENT_MIN_CONFIDENCE_SCANNED,
     COMMENT_MAX_PRIMARY_PAGES,
@@ -29,7 +31,6 @@ from config import (
 )
 
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 COOKIE_FILES = {
     "douyin": DATA_DIR / "douyin.cookies.txt",
     "xiaohongshu": DATA_DIR / "xiaohongshu.cookies.txt",
@@ -414,6 +415,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
                 "locale": "zh-CN",
                 "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"),
+                "service_workers": "block",
             }
             storage_state_path = STORAGE_STATE_FILES.get(platform)
             if storage_state_path and storage_state_path.exists():
@@ -423,6 +425,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
             if cookies and not context_options.get("storage_state"):
                 await context.add_cookies(cookies)
             page = await context.new_page()
+            await install_playwright_request_guard(page)
             page.on("response", observer.observe)
             await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
             # Let the SPA restore the authenticated session and mount its
@@ -541,6 +544,8 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
                 "confidence": _estimate_top5_confidence(pool, observer, 0),
                 "confidence_target": COMMENT_TARGET_CONFIDENCE,
                 "confidence_reached": False,
-                "message": str(exc)[:180],
+                "message": public_error_message(
+                    exc, fallback="评论采集暂时不可用，请稍后重试"
+                ),
             },
         }

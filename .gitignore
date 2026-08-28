@@ -30,3 +30,6 @@ data/caddy/
 *.log
 scripts/.uidiff/
 scripts/推送失败待补.jsonl
+
+# 长任务构建契约与评审运行记录（只用于本地协作，不进入产品仓库）
+.agents/runtime/harness/

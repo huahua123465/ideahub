@@ -1,5 +1,6 @@
 """Flask Web UI: extract text and metadata from social-media posts."""
 import base64
+import hashlib
 import json
 import re
 import shutil
@@ -7,6 +8,7 @@ import threading
 import asyncio
 import httpx
 import uuid
+import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -18,18 +20,31 @@ from config import (
     IDEAHUB_API_KEY,
     IDEAHUB_INGEST_URL,
     IDEAHUB_DOC_URL,
+    COLLECTOR_INTERNAL_TOKEN,
+    COLLECTOR_MAX_CONCURRENT,
+    COLLECTOR_MAX_QUEUE,
+    COLLECTOR_QR_TTL_SEC,
 )
 from db import TaskDB
+from security import (
+    UnsafeUrl,
+    public_error_message,
+    redact_sensitive_text,
+    valid_internal_token,
+    validate_public_url,
+)
 from utils import (url_to_id, detect_platform, resolve_share_url,
                    canonical_content_key)
 from media import (download_video, extract_video_text,
                    download_post_images, extract_images_text, extract_hot_comments,
                    extract_video_metadata, has_saved_xhs_login, invalidate_xhs_login,
                    login_xiaohongshu, read_xhs_login_profile,
+                   persist_xhs_login_session,
                    sync_saved_xhs_account, friendly_xhs_login_error,
                    extract_cover_title_from_path,
                    download_video_cover, reconcile_cover_title,
                    transcribe_video_with_model, url_declares_video)
+from media import XHS_QR_FILE
 from media.content_extractor import (extract_page, clean_post_title,
                                      strip_topics_from_description)
 from media.profile_extractor import (
@@ -45,12 +60,75 @@ from generators.business_analyzer import (
 
 app = Flask(__name__)
 db = TaskDB()
+db.recover_interrupted_tasks()
 _running = {}
 _task_state_lock = threading.Lock()
 _content_write_lock = threading.Lock()
-MAX_CONCURRENT_TASKS = 3
+MAX_CONCURRENT_TASKS = COLLECTOR_MAX_CONCURRENT
 _pipeline_slots = threading.BoundedSemaphore(MAX_CONCURRENT_TASKS)
-_login_state = {"status": "saved" if has_saved_xhs_login() else "idle", "message": ""}
+_login_state_lock = threading.RLock()
+_login_generation = 0
+_login_state = {
+    "status": "saved" if has_saved_xhs_login() else "idle",
+    "message": "",
+    "qr_available": False,
+}
+XHS_QR_FILE.unlink(missing_ok=True)
+
+
+def _login_generation_is_current(generation: int) -> bool:
+    with _login_state_lock:
+        return generation == _login_generation
+
+
+def _update_login_generation(generation: int, status: str, message: str, **state) -> bool:
+    with _login_state_lock:
+        if generation != _login_generation:
+            return False
+        _login_state.update(
+            status=status,
+            message=redact_sensitive_text(message),
+            qr_available=bool(state.get("qr_available")),
+            expires_at=state.get("expires_at"),
+        )
+        return True
+
+
+def _publish_login_qr(generation: int, temp_path: Path) -> bool:
+    with _login_state_lock:
+        if generation != _login_generation:
+            return False
+        temp_path.replace(XHS_QR_FILE)
+        return True
+
+
+def _commit_login_session(
+    generation: int, cookies: list[dict], storage_state: dict, profile: dict
+) -> bool:
+    with _login_state_lock:
+        if generation != _login_generation:
+            return False
+        persist_xhs_login_session(cookies, storage_state, profile)
+        return True
+
+
+def _cleanup_login_qr(generation: int) -> None:
+    with _login_state_lock:
+        if generation == _login_generation:
+            XHS_QR_FILE.unlink(missing_ok=True)
+
+
+def _cancel_login_attempt(status: str, message: str) -> None:
+    global _login_generation
+    with _login_state_lock:
+        _login_generation += 1
+        XHS_QR_FILE.unlink(missing_ok=True)
+        _login_state.update(
+            status=status,
+            message=redact_sensitive_text(message),
+            qr_available=False,
+            expires_at=None,
+        )
 
 IDEAHUB_CHANNELS = {
     "persona": "真人作品 → 对标账号",
@@ -72,6 +150,41 @@ AI_VIDEO_EDIT_KEYS = (
 AI_COMMENT_EDIT_KEYS = (
     "main_questions", "high_frequency_needs", "worries", "unclear_points",
 )
+
+
+@app.before_request
+def _require_internal_token():
+    """Refuse every route except health unless IdeaHub proves its identity."""
+    if request.path == "/health":
+        return None
+    if app.config.get("TESTING") and app.config.get("COLLECTOR_AUTH_BYPASS_TESTS", True):
+        return None
+    supplied = request.headers.get("X-Collector-Token", "")
+    if len((COLLECTOR_INTERNAL_TOKEN or "").encode("utf-8")) < 32:
+        return jsonify({"error": "Collector 内部令牌未配置"}), 503
+    if not valid_internal_token(COLLECTOR_INTERNAL_TOKEN, supplied):
+        return jsonify({"error": "未授权访问"}), 401
+    return None
+
+
+@app.after_request
+def _secure_sensitive_responses(response):
+    if request.path.startswith("/api/login/xiaohongshu"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.route("/health")
+def health():
+    configured = len((COLLECTOR_INTERNAL_TOKEN or "").encode("utf-8")) >= 32
+    return jsonify({
+        "ok": configured,
+        "status": "ok" if configured else "misconfigured",
+        "max_concurrent": MAX_CONCURRENT_TASKS,
+        "max_queue": COLLECTOR_MAX_QUEUE,
+    }), 200 if configured else 503
 
 
 def _account_collection_status(account):
@@ -125,12 +238,18 @@ def _post_ideahub_analysis(payload, channel):
     return body
 
 
-def _find_equivalent_task(url):
+def _owner_task_id(url, owner_id):
+    identity = f"{canonical_content_key(url)}\0{owner_id}".encode("utf-8")
+    return hashlib.sha256(identity).hexdigest()[:12]
+
+
+def _find_equivalent_task(url, owner_id):
     content_key = canonical_content_key(url)
     if not content_key:
         return None
     for task in db.list_tasks(200):
-        if canonical_content_key(task.get("url") or "") == content_key:
+        if (str(task.get("owner_id") or "") == str(owner_id)
+                and canonical_content_key(task.get("url") or "") == content_key):
             return task
     return None
 
@@ -749,7 +868,7 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
         fresh_comments = comment_result.get("comments") or []
         if platform == "xiaohongshu" and fresh_summary.get("status") == "login_required":
             invalidate_xhs_login()
-            _login_state.update(status="idle", message="登录态已失效，请重新扫码")
+            _cancel_login_attempt("idle", "登录态已失效，请重新扫码")
         comment_result = _preserve_last_good_comments(comment_result, last_good)
         if fresh_comments and fresh_summary.get("status") in {"ok", "partial"}:
             _atomic_write_text(
@@ -860,9 +979,12 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
         }
 
     except Exception as e:
-        app.logger.exception("Pipeline failed for task %s", vid)
+        safe_message = public_error_message(e, fallback="内容采集失败，请稍后重试")
+        app.logger.error(
+            "Pipeline failed for task %s (%s)", vid, e.__class__.__name__
+        )
         _running[vid] = {
-            "status": "failed", "progress": 0, "message": str(e),
+            "status": "failed", "progress": 0, "message": safe_message,
             "collection_mode": collection_mode,
             "manual_refresh": manual_refresh,
         }
@@ -871,7 +993,7 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
                 shutil.rmtree(final_task_dir, ignore_errors=True)
                 refresh_backup_dir.replace(final_task_dir)
         else:
-            db.update_status(vid, "failed", error_msg=str(e))
+            db.update_status(vid, "failed", error_msg=safe_message)
     finally:
         if working_dir.is_dir() and working_dir.resolve().parent == task_dir.resolve():
             shutil.rmtree(working_dir, ignore_errors=True)
@@ -880,7 +1002,7 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
 
 
 def _run_pipeline_in_slot(vid: str, url: str, manual_refresh: bool = False):
-    """Run one collection pipeline while limiting expensive work to three jobs."""
+    """Run one collection pipeline within the configured single-VPS bound."""
     with _pipeline_slots:
         _run_pipeline(vid, url, manual_refresh=manual_refresh)
 
@@ -890,34 +1012,72 @@ def index():
     return render_template("index.html")
 
 
-def _run_xhs_login(force_fresh=False):
-    def update(status, message):
-        _login_state.update(status=status, message=message)
+def _run_xhs_login(generation: int, force_fresh=False):
+    def update(status, message, **public_state):
+        return _update_login_generation(
+            generation, status, message, **public_state
+        )
 
     try:
-        asyncio.run(login_xiaohongshu(update, force_fresh=force_fresh))
+        asyncio.run(login_xiaohongshu(
+            update,
+            force_fresh=force_fresh,
+            is_current=lambda: _login_generation_is_current(generation),
+            publish_qr=lambda temp_path: _publish_login_qr(generation, temp_path),
+            commit_session=lambda cookies, state, profile: _commit_login_session(
+                generation, cookies, state, profile
+            ),
+            cleanup_qr=lambda: _cleanup_login_qr(generation),
+            qr_file=XHS_QR_FILE,
+        ))
     except Exception as exc:
         saved = has_saved_xhs_login()
         update("saved" if saved else "failed", friendly_xhs_login_error(exc, saved=saved))
 
 
 def _xhs_login_payload():
-    state = dict(_login_state)
-    state["saved"] = has_saved_xhs_login()
-    state["account"] = read_xhs_login_profile()
-    return state
+    with _login_state_lock:
+        state = {
+            key: _login_state.get(key)
+            for key in ("status", "message", "qr_available", "expires_at")
+        }
+        state["saved"] = has_saved_xhs_login()
+        state["account"] = read_xhs_login_profile()
+        return state
 
 
 @app.route("/api/login/xiaohongshu", methods=["POST"])
 def api_login_xiaohongshu():
-    if _login_state.get("status") in {"opening", "waiting_scan"}:
-        return jsonify(_login_state), 409
+    global _login_generation
     body = request.get_json(silent=True) or {}
     force_fresh = body.get("force_fresh") is True or body.get("mode") == "switch"
     message = "正在打开小红书账号切换窗口…" if force_fresh else "正在打开小红书登录窗口…"
-    _login_state.update(status="opening", message=message)
-    threading.Thread(target=_run_xhs_login, args=(force_fresh,), daemon=True).start()
-    return jsonify(_login_state)
+    with _login_state_lock:
+        if _login_state.get("status") in {"opening", "waiting_scan", "syncing"}:
+            payload = {
+                key: _login_state.get(key)
+                for key in ("status", "message", "qr_available", "expires_at")
+            }
+            return jsonify(payload), 409
+        if any(
+            state.get("status") in {"pending", "running"}
+            for state in _running.values()
+        ):
+            return jsonify({"error": "有采集任务正在使用平台登录态，请完成后再切换账号"}), 409
+        _login_generation += 1
+        generation = _login_generation
+        XHS_QR_FILE.unlink(missing_ok=True)
+        _login_state.update(
+            status="opening", message=message, qr_available=False, expires_at=None
+        )
+        payload = {
+            key: _login_state.get(key)
+            for key in ("status", "message", "qr_available", "expires_at")
+        }
+    threading.Thread(
+        target=_run_xhs_login, args=(generation, force_fresh), daemon=True
+    ).start()
+    return jsonify(payload)
 
 
 @app.route("/api/login/xiaohongshu/status")
@@ -925,24 +1085,48 @@ def api_login_xiaohongshu_status():
     return jsonify(_xhs_login_payload())
 
 
+@app.route("/api/login/xiaohongshu/qr")
+def api_login_xiaohongshu_qr():
+    with _login_state_lock:
+        expires_at = int(_login_state.get("expires_at") or 0)
+    if expires_at and time.time() >= expires_at:
+        _cancel_login_attempt("expired", "二维码已过期，请重新发起登录")
+        return jsonify({"error": "二维码已过期"}), 410
+    with _login_state_lock:
+        if not _login_state.get("qr_available") or not XHS_QR_FILE.is_file():
+            return jsonify({"error": "二维码尚未生成"}), 404
+        qr_bytes = XHS_QR_FILE.read_bytes()
+    return send_file(
+        BytesIO(qr_bytes), mimetype="image/png", conditional=False, max_age=0
+    )
+
+
 @app.route("/api/login/xiaohongshu/account", methods=["POST"])
 def api_login_xiaohongshu_account():
-    if _login_state.get("status") in {"opening", "waiting_scan"}:
-        return jsonify(_xhs_login_payload()), 409
-    if not has_saved_xhs_login():
-        _login_state.update(status="idle", message="请先登录小红书账号")
-        return jsonify(_xhs_login_payload()), 409
-    _login_state.update(status="syncing", message="正在读取当前登录账号…")
+    with _login_state_lock:
+        if _login_state.get("status") in {"opening", "waiting_scan", "syncing"}:
+            return jsonify(_xhs_login_payload()), 409
+        if any(
+            state.get("status") in {"pending", "running"}
+            for state in _running.values()
+        ):
+            return jsonify({"error": "有采集任务正在使用平台登录态，请完成后再同步账号"}), 409
+        if not has_saved_xhs_login():
+            _login_state.update(status="idle", message="请先登录小红书账号")
+            return jsonify(_xhs_login_payload()), 409
+        _login_state.update(status="syncing", message="正在读取当前登录账号…")
     try:
         account = asyncio.run(sync_saved_xhs_account())
     except Exception as exc:
         saved = has_saved_xhs_login()
-        _login_state.update(
-            status="saved" if saved else "failed",
-            message=friendly_xhs_login_error(exc, saved=saved),
-        )
+        with _login_state_lock:
+            _login_state.update(
+                status="saved" if saved else "failed",
+                message=friendly_xhs_login_error(exc, saved=saved),
+            )
         return jsonify(_xhs_login_payload()), 422
-    _login_state.update(status="saved", message="当前登录账号已同步")
+    with _login_state_lock:
+        _login_state.update(status="saved", message="当前登录账号已同步")
     payload = _xhs_login_payload()
     payload["account"] = account
     return jsonify(payload)
@@ -954,10 +1138,17 @@ def api_convert():
     url = resolve_share_url(data.get("url", ""))
     if not url:
         return jsonify({"error": "URL required"}), 400
+    try:
+        url = validate_public_url(url)
+    except UnsafeUrl as exc:
+        return jsonify({"error": str(exc)}), 400
     collection_mode = COLLECTION_MODE
+    owner_id = str(request.headers.get("X-IdeaHub-User-Id") or "").strip()[:128]
+    if not owner_id:
+        return jsonify({"error": "缺少任务创建者身份"}), 400
 
-    equivalent_task = _find_equivalent_task(url)
-    vid = equivalent_task["id"] if equivalent_task else url_to_id(url)
+    equivalent_task = _find_equivalent_task(url, owner_id)
+    vid = equivalent_task["id"] if equivalent_task else _owner_task_id(url, owner_id)
     existing = db.get_task(vid)
     content_path = OUTPUT_DIR / vid / "content.json"
     if existing and existing["status"] == "done" and content_path.exists():
@@ -982,6 +1173,7 @@ def api_convert():
             return jsonify({
                 "task_id": vid, "status": "done", "cached": True,
                 "collection_mode": cached_mode,
+                "owner_id": existing.get("owner_id") or owner_id,
             })
 
     # Reserve the task before starting its worker. Without this guard, login
@@ -995,12 +1187,19 @@ def api_convert():
                 "task_id": vid, "status": active.get("status"), "coalesced": True,
                 "collection_mode": active_mode,
                 "max_concurrent": MAX_CONCURRENT_TASKS,
+                "owner_id": existing.get("owner_id") if existing else owner_id,
             })
+        active_count = sum(
+            1 for state in _running.values()
+            if state.get("status") in {"pending", "running"}
+        )
+        if active_count >= MAX_CONCURRENT_TASKS + COLLECTOR_MAX_QUEUE:
+            return jsonify({"error": "采集队列已满，请稍后重试"}), 429
         _running[vid] = {
             "status": "pending", "progress": 0, "message": "等待并发槽位...",
             "collection_mode": collection_mode,
         }
-        db.create_task(vid, url, detect_platform(url))
+        db.create_task(vid, url, detect_platform(url), owner_id=owner_id)
         threading.Thread(
             target=_run_pipeline_in_slot, args=(vid, url), daemon=True
         ).start()
@@ -1009,17 +1208,18 @@ def api_convert():
         "status": "pending",
         "collection_mode": collection_mode,
         "max_concurrent": MAX_CONCURRENT_TASKS,
+        "owner_id": owner_id,
     })
 
 
 @app.route("/api/status/<vid>")
 def api_status(vid):
-    if vid in _running:
-        return jsonify(_running[vid])
     t = db.get_task(vid)
+    if vid in _running:
+        return jsonify({**_running[vid], "owner_id": (t or {}).get("owner_id") or ""})
     if t:
         pct = 100 if t["status"] == "done" else 0
-        return jsonify({"status": t["status"], "progress": pct, "message": t.get("error_msg", "")})
+        return jsonify({"status": t["status"], "progress": pct, "message": t.get("error_msg", ""), "owner_id": t.get("owner_id") or ""})
     return jsonify({"status": "unknown"})
 
 
@@ -1043,8 +1243,8 @@ def api_refresh_task(vid):
             1 for state in _running.values()
             if state.get("status") in {"pending", "running"}
         )
-        if active_count >= MAX_CONCURRENT_TASKS:
-            return jsonify({"error": "当前 3 个并发槽位已满，请稍后再更新"}), 429
+        if active_count >= MAX_CONCURRENT_TASKS + COLLECTOR_MAX_QUEUE:
+            return jsonify({"error": "采集队列已满，请稍后再更新"}), 429
         _running[vid] = {
             "status": "pending",
             "progress": 0,
@@ -1297,6 +1497,7 @@ def api_result(vid):
         "local_access": _is_local_request(),
     }
     content["data_updated_at"] = content.get("collected_at") or task.get("updated_at") or ""
+    content["owner_id"] = task.get("owner_id") or ""
     return jsonify(content)
 
 
@@ -1609,8 +1810,10 @@ def api_delete_task(vid):
         item = _delete_tasks_atomically([vid])[0]
     except TaskDeleteError as exc:
         return jsonify({"error": str(exc)}), exc.status_code
-    except Exception:
-        app.logger.exception("Task deletion failed for %s", vid)
+    except Exception as exc:
+        app.logger.error(
+            "Task deletion failed for %s (%s)", vid, exc.__class__.__name__
+        )
         return jsonify({"error": "删除失败，原历史结果已保留"}), 500
     return jsonify({"deleted": True, **item})
 
@@ -1630,8 +1833,8 @@ def api_batch_delete_tasks():
         items = _delete_tasks_atomically(task_ids)
     except TaskDeleteError as exc:
         return jsonify({"error": str(exc)}), exc.status_code
-    except Exception:
-        app.logger.exception("Batch task deletion failed")
+    except Exception as exc:
+        app.logger.error("Batch task deletion failed (%s)", exc.__class__.__name__)
         return jsonify({"error": "批量删除失败，原历史结果已保留"}), 500
     return jsonify({"deleted": True, "deleted_count": len(items), "items": items})
 

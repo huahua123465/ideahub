@@ -6,6 +6,7 @@ from pathlib import Path
 
 import cv2
 from rapidocr_onnxruntime import RapidOCR
+from config import COLLECTOR_OCR_WORKERS
 
 
 def extract_burned_subtitles(video_path: str, interval: float = 4.0) -> str:
@@ -31,8 +32,11 @@ def extract_burned_subtitles(video_path: str, interval: float = 4.0) -> str:
     finally:
         cap.release()
 
-    chunks = [samples[index::4] for index in range(4)]
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    if not samples:
+        return ""
+    worker_count = min(COLLECTOR_OCR_WORKERS, len(samples))
+    chunks = [samples[index::worker_count] for index in range(worker_count)]
+    with ThreadPoolExecutor(max_workers=worker_count) as pool:
         recognized = [item for batch in pool.map(_ocr_chunk, chunks) for item in batch]
 
     entries: list[tuple[float, str]] = []
