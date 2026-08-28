@@ -26,6 +26,7 @@ import * as tagfilter from './views/tagfilter.js';
 import * as importer from './views/importer.js';
 import * as dashboard from './views/dashboard.js';
 import * as learning from './views/learning.js';
+import * as collector from './views/collector.js';
 import { initMotion } from './motion.js';
 
 let view = 'home';
@@ -52,6 +53,7 @@ const CHROME = {
   tagadmin:     { group: '团队', title: '标签与对接' },
   funnel:       { group: '数据', title: '数据漏斗' },
   stats:        { group: '数据', title: '统计看板' },
+  collector:    { group: '数据', title: '内容采集' },
   learning:     { group: '学习中心', title: '站内学习' },
 };
 
@@ -122,6 +124,7 @@ async function boot() {
   chat.setMe(me);
   tagadmin.setMe(me);
   dashboard.setMe(me);
+  collector.setMe(me);
   const av = $('#meAvatar');
   av.textContent = initial(me.name);
   av.style.background = avatarColor(me.name);
@@ -221,10 +224,11 @@ function syncDrawerVote(d) {
 /** 所有一级视图。
     clientDetail 没有对应的导航按钮 —— 它是从客户档案点进去的二级页面，
     所以下面切视图时要单独处理它的 tab 高亮（客户档案那颗仍然亮着）。 */
-const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
+const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'collector', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
 
 function go(next) {
   if (next === view) return;
+  if (view === 'collector') collector.leave();
   view = next;
   for (const k of VIEWS) {
     $('#v-' + k).classList.toggle('on', k === next);
@@ -259,6 +263,7 @@ function go(next) {
   if (next === 'funnel') funnel.render();
   if (next === 'tagadmin') tagadmin.render();
   if (next === 'learning') learning.render();
+  if (next === 'collector') collector.render();
 }
 
 /**

@@ -7,7 +7,9 @@
 import { logApi, logSql, logQueue } from './apilog.js';
 
 const hoursAgo = h => new Date(Date.now() - h * 3600e3).toISOString();
-const ME = { id: 1, name: '陈屿', dept: '产品部', role: 'admin' };
+const mockRole = typeof location !== 'undefined'
+  ? new URLSearchParams(location.search).get('mockRole') : '';
+const ME = { id: 1, name: '陈屿', dept: '产品部', role: mockRole === 'member' ? 'member' : 'admin' };
 
 let seq = 100;
 let codeSeq = 38;
@@ -246,6 +248,74 @@ let REPORTS = [
     files:mockReportFiles() },
 ];
 
+/* 内容采集演示数据：状态会在当前页面生命周期内真实流转，刷新后还原。
+   不使用 localStorage，避免演示任务和真实用户数据混在一起。 */
+const collectorCover = (title, bg = '#eeeaf4', ink = '#68455f') => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960"><rect width="720" height="960" rx="38" fill="${bg}"/><circle cx="590" cy="150" r="110" fill="#fff" opacity=".52"/><text x="58" y="118" font-family="sans-serif" font-size="27" font-weight="700" fill="${ink}">内容样本</text><foreignObject x="58" y="250" width="604" height="430"><div xmlns="http://www.w3.org/1999/xhtml" style="font:700 58px/1.35 sans-serif;color:${ink};word-break:break-all">${title}</div></foreignObject><text x="58" y="890" font-family="sans-serif" font-size="23" fill="${ink}" opacity=".72">IdeaHub · 采集预览</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+
+const collectorAnalysis = () => ({
+  status:'ok', notice:'AI 结论仅作辅助整理，请结合原始内容与评论证据判断。',
+  video:{ status:'ok', items:{
+    main_topic:{ label:'这条主要讲什么', summary:'通过三个常见互动细节，判断一段关系是否仍在稳定推进。' },
+    target_audience:{ label:'适合谁看', summary:'处于暧昧或关系降温期，希望减少情绪猜测的人。' },
+    user_need:{ label:'解决什么需求', summary:'把模糊的不安还原为可观察、可验证的行动信号。' },
+    content_structure:{ label:'内容结构', summary:'痛点开场、三个信号、反例说明与两周观察建议。' },
+    solution:{ label:'给出的办法', summary:'降低追问频率，设定观察窗口，记录对方是否主动补位。' },
+  }},
+  comments:{ status:'ok', sample_size:36, items:{
+    main_questions:{ label:'大家主要在问什么', summary:'如何区分短期忙碌和长期回避，以及观察窗口应该多长。', evidence_comments:[{ id:'c-1', author:'小葵', like_count:86, text:'如果他最近工作真的很忙，也要按两周来观察吗？' }] },
+    high_frequency_needs:{ label:'高频真实需求', summary:'希望得到明确的判断标准和不伤自尊的行动步骤。', evidence_comments:[] },
+    worries:{ label:'最担心什么', summary:'担心减少主动后关系直接断掉，也担心继续投入是在自我消耗。', evidence_comments:[] },
+    unclear_points:{ label:'还没讲清楚什么', summary:'不同关系阶段的观察周期可以进一步拆开说明。', evidence_comments:[] },
+    key_comments:{ label:'哪些评论值得重点看', entries:[{ reason:'提出了反例边界，适合补进后续内容。', comment:{ id:'c-1', author:'小葵', like_count:86, text:'如果他最近工作真的很忙，也要按两周来观察吗？' } }] },
+    topic_extensions:{ label:'可以延伸什么选题', entries:[{ idea:'忙碌和回避的五个区别', evidence_comments:[] }] },
+  }},
+});
+
+let collectorLogin = {
+  status:'saved', message:'当前登录账号可用', qr_available:false, expires_at:null, saved:true,
+  account:{ nickname:'关系研究所', red_id:'ideahub-demo', user_id:'demo-xhs-01', avatar_url:'', description:'关系判断与行动建议' },
+};
+let collectorLoginPolls = 0;
+let collectorTaskSeq = 3;
+let COLLECTOR_TASKS = [
+  { id:'demo-done-1', url:'https://www.xiaohongshu.com/explore/demo1', source:'xiaohongshu',
+    title:'关系降温后，先看清这三个信号', account_name:'关系研究所', owner_id:'1', status:'done',
+    created_at:hoursAgo(2), updated_at:hoursAgo(1.8) },
+  { id:'demo-failed-2', url:'https://www.douyin.com/video/demo2', source:'douyin',
+    title:'采集失败的演示记录', account_name:'关系研究所', owner_id:'1', status:'failed',
+    error_msg:'原链接已失效或平台暂时限制访问，请检查链接后重试。', created_at:hoursAgo(9), updated_at:hoursAgo(8.8) },
+  { id:'demo-interrupted-3', url:'https://www.xiaohongshu.com/explore/demo3', source:'xiaohongshu',
+    title:'服务重启后的任务', account_name:'关系研究所', owner_id:'1', status:'interrupted',
+    error_msg:'服务重启导致任务中断，请手动重试。', created_at:hoursAgo(22), updated_at:hoursAgo(21.8) },
+];
+const collectorPolls = new Map();
+const collectorAnalyses = new Map();
+const cloneCollectorData = value => JSON.parse(JSON.stringify(value));
+const analysisFor = id => {
+  if (!collectorAnalyses.has(id)) collectorAnalyses.set(id, collectorAnalysis());
+  return collectorAnalyses.get(id);
+};
+const collectorResult = task => ({
+  task_id:task.id, owner_id:task.owner_id, status:'done', schema_version:2,
+  title:task.title, post_title:task.title, display_title:task.title, platform:task.source,
+  source_url:task.url, author:'关系研究所', description:'从可验证的行动证据出发，减少在关系中的反复猜测。',
+  topics:['关系判断','行动验证','停止内耗'], media_type:'image_post',
+  account:{ name:'关系研究所', nickname:'关系研究所', follower_count:'12.8万', likes_and_collections_count:'186.4万', bio:'关系判断与行动建议' },
+  engagement:{ likes:'1.6万', collects:'8,206', comments:'436' },
+  images:[
+    { index:1, filename:'cover-1.png', url:collectorCover('关系降温后，先看清这三个信号'), text:'关系降温后，先看清这三个信号', stored_locally:false },
+    { index:2, filename:'detail-2.png', url:collectorCover('不要猜，观察对方是否主动补位','#f5eee7','#6f5148'), text:'不要猜，观察对方是否主动补位', stored_locally:false },
+  ],
+  video_text:'', comments:[
+    { id:'c-1', author:'小葵', like_count:86, text:'如果他最近工作真的很忙，也要按两周来观察吗？' },
+    { id:'c-2', author:'秋叶', like_count:52, text:'减少主动之后，反而更容易看清关系。' },
+  ],
+  ai_analysis:cloneCollectorData(analysisFor(task.id)), media_assets:{ video:{} }, data_updated_at:hoursAgo(1.8),
+});
+
 const PEOPLE = [
   { id:1, name:'陈屿', dept:'产品部' }, { id:2, name:'苏禾', dept:'内容组' },
   { id:3, name:'叶昭', dept:'运营组' }, { id:4, name:'林知远', dept:'技术组' },
@@ -263,6 +333,136 @@ export async function handle(method, path, body) {
   logApi(method, path, 200);
 
   if (p === '/api/me') return ME;
+
+  /* ---------- 内容采集：完整的无后端交互链路 ---------- */
+  if (p === '/api/collector/health' && method === 'GET') {
+    return q.get('scenario') === 'down'
+      ? { ok:false, collector:'down', error:'演示：采集服务暂时未启动' }
+      : { ok:true, collector:'up' };
+  }
+  if (p === '/api/collector/login/xiaohongshu/status' && method === 'GET') {
+    if (ME.role !== 'admin') throw Object.assign(new Error('只有管理员可以管理平台登录或删除采集记录'), { status:403 });
+    if (collectorLogin.status === 'opening') {
+      collectorLoginPolls += 1;
+      collectorLogin = { ...collectorLogin, status:'waiting_scan', message:'请使用小红书扫码登录', qr_available:true,
+        expires_at:Math.floor(Date.now() / 1000) + 180, saved:false, account:{} };
+    } else if (collectorLogin.status === 'waiting_scan' && ++collectorLoginPolls >= 3) {
+      collectorLogin = { status:'saved', message:'扫码成功，登录态已安全保存', qr_available:false, expires_at:null, saved:true,
+        account:{ nickname:'关系研究所', red_id:'ideahub-demo', user_id:'demo-xhs-01', avatar_url:'', description:'关系判断与行动建议' } };
+    }
+    return { ...collectorLogin, account:{ ...(collectorLogin.account || {}) } };
+  }
+  if (p === '/api/collector/login/xiaohongshu' && method === 'POST') {
+    if (ME.role !== 'admin' || body?.mock_role === 'member') {
+      throw Object.assign(new Error('只有管理员可以管理平台登录或删除采集记录'), { status:403 });
+    }
+    collectorLoginPolls = 0;
+    collectorLogin = { status:'opening', message:body?.mode === 'switch' ? '正在准备切换账号…' : '正在打开登录页面…',
+      qr_available:false, expires_at:null, saved:false, account:{} };
+    return { ...collectorLogin };
+  }
+  if (p === '/api/collector/login/xiaohongshu/account' && method === 'POST') {
+    if (ME.role !== 'admin') throw Object.assign(new Error('只有管理员可以管理平台账号'), { status:403 });
+    if (!collectorLogin.saved) throw Object.assign(new Error('请先扫码登录小红书'), { status:409 });
+    await new Promise(resolve => setTimeout(resolve, 260));
+    collectorLogin = { ...collectorLogin, status:'saved', message:'当前登录账号已同步' };
+    return { ...collectorLogin, account:{ ...collectorLogin.account } };
+  }
+  if (p === '/api/collector/tasks' && method === 'GET') {
+    if (q.get('scenario') === 'empty') return [];
+    return COLLECTOR_TASKS.map(item => ({ ...item }));
+  }
+  if (p === '/api/collector/tasks' && method === 'POST') {
+    const raw = String(body?.url || '').trim();
+    const matched = raw.match(/https?:\/\/[^\s<>"']+/i);
+    const url = matched?.[0]?.replace(/[，。！？、；：,!?;:)\]}）】》]+$/, '') || '';
+    if (!/^https?:\/\/(?:www\.)?(?:xiaohongshu\.com|xhslink\.(?:com|cn)|douyin\.com|v\.douyin\.com)\//i.test(url)) {
+      throw Object.assign(new Error('目前只支持小红书或抖音分享链接'), { status:400 });
+    }
+    const id = `demo-new-${++collectorTaskSeq}`;
+    const task = { id, url, source:/douyin/i.test(url) ? 'douyin' : 'xiaohongshu', title:'正在识别内容标题…',
+      account_name:'', owner_id:String(ME.id), status:'pending', progress:0, message:'等待采集槽位…',
+      created_at:new Date().toISOString(), updated_at:new Date().toISOString() };
+    COLLECTOR_TASKS.unshift(task);
+    collectorPolls.set(id, 0);
+    return { task_id:id, status:'pending', owner_id:String(ME.id), max_concurrent:1 };
+  }
+  const collectorStatusMatch = p.match(/^\/api\/collector\/tasks\/([^/]+)\/status$/);
+  if (collectorStatusMatch && method === 'GET') {
+    const id = decodeURIComponent(collectorStatusMatch[1]);
+    const task = COLLECTOR_TASKS.find(item => item.id === id);
+    if (!task) throw Object.assign(new Error('找不到这条采集任务'), { status:404 });
+    if (task.status === 'pending' || task.status === 'running') {
+      const count = (collectorPolls.get(id) || 0) + 1;
+      collectorPolls.set(id, count);
+      if (count === 1) Object.assign(task, { status:'running', progress:46, message:'正在提取正文、图片和评论…' });
+      else Object.assign(task, { status:'done', progress:100, message:'采集分析完成', title:'关系降温后，先看清这三个信号', account_name:'关系研究所' });
+      task.updated_at = new Date().toISOString();
+    } else if (task.refresh_status) {
+      const count = (collectorPolls.get(`refresh:${id}`) || 0) + 1;
+      collectorPolls.set(`refresh:${id}`, count);
+      if (count >= 2) delete task.refresh_status;
+      else task.refresh_status = 'running';
+      task.progress = count >= 2 ? 100 : 62;
+      task.message = count >= 2 ? '最新数据已更新' : '正在更新评论与互动数据…';
+    }
+    return { status:task.refresh_status || task.status, progress:task.progress ?? (task.status === 'done' ? 100 : 0),
+      message:task.message || task.error_msg || '', owner_id:task.owner_id };
+  }
+  const collectorResultMatch = p.match(/^\/api\/collector\/tasks\/([^/]+)\/result$/);
+  if (collectorResultMatch && method === 'GET') {
+    const id = decodeURIComponent(collectorResultMatch[1]);
+    const task = COLLECTOR_TASKS.find(item => item.id === id);
+    if (!task) throw Object.assign(new Error('任务不存在'), { status:404 });
+    if (task.status !== 'done') throw Object.assign(new Error('结果仍在生成中'), { status:409 });
+    return collectorResult(task);
+  }
+  const collectorRefreshMatch = p.match(/^\/api\/collector\/tasks\/([^/]+)\/refresh$/);
+  if (collectorRefreshMatch && method === 'POST') {
+    const id = decodeURIComponent(collectorRefreshMatch[1]);
+    const task = COLLECTOR_TASKS.find(item => item.id === id);
+    if (!task || task.status !== 'done') throw Object.assign(new Error('只有已完成任务可以更新'), { status:409 });
+    task.refresh_status = 'pending'; task.progress = 0; task.message = '等待更新槽位…';
+    collectorPolls.set(`refresh:${id}`, 0);
+    return { ok:true, status:'pending', task_id:id };
+  }
+  const collectorAnalysisMatch = p.match(/^\/api\/collector\/tasks\/([^/]+)\/analysis$/);
+  if (collectorAnalysisMatch && method === 'PATCH') {
+    const id = decodeURIComponent(collectorAnalysisMatch[1]);
+    const task = COLLECTOR_TASKS.find(item => item.id === id);
+    if (!task || task.status !== 'done') throw Object.assign(new Error('任务完成后才能编辑 AI 分析'), { status:409 });
+    const analysis = analysisFor(id);
+    for (const scope of ['video','comments']) {
+      for (const [key, value] of Object.entries(body?.[scope] || {})) {
+        if (analysis[scope]?.items?.[key]) analysis[scope].items[key].summary = String(value);
+      }
+    }
+    const keyEntries = analysis.comments.items.key_comments.entries;
+    (body?.key_comments || []).forEach((value, index) => { if (keyEntries[index]) keyEntries[index].reason = String(value); });
+    const topicEntries = analysis.comments.items.topic_extensions.entries;
+    (body?.topic_extensions || []).forEach((value, index) => { if (topicEntries[index]) topicEntries[index].idea = String(value); });
+    analysis.manual_edit = { edited_at:new Date().toISOString(), edited_fields:Object.keys(body?.video || {}).length + Object.keys(body?.comments || {}).length + (body?.key_comments || []).length + (body?.topic_extensions || []).length };
+    return { ok:true, ai_analysis:cloneCollectorData(analysis), manual_edit:{ ...analysis.manual_edit } };
+  }
+  const collectorPushMatch = p.match(/^\/api\/collector\/tasks\/([^/]+)\/push$/);
+  if (collectorPushMatch && method === 'POST') {
+    const id = decodeURIComponent(collectorPushMatch[1]);
+    const task = COLLECTOR_TASKS.find(item => item.id === id);
+    if (!task || task.status !== 'done') throw Object.assign(new Error('任务完成后才能推送'), { status:409 });
+    const channel = body?.channel;
+    if (!['persona','matrix'].includes(channel)) throw Object.assign(new Error('请选择真人作品或矩阵作品'), { status:400 });
+    return { ok:true, channel, destination:channel === 'persona' ? '真人作品' : '矩阵作品', id:900 + collectorTaskSeq, record_id:900 + collectorTaskSeq };
+  }
+  const collectorDeleteMatch = p.match(/^\/api\/collector\/tasks\/([^/]+)$/);
+  if (collectorDeleteMatch && method === 'DELETE') {
+    if (ME.role !== 'admin') throw Object.assign(new Error('只有管理员可以删除采集记录'), { status:403 });
+    const id = decodeURIComponent(collectorDeleteMatch[1]);
+    const index = COLLECTOR_TASKS.findIndex(item => item.id === id);
+    if (index < 0) throw Object.assign(new Error('任务不存在或已被删除'), { status:404 });
+    COLLECTOR_TASKS.splice(index, 1);
+    collectorAnalyses.delete(id);
+    return { ok:true, task_id:id, deleted_files:4 };
+  }
 
   if (p === '/api/import/provider' && method === 'GET') {
     return { configured:false, canManage:true, baseUrl:'https://ai.cangyuansuanli.cn/v1',

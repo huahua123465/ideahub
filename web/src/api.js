@@ -238,4 +238,38 @@ export const api = {
 
   /** 漏斗看板是只读的算出来的，没有增删改 */
   funnel:         ()            => call('GET',    '/api/funnel'),
+
+  /* ---------- 内容采集 ----------
+     Collector 只在 Docker 内网可见；浏览器始终请求 IdeaHub 的同源代理，
+     内部令牌、平台 Cookie 和 AI 密钥都不会进入前端。 */
+  collectorHealth:      ()            => call('GET',    '/api/collector/health'),
+  collectorLoginStatus: ()            => call('GET',    '/api/collector/login/xiaohongshu/status'),
+  collectorLoginStart:  (switchAccount = false) => call('POST', '/api/collector/login/xiaohongshu',
+    switchAccount ? { mode: 'switch', force_fresh: true } : {}),
+  collectorAccountSync: ()            => call('POST',   '/api/collector/login/xiaohongshu/account', {}),
+  collectorTasks:       ()            => call('GET',    '/api/collector/tasks'),
+  collectorCreate:      (url)         => call('POST',   '/api/collector/tasks', { url }),
+  collectorTaskStatus:  (id)          => call('GET',    `/api/collector/tasks/${encodeURIComponent(id)}/status`),
+  collectorResult:      (id)          => call('GET',    `/api/collector/tasks/${encodeURIComponent(id)}/result`),
+  collectorRefresh:     (id)          => call('POST',   `/api/collector/tasks/${encodeURIComponent(id)}/refresh`, {}),
+  collectorAnalysis:    (id, payload) => call('PATCH',  `/api/collector/tasks/${encodeURIComponent(id)}/analysis`, payload),
+  collectorPush:        (id, channel) => call('POST',   `/api/collector/tasks/${encodeURIComponent(id)}/push`, { channel }),
+  collectorDelete:      (id)          => call('DELETE', `/api/collector/tasks/${encodeURIComponent(id)}`),
 };
+
+/** 二进制资源不经过 JSON call()；这里只生成固定、同源、已编码的安全路径。 */
+export function collectorQrUrl(stamp = Date.now()) {
+  if (state.mode === 'mock') {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="280" height="280" viewBox="0 0 280 280"><rect width="280" height="280" rx="24" fill="#fff"/><g fill="#20242d"><path d="M28 28h72v72H28zm16 16v40h40V44zM180 28h72v72h-72zm16 16v40h40V44zM28 180h72v72H28zm16 16v40h40v-40z"/><path d="M124 28h20v20h-20zm24 24h20v24h-20zm-24 44h20v20h-20zm44 20h20v20h-20zm-44 20h20v20h-20zm28 12h20v20h-20zm40 0h20v20h-20zm-68 32h20v20h-20zm28 8h20v20h-20zm36-4h24v20h-24zm28 28h20v40h-20zm-68 16h20v24h-20zm32 0h20v20h-20z"/></g><text x="140" y="270" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#8b93a2">IdeaHub 演示二维码</text></svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+  return `${BASE}/api/collector/login/xiaohongshu/qr?t=${encodeURIComponent(stamp)}`;
+}
+
+export function collectorImageUrl(taskId, filename) {
+  return `${BASE}/api/collector/tasks/${encodeURIComponent(taskId)}/images/${encodeURIComponent(filename)}`;
+}
+
+export function collectorMediaUrl(taskId, filename) {
+  return `${BASE}/api/collector/tasks/${encodeURIComponent(taskId)}/media/${encodeURIComponent(filename)}`;
+}
