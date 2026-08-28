@@ -1,0 +1,34 @@
+# Secrets / environment
+.env
+data/
+*.login_profile.json
+
+# Python
+__pycache__/
+.pytest_cache/
+.codex-tmp/
+.venv/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output data (optional, adjust as needed)
+output/
+
+# Local runtime state and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+*.tmp

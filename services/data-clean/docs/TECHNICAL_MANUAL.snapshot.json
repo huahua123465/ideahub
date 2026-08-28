@@ -1,0 +1,678 @@
+{
+  "snapshot_schema": 1,
+  "key_constants": {
+    "MAX_CONCURRENT_TASKS": 3,
+    "COLLECTION_MODE": "analyze",
+    "COLLECTION_MODE_LABEL": "采集分析",
+    "STORAGE_POLICY": "source_linked",
+    "CONTENT_SCHEMA_VERSION": 16
+  },
+  "routes": [
+    {
+      "path": "/",
+      "methods": [
+        "GET"
+      ],
+      "handler": "index"
+    },
+    {
+      "path": "/api/convert",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_convert"
+    },
+    {
+      "path": "/api/download/<vid>",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_download"
+    },
+    {
+      "path": "/api/export/<vid>/<export_format>",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_export"
+    },
+    {
+      "path": "/api/history",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_history"
+    },
+    {
+      "path": "/api/ideahub/push-batch",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_ideahub_push_batch"
+    },
+    {
+      "path": "/api/ideahub/push/<vid>",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_ideahub_push"
+    },
+    {
+      "path": "/api/ideahub/status",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_ideahub_status"
+    },
+    {
+      "path": "/api/image/<vid>/<path:filename>",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_image"
+    },
+    {
+      "path": "/api/login/xiaohongshu",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_login_xiaohongshu"
+    },
+    {
+      "path": "/api/login/xiaohongshu/status",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_login_xiaohongshu_status"
+    },
+    {
+      "path": "/api/media/<vid>/<path:filename>",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_media"
+    },
+    {
+      "path": "/api/result/<vid>",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_result"
+    },
+    {
+      "path": "/api/status/<vid>",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_status"
+    },
+    {
+      "path": "/api/task/<vid>",
+      "methods": [
+        "DELETE"
+      ],
+      "handler": "api_delete_task"
+    },
+    {
+      "path": "/api/task/<vid>/refresh",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_refresh_task"
+    },
+    {
+      "path": "/api/tasks/batch-delete",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_batch_delete_tasks"
+    },
+    {
+      "path": "/api/technical-audit/<vid>/<audit_format>",
+      "methods": [
+        "GET"
+      ],
+      "handler": "api_technical_audit"
+    }
+  ],
+  "environment": [
+    {
+      "constant": "COMMENT_LIKE_THRESHOLD",
+      "environment": "COMMENT_LIKE_THRESHOLD",
+      "default_expression": "\"20\""
+    },
+    {
+      "constant": "COMMENT_MAX_PRIMARY_PAGES",
+      "environment": "COMMENT_MAX_PRIMARY_PAGES",
+      "default_expression": "\"8\""
+    },
+    {
+      "constant": "COMMENT_MAX_REPLY_PAGES",
+      "environment": "COMMENT_MAX_REPLY_PAGES",
+      "default_expression": "\"3\""
+    },
+    {
+      "constant": "COMMENT_MAX_REPLY_THREADS",
+      "environment": "COMMENT_MAX_REPLY_THREADS",
+      "default_expression": "\"24\""
+    },
+    {
+      "constant": "COMMENT_MAX_SCANNED",
+      "environment": "COMMENT_MAX_SCANNED",
+      "default_expression": "\"320\""
+    },
+    {
+      "constant": "COMMENT_MIN_CONFIDENCE_SCANNED",
+      "environment": "COMMENT_MIN_CONFIDENCE_SCANNED",
+      "default_expression": "\"80\""
+    },
+    {
+      "constant": "COMMENT_TARGET_CONFIDENCE",
+      "environment": "COMMENT_TARGET_CONFIDENCE",
+      "default_expression": "\"0.80\""
+    },
+    {
+      "constant": "COMMENT_TIMEOUT_SEC",
+      "environment": "COMMENT_TIMEOUT_SEC",
+      "default_expression": "\"50\""
+    },
+    {
+      "constant": "COMMENT_TOP_K",
+      "environment": "COMMENT_TOP_K",
+      "default_expression": "\"5\""
+    },
+    {
+      "constant": "DEEPSEEK_API_KEY",
+      "environment": "DEEPSEEK_API_KEY",
+      "default_expression": "\"\""
+    },
+    {
+      "constant": "DEEPSEEK_BASE_URL",
+      "environment": "DEEPSEEK_BASE_URL",
+      "default_expression": "\"https://api.deepseek.com\""
+    },
+    {
+      "constant": "DEEPSEEK_MODEL",
+      "environment": "DEEPSEEK_MODEL",
+      "default_expression": "\"deepseek-v4-flash\""
+    },
+    {
+      "constant": "FRAME_INTERVAL",
+      "environment": "FRAME_INTERVAL",
+      "default_expression": "\"5\""
+    },
+    {
+      "constant": "IDEAHUB_API_KEY",
+      "environment": "IDEAHUB_API_KEY",
+      "default_expression": "\"\""
+    },
+    {
+      "constant": "IDEAHUB_DOC_URL",
+      "environment": "IDEAHUB_DOC_URL",
+      "default_expression": "\"https://xm.xingxingqule.com:9443/%E6%8E%A5%E5%85%A5%E8%AF%B4%E6%98%8E.html\","
+    },
+    {
+      "constant": "IDEAHUB_INGEST_URL",
+      "environment": "IDEAHUB_INGEST_URL",
+      "default_expression": "\"https://xm.xingxingqule.com:9443/api/ingest/analysis\","
+    },
+    {
+      "constant": "MAX_FRAMES",
+      "environment": "MAX_FRAMES",
+      "default_expression": "\"20\""
+    },
+    {
+      "constant": "MAX_VIDEO_DURATION",
+      "environment": "MAX_VIDEO_DURATION",
+      "default_expression": "\"600\""
+    },
+    {
+      "constant": "MODEL_LLM",
+      "environment": "MODEL_LLM",
+      "default_expression": "<multiline-or-derived>"
+    },
+    {
+      "constant": "MODEL_VLM",
+      "environment": "MODEL_VLM",
+      "default_expression": "\"gpt-4o\""
+    },
+    {
+      "constant": "MODEL_WHISPER",
+      "environment": "MODEL_WHISPER",
+      "default_expression": "\"whisper-1\""
+    },
+    {
+      "constant": "MOXUS_API_KEY",
+      "environment": "MOXUS_API_KEY",
+      "default_expression": "\"\""
+    },
+    {
+      "constant": "MOXUS_BASE_URL",
+      "environment": "MOXUS_BASE_URL",
+      "default_expression": "\"https://moxus.ai\""
+    },
+    {
+      "constant": "MOXUS_VIDEO_MODEL",
+      "environment": "MOXUS_VIDEO_MODEL",
+      "default_expression": "\"gemini-3.6-flash\""
+    },
+    {
+      "constant": "OPENAI_API_KEY",
+      "environment": "OPENAI_API_KEY",
+      "default_expression": "\"\""
+    },
+    {
+      "constant": "OPENAI_BASE_URL",
+      "environment": "OPENAI_BASE_URL",
+      "default_expression": "\"https://api.openai.com/v1\""
+    },
+    {
+      "constant": "OPENAI_WHISPER_KEY",
+      "environment": "OPENAI_WHISPER_KEY",
+      "default_expression": "OPENAI_API_KEY"
+    },
+    {
+      "constant": "OPENAI_WHISPER_URL",
+      "environment": "OPENAI_WHISPER_URL",
+      "default_expression": "\"https://api.openai.com/v1\""
+    },
+    {
+      "constant": "OPENROUTER_API_KEY",
+      "environment": "OPENROUTER_API_KEY",
+      "default_expression": "\"\""
+    },
+    {
+      "constant": "OPENROUTER_BASE_URL",
+      "environment": "OPENROUTER_BASE_URL",
+      "default_expression": "\"https://openrouter.ai/api/v1\""
+    },
+    {
+      "constant": "OPENROUTER_VIDEO_MODEL",
+      "environment": "OPENROUTER_VIDEO_MODEL",
+      "default_expression": "\"stealth/ox-alpha\""
+    },
+    {
+      "constant": "VIDEO_MODEL_CHUNK_OVERLAP",
+      "environment": "VIDEO_MODEL_CHUNK_OVERLAP",
+      "default_expression": "\"2\""
+    },
+    {
+      "constant": "VIDEO_MODEL_CHUNK_SECONDS",
+      "environment": "VIDEO_MODEL_CHUNK_SECONDS",
+      "default_expression": "\"60\""
+    },
+    {
+      "constant": "VIDEO_MODEL_FPS",
+      "environment": "VIDEO_MODEL_FPS",
+      "default_expression": "\"4\""
+    },
+    {
+      "constant": "VIDEO_MODEL_MAX_CHUNKS",
+      "environment": "VIDEO_MODEL_MAX_CHUNKS",
+      "default_expression": "\"20\""
+    },
+    {
+      "constant": "VIDEO_MODEL_PROVIDER",
+      "environment": "VIDEO_MODEL_PROVIDER",
+      "default_expression": "\"moxus\""
+    },
+    {
+      "constant": "VIDEO_MODEL_REQUEST_RETRIES",
+      "environment": "VIDEO_MODEL_REQUEST_RETRIES",
+      "default_expression": "\"3\""
+    },
+    {
+      "constant": "VIDEO_MODEL_WIDTH",
+      "environment": "VIDEO_MODEL_WIDTH",
+      "default_expression": "\"720\""
+    }
+  ],
+  "requirements": [
+    "﻿crawl4ai>=0.4.0",
+    "yt-dlp>=2024.0.0",
+    "openai>=1.30.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+    "rapidocr-onnxruntime>=1.3.0",
+    "PyYAML==6.0.3",
+    "Flask>=3.0.0",
+    "playwright>=1.45.0",
+    "opencv-python>=4.8.0",
+    "Pillow>=10.0.0"
+  ],
+  "requirements_sha256": "c2dcdfc7f3391596dffec5565e2b7bb8353ba8a607f3c9d4ddc748b710382e11",
+  "database": {
+    "artifacts": [
+      "id",
+      "task_id",
+      "type",
+      "path",
+      "meta",
+      "created_at"
+    ],
+    "characters": [
+      "id",
+      "task_id",
+      "char_id",
+      "name",
+      "role",
+      "age",
+      "gender",
+      "appearance",
+      "personality",
+      "voice_style"
+    ],
+    "scripts": [
+      "id",
+      "task_id",
+      "version",
+      "file_path_md",
+      "file_path_json",
+      "created_at"
+    ],
+    "tasks": [
+      "id",
+      "url",
+      "source",
+      "title",
+      "description",
+      "duration_sec",
+      "status",
+      "error_msg",
+      "created_at",
+      "updated_at",
+      "account_name"
+    ]
+  },
+  "modules": {
+    "app.py": {
+      "functions": [
+        "api_batch_delete_tasks",
+        "api_convert",
+        "api_delete_task",
+        "api_download",
+        "api_export",
+        "api_history",
+        "api_ideahub_push",
+        "api_ideahub_push_batch",
+        "api_ideahub_status",
+        "api_image",
+        "api_login_xiaohongshu",
+        "api_login_xiaohongshu_status",
+        "api_media",
+        "api_refresh_task",
+        "api_result",
+        "api_status",
+        "api_technical_audit",
+        "disable_page_cache",
+        "index"
+      ],
+      "classes": [
+        "IdeaHubPushError",
+        "TaskDeleteError"
+      ]
+    },
+    "db.py": {
+      "functions": [],
+      "classes": [
+        "TaskDB"
+      ]
+    },
+    "generators/business_analyzer.py": {
+      "functions": [
+        "analyze_content",
+        "analyze_content_with_audit",
+        "build_technical_audit_markdown"
+      ],
+      "classes": []
+    },
+    "generators/script_generator.py": {
+      "functions": [
+        "generate_novel"
+      ],
+      "classes": []
+    },
+    "main.py": {
+      "functions": [
+        "main",
+        "run_pipeline"
+      ],
+      "classes": []
+    },
+    "media/audio_analyzer.py": {
+      "functions": [
+        "extract_audio",
+        "transcribe"
+      ],
+      "classes": []
+    },
+    "media/comment_extractor.py": {
+      "functions": [
+        "extract_hot_comments"
+      ],
+      "classes": [
+        "BrowserCommentCollector",
+        "HotCommentPool"
+      ]
+    },
+    "media/content_extractor.py": {
+      "functions": [
+        "clean_post_title",
+        "extract_page",
+        "strip_topics_from_description"
+      ],
+      "classes": []
+    },
+    "media/downloader.py": {
+      "functions": [
+        "download_video",
+        "download_video_cover",
+        "extract_video_metadata",
+        "url_declares_video"
+      ],
+      "classes": []
+    },
+    "media/frame_extractor.py": {
+      "functions": [
+        "extract_scene_grid"
+      ],
+      "classes": []
+    },
+    "media/image_analyzer.py": {
+      "functions": [
+        "analyze_grid"
+      ],
+      "classes": []
+    },
+    "media/platform_login.py": {
+      "functions": [
+        "has_saved_xhs_login",
+        "invalidate_xhs_login",
+        "login_xiaohongshu"
+      ],
+      "classes": []
+    },
+    "media/profile_extractor.py": {
+      "functions": [
+        "account_from_downloader",
+        "empty_account",
+        "extract_account_from_html",
+        "hydrate_account",
+        "merge_accounts",
+        "normalize_account"
+      ],
+      "classes": []
+    },
+    "media/subtitle_extractor.py": {
+      "functions": [
+        "extract_burned_subtitles",
+        "extract_or_load_subtitles"
+      ],
+      "classes": []
+    },
+    "media/text_ocr.py": {
+      "functions": [
+        "detect_cover_title",
+        "download_post_images",
+        "extract_cover_title_from_path",
+        "extract_images_text",
+        "extract_video_text",
+        "reconcile_cover_title"
+      ],
+      "classes": []
+    },
+    "media/video_transcriber.py": {
+      "functions": [
+        "transcribe_video_with_model"
+      ],
+      "classes": []
+    },
+    "tests/test_business_analyzer.py": {
+      "functions": [],
+      "classes": [
+        "BusinessAnalyzerTests"
+      ]
+    },
+    "tests/test_collection_modes.py": {
+      "functions": [],
+      "classes": [
+        "CollectionModeTests",
+        "PipelineStorageTests",
+        "TechnicalAuditDownloadTests"
+      ]
+    },
+    "tests/test_comments.py": {
+      "functions": [],
+      "classes": [
+        "HotCommentPoolTests",
+        "LoginCookieTests",
+        "PlatformNormalizationTests",
+        "ResultPreservationTests"
+      ]
+    },
+    "tests/test_content_extractor.py": {
+      "functions": [],
+      "classes": [
+        "ContentDeduplicationTests"
+      ]
+    },
+    "tests/test_db.py": {
+      "functions": [],
+      "classes": [
+        "TaskDBRetryTests"
+      ]
+    },
+    "tests/test_deletion.py": {
+      "functions": [],
+      "classes": [
+        "BatchDeletionTests"
+      ]
+    },
+    "tests/test_downloader.py": {
+      "functions": [],
+      "classes": [
+        "VideoMetadataTests"
+      ]
+    },
+    "tests/test_exports.py": {
+      "functions": [],
+      "classes": [
+        "ExportTests"
+      ]
+    },
+    "tests/test_ideahub.py": {
+      "functions": [],
+      "classes": [
+        "IdeaHubPushTests"
+      ]
+    },
+    "tests/test_profile_extractor.py": {
+      "functions": [],
+      "classes": [
+        "AccountHydrationTests",
+        "ProfileExtractorTests"
+      ]
+    },
+    "tests/test_text_ocr.py": {
+      "functions": [
+        "line"
+      ],
+      "classes": [
+        "CoverTitleTests"
+      ]
+    },
+    "tests/test_utils.py": {
+      "functions": [],
+      "classes": [
+        "ShareUrlTests"
+      ]
+    },
+    "tests/test_video_transcriber.py": {
+      "functions": [],
+      "classes": [
+        "VideoTranscriberTests"
+      ]
+    },
+    "tools/build_technical_manual.py": {
+      "functions": [
+        "add_code_block",
+        "add_cover",
+        "add_inline",
+        "add_note",
+        "add_page_field",
+        "add_table",
+        "allocate_widths",
+        "apply_numbering",
+        "build",
+        "configure_header_footer",
+        "configure_page",
+        "configure_styles",
+        "install_numbering",
+        "is_separator_row",
+        "main",
+        "make_abstract_num",
+        "make_num",
+        "paragraph_border",
+        "set_cell_margins",
+        "set_cell_width",
+        "set_paragraph_spacing",
+        "set_repeat_table_header",
+        "set_run_font",
+        "set_table_borders",
+        "set_table_geometry",
+        "shade",
+        "split_table_row"
+      ],
+      "classes": []
+    },
+    "tools/check_technical_manual.py": {
+      "functions": [
+        "assignment_value",
+        "collect",
+        "database_inventory",
+        "describe_diff",
+        "environment_inventory",
+        "literal",
+        "main",
+        "python_files",
+        "route_inventory",
+        "sha256",
+        "top_level_symbols"
+      ],
+      "classes": []
+    },
+    "utils.py": {
+      "functions": [
+        "canonical_content_key",
+        "detect_platform",
+        "normalize_url",
+        "resolve_share_url",
+        "sanitize_filename",
+        "url_to_id"
+      ],
+      "classes": []
+    }
+  },
+  "test_count": 80
+}
