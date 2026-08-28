@@ -3,7 +3,7 @@ import html as html_lib
 import difflib
 import json
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from playwright.async_api import async_playwright
 from security import (
     fetch_safe_text,
@@ -11,6 +11,7 @@ from security import (
     redact_url,
 )
 
+from .comment_extractor import COOKIE_FILES, STORAGE_STATE_FILES, _netscape_cookies
 from .profile_extractor import extract_account_from_html
 
 BROWSER_HEADERS = {
@@ -20,21 +21,79 @@ BROWSER_HEADERS = {
 }
 
 
+def _platform_for_url(url: str) -> str:
+    host = (urlparse(str(url or "")).hostname or "").casefold()
+    if host == "xiaohongshu.com" or host.endswith(".xiaohongshu.com") or host in {
+        "xhslink.com", "www.xhslink.com", "xhslink.cn", "www.xhslink.cn",
+    }:
+        return "xiaohongshu"
+    if host == "douyin.com" or host.endswith(".douyin.com"):
+        return "douyin"
+    return ""
+
+
+def _page_headers(url: str) -> dict[str, str]:
+    headers = dict(BROWSER_HEADERS)
+    platform = _platform_for_url(url)
+    host = (urlparse(str(url or "")).hostname or "").casefold()
+    if platform == "xiaohongshu" and not (
+        host == "xiaohongshu.com" or host.endswith(".xiaohongshu.com")
+    ):
+        return headers
+    cookie_path = COOKIE_FILES.get(platform)
+    if cookie_path and cookie_path.exists():
+        cookies = _netscape_cookies(cookie_path)
+        cookie_header = "; ".join(
+            f"{item['name']}={item.get('value', '')}"
+            for item in cookies if item.get("name")
+        )
+        if cookie_header:
+            headers["Cookie"] = cookie_header
+    return headers
+
+
+def _merge_page_results(primary: dict, enriched: dict) -> dict:
+    merged = dict(primary or {})
+    for key, value in (enriched or {}).items():
+        if key == "images":
+            combined = []
+            for item in [*(primary.get("images") or []), *(value or [])]:
+                if item and item not in combined:
+                    combined.append(item)
+            merged[key] = combined
+        elif key in {"topics"}:
+            merged[key] = list(dict.fromkeys([*(primary.get(key) or []), *(value or [])]))
+        elif key in {"account", "engagement"}:
+            merged[key] = {
+                **(value if isinstance(value, dict) else {}),
+                **{k: v for k, v in (primary.get(key) or {}).items() if v},
+            }
+        elif not merged.get(key) and value:
+            merged[key] = value
+    return merged
+
+
 async def extract_page(url: str) -> dict | None:
     print(f"  [extract] {redact_url(url)[:120]}")
+    partial_result = None
+    browser_url = url
 
     # ---- Try httpx ----
     try:
         html, _headers, final_url = await fetch_safe_text(
             url,
             timeout=20,
-            headers=BROWSER_HEADERS,
+            headers=_page_headers(url),
         )
+        browser_url = final_url
         if html and len(html) > 500:
             result = _parse_html(html, final_url)
             if result:
                 print(f"  [httpx] OK: {len(result['text'])} chars")
-                return result
+                if result.get("images") or _platform_for_url(final_url) != "xiaohongshu":
+                    return result
+                partial_result = result
+                print("  [httpx] Xiaohongshu metadata found without images; enriching in browser")
         print(f"  [httpx] Got {len(html)} chars, need browser")
     except Exception as e:
         print(f"  [httpx] Failed safely ({e.__class__.__name__})")
@@ -44,19 +103,30 @@ async def extract_page(url: str) -> dict | None:
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
+            context_options = dict(
                 viewport={"width": 1280, "height": 800},
                 locale="zh-CN",
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
                 service_workers="block",
             )
+            platform = _platform_for_url(browser_url)
+            storage_state_path = STORAGE_STATE_FILES.get(platform)
+            if storage_state_path and storage_state_path.exists():
+                context_options["storage_state"] = str(storage_state_path)
+            context = await browser.new_context(**context_options)
+            if "storage_state" not in context_options:
+                cookie_path = COOKIE_FILES.get(platform)
+                if cookie_path and cookie_path.exists():
+                    cookies = _netscape_cookies(cookie_path)
+                    if cookies:
+                        await context.add_cookies(cookies)
             page = await context.new_page()
             await install_playwright_request_guard(page)
             # Block heavy resources
             await page.route("**/*.{png,jpg,jpeg,gif,svg,mp4,webm,mp3,woff2,css,ttf,woff}", lambda r: r.abort())
 
             print(f"  [pw] Navigating...")
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            await page.goto(browser_url, wait_until="domcontentloaded", timeout=30000)
             print(f"  [pw] Initial title: {(await page.title())[:60]}")
 
             # Wait for anti-bot page to resolve (Sina Visitor System auto-redirects)
@@ -78,19 +148,20 @@ async def extract_page(url: str) -> dict | None:
             await page.wait_for_timeout(1000)
 
             html = await page.content()
+            final_browser_url = page.url
             print(f"  [pw] Final HTML: {len(html)} chars")
             await browser.close()
 
-            result = _parse_html(html, page.url)
+            result = _parse_html(html, final_browser_url)
             if result:
                 print(f"  [pw] Parsed: {len(result['text'])} chars")
-                return result
+                return _merge_page_results(partial_result or {}, result)
             print(f"  [pw] Parse failed")
 
     except Exception as e:
         print(f"  [pw] Error ({e.__class__.__name__})")
 
-    return None
+    return partial_result
 
 
 def _meta_content(page_html: str, *, property_name: str = "", name: str = "") -> str:
@@ -114,8 +185,85 @@ def _decode_json_string(value: str) -> str:
         return value.replace(r"\/", "/").replace(r"\u002F", "/")
 
 
+def _balanced_json_value(source: str, start: int):
+    if start >= len(source) or source[start] not in "[{":
+        return None
+    opening = source[start]
+    closing = "]" if opening == "[" else "}"
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(source)):
+        char = source[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(source[start:index + 1])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+    return None
+
+
+def _image_item_url(item) -> str:
+    if isinstance(item, str):
+        return item
+    if not isinstance(item, dict):
+        return ""
+    for key in ("urlDefault", "url_default", "url", "urlPre", "url_pre"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    info_list = item.get("infoList") or item.get("info_list") or []
+    if isinstance(info_list, list):
+        preferred = sorted(
+            (entry for entry in info_list if isinstance(entry, dict)),
+            key=lambda entry: 0 if entry.get("imageScene") in {"WB_DFT", "CRD_WM_JPG"} else 1,
+        )
+        for entry in preferred:
+            value = entry.get("url") or entry.get("urlDefault")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+
+def _extract_structured_image_urls(page_html: str) -> list[str]:
+    """Read Xiaohongshu note image lists, including extensionless CDN URLs."""
+    images = []
+    seen = set()
+    pattern = re.compile(r'["\'](?:imageList|image_list)["\']\s*:\s*', re.I)
+    for match in pattern.finditer(page_html):
+        value_start = match.end()
+        while value_start < len(page_html) and page_html[value_start].isspace():
+            value_start += 1
+        value = _balanced_json_value(page_html, value_start)
+        items = value if isinstance(value, list) else []
+        for item in items:
+            candidate = html_lib.unescape(_decode_json_string(_image_item_url(item))).replace("\\/", "/")
+            if candidate.startswith("//"):
+                candidate = "https:" + candidate
+            parsed = urlparse(candidate)
+            if parsed.scheme in {"http", "https"} and parsed.netloc and candidate not in seen:
+                seen.add(candidate)
+                images.append(candidate)
+    return images
+
+
 def _extract_images(page_html: str, base_url: str) -> list[str]:
-    candidates = re.findall(
+    candidates = _extract_structured_image_urls(page_html)
+    candidates += re.findall(
         r'(?:https?:)?(?:\\?/){2}[^"\'<>\s]+?(?:\.jpe?g|\.png|\.webp)(?:\?[^"\'<>\s]*)?',
         page_html,
         re.I,
@@ -132,6 +280,13 @@ def _extract_images(page_html: str, base_url: str) -> list[str]:
         if image_url.startswith("//"):
             image_url = "https:" + image_url
         image_url = urljoin(base_url, image_url)
+        parsed_image = urlparse(image_url)
+        image_host = (parsed_image.hostname or "").casefold()
+        if parsed_image.scheme == "http" and any(
+            image_host == suffix or image_host.endswith(f".{suffix}")
+            for suffix in ("xhscdn.com", "xhscdn.net", "xiaohongshu.com")
+        ):
+            image_url = parsed_image._replace(scheme="https").geturl()
         lower = image_url.lower()
         if any(marker in lower for marker in ("avatar", "logo", "favicon", "emoji", "icon")):
             continue

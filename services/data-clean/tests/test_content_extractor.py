@@ -1,9 +1,11 @@
 import unittest
+import json
 
 from media.content_extractor import (
     clean_post_title,
     _dedupe_text_blocks,
     _extract_engagement,
+    _extract_images,
     _extract_topics,
     _near_duplicate,
     _parse_html,
@@ -12,6 +14,22 @@ from media.content_extractor import (
 
 
 class ContentDeduplicationTests(unittest.TestCase):
+    def test_xhs_structured_image_list_keeps_extensionless_cdn_urls(self):
+        first = "https://sns-webpic-qc.xhscdn.com/202608281234/first-image"
+        second = "https://sns-webpic-qc.xhscdn.com/202608281234/second-image"
+        initial_state = {"note": {"noteDetailMap": {"x": {"note": {
+            "imageList": [
+                {"urlDefault": first, "width": 1080, "height": 1440},
+                {"infoList": [{"imageScene": "WB_DFT", "url": second}]},
+            ],
+        }}}}}
+        page_html = f'''<html><head><title>图文笔记</title></head><body>
+        <script>window.__INITIAL_STATE__={json.dumps(initial_state)};</script>
+        <article>足够长的图文笔记正文内容，用来通过页面解析的最小长度检查。</article>
+        </body></html>'''
+
+        self.assertEqual([first, second], _extract_images(page_html, "https://www.xiaohongshu.com/explore/x"))
+
     def test_post_metadata_is_named_and_split(self):
         self.assertEqual("异性缘爆棚的男生", clean_post_title("异性缘爆棚的男生 - 小红书"))
         self.assertEqual(

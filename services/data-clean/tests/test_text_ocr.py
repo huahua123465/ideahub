@@ -1,6 +1,11 @@
 import unittest
+from io import BytesIO
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from media.text_ocr import detect_cover_title, reconcile_cover_title
+from PIL import Image
+
+from media.text_ocr import detect_cover_title, download_post_images, reconcile_cover_title
 
 
 def line(text, y, height, width=500, x=60, confidence=0.99):
@@ -15,6 +20,26 @@ def line(text, y, height, width=500, x=60, confidence=0.99):
 
 
 class CoverTitleTests(unittest.TestCase):
+    def test_extensionless_cdn_image_is_accepted_after_pillow_validation(self):
+        buffer = BytesIO()
+        Image.new("RGB", (720, 960), "white").save(buffer, format="PNG")
+        payload = buffer.getvalue()
+        diagnostics = {}
+
+        with TemporaryDirectory() as root, patch(
+            "media.text_ocr.fetch_safe_bytes",
+            return_value=(payload, {"content-type": "application/octet-stream"}, "https://xhscdn.com/image-id"),
+        ):
+            images = download_post_images(
+                ["https://xhscdn.com/image-id"], root,
+                "https://www.xiaohongshu.com/explore/note-id",
+                diagnostics=diagnostics,
+            )
+
+        self.assertEqual(1, len(images))
+        self.assertEqual(1, diagnostics["downloaded"])
+        self.assertEqual(0, diagnostics["failed"])
+
     def test_largest_adjacent_lines_become_cover_title(self):
         lines = [
             line("备忘录", 57, 52, 156, 99),

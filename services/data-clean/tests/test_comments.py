@@ -14,7 +14,9 @@ from media.comment_extractor import (
     _normalize_xhs,
     _is_fuzzy_like,
     _estimate_top5_confidence,
+    _comment_collection_status,
     _netscape_cookies,
+    _xhs_session_evidence,
 )
 from media.platform_login import (
     _extract_xhs_public_profile,
@@ -151,6 +153,47 @@ class PlatformNormalizationTests(unittest.TestCase):
 
 
 class LoginCookieTests(unittest.TestCase):
+    def test_limited_comment_counts_do_not_invalidate_saved_login(self):
+        pool = HotCommentPool(threshold=20, limit=5, max_scanned=20)
+        observer = BrowserCommentCollector("xiaohongshu", pool)
+        observer.fuzzy_like_count = 3
+        observer.primary_pages = 1
+
+        self.assertEqual(
+            "limited",
+            _comment_collection_status(observer, [], "authenticated"),
+        )
+        self.assertEqual(
+            "login_required",
+            _comment_collection_status(observer, [], "guest"),
+        )
+
+    def test_session_evidence_requires_prompt_and_missing_cookie_for_guest(self):
+        class Locator:
+            def __init__(self, visible=False): self.visible = visible
+            async def count(self): return 1
+            def nth(self, _index): return self
+            async def is_visible(self): return self.visible
+
+        class Context:
+            def __init__(self, cookies): self._cookies = cookies
+            async def cookies(self): return self._cookies
+
+        class Page:
+            def __init__(self, cookies, prompt):
+                self.context = Context(cookies)
+                self.prompt = prompt
+            def locator(self, _selector): return Locator(self.prompt)
+            def get_by_text(self, _pattern): return Locator(False)
+
+        saved = Page([{"name": "web_session", "value": "authenticated-session-value"}], False)
+        guest = Page([], True)
+        ambiguous = Page([{"name": "web_session", "value": "authenticated-session-value"}], True)
+
+        self.assertEqual("authenticated", asyncio.run(_xhs_session_evidence(saved)))
+        self.assertEqual("guest", asyncio.run(_xhs_session_evidence(guest)))
+        self.assertEqual("unknown", asyncio.run(_xhs_session_evidence(ambiguous)))
+
     def test_public_profile_is_whitelisted_from_nested_selfinfo(self):
         profile = _extract_xhs_public_profile({
             "data": {
@@ -217,7 +260,9 @@ class LoginCookieTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertIn("账号切换", response.get_json()["message"])
         self.assertIs(app_module._run_xhs_login, thread.call_args.kwargs["target"])
-        self.assertEqual((True,), thread.call_args.kwargs["args"])
+        generation, force_fresh = thread.call_args.kwargs["args"]
+        self.assertIsInstance(generation, int)
+        self.assertTrue(force_fresh)
         thread.return_value.start.assert_called_once_with()
 
     def test_guest_web_session_is_not_treated_as_login(self):

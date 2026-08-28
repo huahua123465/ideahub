@@ -20,6 +20,7 @@ from security import install_playwright_request_guard
 
 from .comment_extractor import (
     STORAGE_STATE_FILES,
+    _has_visible_login_prompt,
     _netscape_cookies,
     _save_netscape_cookies,
 )
@@ -184,27 +185,6 @@ async def _request_xhs_selfinfo(page):
 
 def _selfinfo_succeeded(payload) -> bool:
     return any(item.get("success") is True for item in _iter_mappings(payload))
-
-
-async def _has_visible_login_prompt(page) -> bool:
-    """Return whether Xiaohongshu is visibly asking the browser to log in."""
-    selectors = (".login-btn", ".comments-login", ".login-container")
-    for selector in selectors:
-        try:
-            locator = page.locator(selector)
-            for index in range(min(await locator.count(), 5)):
-                if await locator.nth(index).is_visible():
-                    return True
-        except Exception:
-            continue
-    try:
-        exact_login = page.get_by_text(re.compile(r"^登录$"))
-        for index in range(min(await exact_login.count(), 8)):
-            if await exact_login.nth(index).is_visible():
-                return True
-    except Exception:
-        pass
-    return False
 
 
 async def _is_xhs_authenticated(page) -> bool:

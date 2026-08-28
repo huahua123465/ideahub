@@ -837,14 +837,37 @@ def _run_pipeline(vid: str, url: str, manual_refresh: bool = False):
             update_running_status(title=title, description=description)
 
             image_urls = page.get("images") or []
+            image_diagnostics = {
+                "discovered": len(image_urls),
+                "downloaded": 0,
+                "failed": 0,
+                "rejected_payload": 0,
+                "rejected_dimensions": 0,
+            }
             if image_urls:
                 progress(42, "正在下载原图并进行 OCR...")
-                image_downloads = download_post_images(image_urls, str(task_dir), url)
+                image_downloads = download_post_images(
+                    image_urls, str(task_dir), url, diagnostics=image_diagnostics,
+                )
                 image_results = extract_images_text(image_downloads)
                 if image_results:
                     cover_title_info = image_results[0].get("cover_title") or {}
                 for item in image_results:
                     add_artifact("image", item["path"], {"ocr_text": item["text"]})
+            media_probe.update({
+                "status": "ok" if image_results else "unavailable",
+                "method": "page_image_download",
+                "message": (
+                    f"已保存 {len(image_results)} 张正文图片"
+                    if image_results
+                    else (
+                        "页面未发现正文图片链接"
+                        if not image_urls
+                        else "发现正文图片链接，但素材下载或校验未通过"
+                    )
+                ),
+                **image_diagnostics,
+            })
 
         progress(70, "正在获取博主账号基础数据...")
         account = _run_async(hydrate_account(url, platform, account))

@@ -29,6 +29,7 @@ class VideoMetadataTests(unittest.TestCase):
             stderr="",
         )
         with (
+            patch("media.downloader.validate_public_url"),
             patch("media.downloader.subprocess.run", side_effect=[failed, succeeded]) as run,
             patch("media.downloader.time.sleep") as sleep,
         ):

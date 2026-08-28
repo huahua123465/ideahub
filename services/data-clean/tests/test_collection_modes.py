@@ -24,9 +24,9 @@ class CollectionModeTests(unittest.TestCase):
         desktop = f"https://www.xiaohongshu.com/discovery/item/{note_id}?source=pc_share"
         mobile = f"https://www.xiaohongshu.com/discovery/item/{note_id}?source=app_share"
         fake_db = unittest.mock.Mock()
-        fake_db.list_tasks.return_value = [{"id": "desktop-task", "url": desktop}]
+        fake_db.list_tasks.return_value = [{"id": "desktop-task", "url": desktop, "owner_id": "owner-1"}]
         with patch.object(app_module, "db", fake_db):
-            self.assertEqual("desktop-task", _find_equivalent_task(mobile)["id"])
+            self.assertEqual("desktop-task", _find_equivalent_task(mobile, "owner-1")["id"])
 
     def test_analysis_with_source_links_is_the_default(self):
         self.assertEqual("analyze", COLLECTION_MODE)
@@ -175,15 +175,21 @@ class PipelineStorageTests(unittest.TestCase):
         return {"comments": [], "comment_summary": {"status": "ok", "threshold": 20}}
 
     @staticmethod
-    def _download_images(urls, output_dir, _referer):
+    def _download_images(urls, output_dir, _referer, diagnostics=None):
         image_dir = Path(output_dir) / "images"
         image_dir.mkdir(parents=True, exist_ok=True)
         image_path = image_dir / "image_01.webp"
         image_path.write_bytes(b"test-image")
-        return [{
+        result = [{
             "path": str(image_path), "source_url": urls[0],
             "width": 1080, "height": 1350, "size_bytes": image_path.stat().st_size,
         }]
+        if diagnostics is not None:
+            diagnostics.update({
+                "discovered": len(urls), "downloaded": 1, "failed": 0,
+                "rejected_payload": 0, "rejected_dimensions": 0,
+            })
+        return result
 
     def _run(self, root, manual_refresh=False):
         if manual_refresh:
@@ -416,7 +422,7 @@ class PipelineStorageTests(unittest.TestCase):
             patch.object(app_module, "_find_equivalent_task", return_value=None),
             patch.object(app_module, "resolve_share_url", return_value="https://www.xiaohongshu.com/explore/test"),
             patch.object(app_module, "validate_public_url", side_effect=lambda value: value),
-            patch.object(app_module, "url_to_id", return_value="task-api"),
+            patch.object(app_module, "_owner_task_id", return_value="task-api"),
             patch.object(app_module.threading, "Thread") as thread,
         ):
             response = app_module.app.test_client().post(

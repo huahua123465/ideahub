@@ -222,6 +222,56 @@ def _save_netscape_cookies(cookies: list[dict], path: Path) -> None:
     temp_path.replace(path)
 
 
+async def _has_visible_login_prompt(page) -> bool:
+    """Return true only when the page visibly presents a login control."""
+    for selector in (".login-btn", ".comments-login", ".login-container"):
+        try:
+            locator = page.locator(selector)
+            for index in range(min(await locator.count(), 5)):
+                if await locator.nth(index).is_visible():
+                    return True
+        except Exception:
+            continue
+    try:
+        exact_login = page.get_by_text(re.compile(r"^登录$"))
+        for index in range(min(await exact_login.count(), 8)):
+            if await exact_login.nth(index).is_visible():
+                return True
+    except Exception:
+        pass
+    return False
+
+
+async def _xhs_session_evidence(page) -> str:
+    """Classify strong browser evidence without treating limited data as logout.
+
+    A fuzzy like count or an empty comment stream is not authentication proof.
+    Only a visible login prompt combined with the absence of a web session is
+    strong enough to invalidate the persisted login marker.
+    """
+    try:
+        cookies = await page.context.cookies()
+        has_session = any(
+            cookie.get("name") == "web_session"
+            and len(str(cookie.get("value") or "")) > 10
+            for cookie in cookies
+        )
+    except Exception:
+        return "unknown"
+    visible_prompt = await _has_visible_login_prompt(page)
+    if visible_prompt and not has_session:
+        return "guest"
+    if has_session and not visible_prompt:
+        return "authenticated"
+    return "unknown"
+
+
+def _comment_collection_status(observer, comments: list[dict], session_evidence: str) -> str:
+    if observer.fuzzy_like_count and not comments:
+        return "login_required" if session_evidence == "guest" else "limited"
+    return "ok" if observer.primary_pages or observer.pool.scanned else "unavailable"
+
+
 class BrowserCommentCollector:
     def __init__(self, platform: str, pool: HotCommentPool):
         self.platform = platform
@@ -407,6 +457,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
     pool = HotCommentPool()
     observer = BrowserCommentCollector(platform, pool)
     browser = None
+    session_evidence = "not_applicable"
     try:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
@@ -431,6 +482,8 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
             # Let the SPA restore the authenticated session and mount its
             # comment panel before driving the hot stream.
             await page.wait_for_timeout(1_800)
+            if platform == "xiaohongshu":
+                session_evidence = await _xhs_session_evidence(page)
 
             deadline = asyncio.get_running_loop().time() + COMMENT_TIMEOUT_SEC
             reply_threads_clicked = 0
@@ -500,10 +553,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
             or any(count >= COMMENT_MAX_REPLY_PAGES for count in observer.reply_pages.values())
             or observer.has_more
         )
-        if observer.fuzzy_like_count and not comments:
-            status = "login_required"
-        else:
-            status = "ok" if observer.primary_pages or pool.scanned else "unavailable"
+        status = _comment_collection_status(observer, comments, session_evidence)
         summary = {
             **base_summary,
             "returned": len(comments),
@@ -514,6 +564,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
             "scope": "bounded_platform_hot_stream",
             "truncated": truncated,
             "status": status,
+            "session_evidence": session_evidence,
             "likes_obscured": bool(observer.fuzzy_like_count),
             "obscured_count": observer.fuzzy_like_count,
             "confidence": confidence,
@@ -538,6 +589,7 @@ async def extract_hot_comments(url: str, platform: str) -> dict:
                 "primary_pages": observer.primary_pages,
                 "reply_pages": sum(observer.reply_pages.values()),
                 "truncated": True,
+                "session_evidence": session_evidence,
                 "status": "partial" if pool.scanned else "unavailable",
                 "likes_obscured": bool(observer.fuzzy_like_count),
                 "obscured_count": observer.fuzzy_like_count,

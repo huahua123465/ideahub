@@ -239,10 +239,20 @@ def extract_video_text(video_path: str, interval: float = 3.0, max_samples: int 
     return "\n".join(f"[{int(sec)//60:02d}:{int(sec)%60:02d}] {text}" for sec, text in entries)
 
 
-def download_post_images(urls: list[str], output_dir: str, referer: str, limit: int = 20) -> list[dict]:
+def download_post_images(
+    urls: list[str], output_dir: str, referer: str, limit: int = 20,
+    diagnostics: dict | None = None,
+) -> list[dict]:
     image_dir = Path(output_dir) / "images"
     image_dir.mkdir(parents=True, exist_ok=True)
     paths = []
+    stats = {
+        "discovered": min(len(urls), limit),
+        "downloaded": 0,
+        "failed": 0,
+        "rejected_payload": 0,
+        "rejected_dimensions": 0,
+    }
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
         "Referer": referer,
@@ -255,15 +265,24 @@ def download_post_images(urls: list[str], output_dir: str, referer: str, limit: 
                 headers=headers,
             )
             content_type = response_headers.get("content-type", "")
-            if not content_type.startswith("image/") or len(content) < 1024:
+            if len(content) < 1024:
+                stats["rejected_payload"] += 1
                 continue
             with Image.open(BytesIO(content)) as image:
                 width, height = image.size
+                detected_format = (image.format or "").casefold()
             # Social pages also expose logos, avatars, and share banners. Real post
-            # images are normally high resolution; do not present page chrome as content.
-            if max(width, height) < 800:
+            # images are normally substantial; keep valid 720px posts while still
+            # rejecting small page chrome. PIL verification also accepts CDN images
+            # returned as application/octet-stream.
+            if max(width, height) < 480 or min(width, height) < 240:
+                stats["rejected_dimensions"] += 1
                 continue
-            suffix = ".png" if "png" in content_type else ".webp" if "webp" in content_type else ".jpg"
+            suffix = (
+                ".png" if "png" in content_type or detected_format == "png"
+                else ".webp" if "webp" in content_type or detected_format == "webp"
+                else ".jpg"
+            )
             path = image_dir / f"image_{len(paths) + 1:02d}{suffix}"
             path.write_bytes(content)
             paths.append({
@@ -273,8 +292,13 @@ def download_post_images(urls: list[str], output_dir: str, referer: str, limit: 
                 "height": height,
                 "size_bytes": len(content),
             })
+            stats["downloaded"] += 1
         except (httpx.HTTPError, UnsafeUrl, OSError, ValueError) as exc:
+            stats["failed"] += 1
             print(f"  image download failed safely ({exc.__class__.__name__})")
+    if diagnostics is not None:
+        diagnostics.clear()
+        diagnostics.update(stats)
     return paths
 
 

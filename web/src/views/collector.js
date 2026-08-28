@@ -151,10 +151,11 @@ function paintAccount() {
   }
   const status = login.status || 'idle';
   const account = login.account || {};
-  if (login.saved && Object.keys(account).length) {
+  if (login.saved) {
     const syncing = status === 'syncing';
+    const hasAccount = Object.values(account).some(Boolean);
     el.innerHTML = `<div class="collector-account-avatar">${esc([...accountName(account)][0] || '小')}</div>
-      <div class="collector-account-copy"><small>${syncing ? '正在同步账号' : '小红书已登录'}</small><b>${esc(accountName(account))}</b><span>${esc(login.message || (account.red_id ? `小红书号 ${account.red_id}` : '登录态已保存'))}</span></div>
+      <div class="collector-account-copy"><small>${syncing ? '正在同步账号' : '小红书已登录'}</small><b>${esc(accountName(account))}</b><span>${esc(login.message || (account.red_id ? `小红书号 ${account.red_id}` : (hasAccount ? '登录态已保存' : '登录有效，账号资料待同步')))}</span></div>
       <div class="collector-account-actions"><button type="button" data-account-sync ${syncing ? 'disabled' : ''}>${syncing ? '同步中…' : '同步'}</button><button type="button" data-login-switch ${syncing ? 'disabled' : ''}>切换</button></div>`;
     return;
   }
@@ -255,6 +256,7 @@ function resultHTML(task, data) {
   const images = data.images || [];
   const comments = data.comments || [];
   const video = data.media_assets?.video || {};
+  const mediaStatus = data.collection_status?.media || {};
   const refreshing = !!task.refresh_status;
   return `<div class="collector-result">
     <header class="collector-result-head">
@@ -280,6 +282,7 @@ function resultHTML(task, data) {
     </div>
     ${video.filename ? `<section class="collector-section"><header><div><span>视频素材</span><h3>服务器留存视频</h3></div></header><video class="collector-video" controls preload="metadata" src="${esc(collectorMediaUrl(task.id, video.filename))}"></video></section>` : ''}
     ${images.length ? `<section class="collector-section"><header><div><span>正文素材</span><h3>图片与画面文字</h3></div><b>${images.length} 张</b></header><div class="collector-gallery">${images.map(image => `<figure><img loading="lazy" src="${esc(imageSrc(task.id, image))}" alt="第 ${Number(image.index || 0)} 张采集图片"><figcaption><b>第 ${Number(image.index || 0)} 张</b><span>${esc(image.text || '未识别到画面文字')}</span></figcaption></figure>`).join('')}</div></section>` : ''}
+    ${data.media_type === 'image_post' && !images.length ? `<section class="collector-section"><header><div><span>正文素材</span><h3>暂未保存到图片</h3></div></header><div class="collector-soft-empty">${esc(mediaStatus.message || '平台没有返回可验证的正文图片，可稍后更新数据重试。')}</div></section>` : ''}
     ${data.video_text ? `<section class="collector-section"><header><div><span>视频识别</span><h3>字幕与画面文字</h3></div></header><div class="collector-longtext">${esc(data.video_text)}</div></section>` : ''}
     ${analysisHTML(data.ai_analysis || {})}
     <section class="collector-section"><header><div><span>原始证据</span><h3>评论样本</h3></div><b>${comments.length} 条</b></header>
