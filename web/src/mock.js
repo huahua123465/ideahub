@@ -325,6 +325,47 @@ let SAMPLE_ITEMS = [
 const sampleAsset = (sampleId, id, kind, mimeType, name, url) => ({ id, sampleId, captureId:sampleId, kind, originalName:name, mimeType, byteSize:245760, sha256:'demo-sha256', width:1080, height:1440, durationMs:null, sourceUrl:null, archiveQuality:'original_images', createdAt:hoursAgo(1), contentUrl:url });
 const sampleDetail = item => ({ ...item, firstIngestMethod:item.platform==='manual'?'manual':'link', lastIngestMethod:item.platform==='manual'?'manual':'link', captureTotal:Number(item.captureCount||1), captures:Array.from({length:Math.min(20,Number(item.captureCount||1))},(_,index)=>({id:item.id*100+index+1,sampleId:item.id,captureKey:`demo-${item.id}-${index+1}`,captureType:item.platform==='manual'?'manual':'link',capturedAt:new Date(new Date(item.updatedAt).valueOf()-index*86400000).toISOString(),sourceUrl:item.sourceUrl,normalizedPayload:{title:item.title},payloadSha256:'demo',completenessScore:item.completenessScore,missingFields:item.missingFields,createdAt:item.createdAt})), assets:item.id===1?[sampleAsset(1,101,'cover','image/svg+xml','cover.svg',collectorCover('关系降温后，先看清这三个信号')),sampleAsset(1,102,'image','image/svg+xml','detail.svg',collectorCover('不要猜，观察是否主动补位','#f5eee7','#6f5148'))]:[] });
 
+/* ---------- 样本库第二阶段：可核验的十五维研究演示 ---------- */
+const SAMPLE_DIMENSIONS = [
+  ['audience','用户对象','受众与需求'],['user_need','用户需求','受众与需求'],['topic','选题','受众与需求'],
+  ['core_viewpoint','核心观点','观点与爆点'],['breakout_point','爆点','观点与爆点'],
+  ['title_mechanism','标题机制','标题与开头'],['opening_method','开头方式','标题与开头'],
+  ['content_structure','内容结构','结构与论证'],['argumentation_method','论证方式','结构与论证'],
+  ['language_style','语言风格','表达与篇幅'],['length','篇幅','表达与篇幅'],['layout','排版','表达与篇幅'],
+  ['visual_style','视觉风格','视听与行动'],['bgm','BGM','视听与行动'],['cta','CTA','视听与行动'],
+].map(([key,label,group],index)=>({key,label,group,sortOrder:index+1}));
+const SAMPLE_TAGS = [
+  {id:101,kind:'audience',kindLabel:'用户对象',name:'女性用户',active:true},
+  {id:102,kind:'user_need',kindLabel:'用户需求',name:'关系判断需求',active:true},
+  {id:103,kind:'title_mechanism',kindLabel:'标题机制',name:'强结论标题',active:true},
+  {id:104,kind:'content_structure',kindLabel:'内容结构',name:'案例拆解结构',active:true},
+  {id:105,kind:'topic',kindLabel:'选题',name:'女性情感赛道',active:true},
+  {id:106,kind:'language_style',kindLabel:'语言风格',name:'专业解释',active:true},
+];
+let SAMPLE_TAG_LINKS = {1:[101,102,103,104,105,106],2:[101,102,104]};
+let researchVersionSeq=3,researchDecisionSeq=10,researchEvaluationSeq=4,researchJobSeq=0;
+const demoValues={audience:'在关系降温阶段反复猜测的女性',user_need:'判断对方是否仍在投入，并获得下一步行动标准',topic:'用行动证据判断关系降温',core_viewpoint:'不要用回复频率猜测关系，要看对方是否主动补位',breakout_point:'把情绪问题改写成可观察的两周验证窗口',title_mechanism:'痛点场景 + 强判断 + 数字承诺',opening_method:'先否定常见误区，再给出判断标准',content_structure:'问题场景 → 三个信号 → 观察窗口 → 行动建议',argumentation_method:'行为证据归纳 + 正反例边界',language_style:'克制、直接、短句判断',length:'中篇，约 900 字',layout:'封面强标题，正文卡片分段并突出关键词',visual_style:'低饱和暖色卡片，人物弱化，文字为主',bgm:null,cta:'收藏后按两周窗口执行，并留言描述观察结果'};
+function researchElements(source='ai'){
+  return SAMPLE_DIMENSIONS.map((dim,index)=>({id:index+1,dimensionKey:dim.key,label:dim.label,status:dim.key==='bgm'?'insufficient':'ok',aiValue:source==='manual'?null:demoValues[dim.key],effectiveValue:source==='manual'?null:demoValues[dim.key],function:dim.key==='title_mechanism'?'在进入正文前同时完成场景识别与价值承诺':dim.key==='content_structure'?'把焦虑引导到可执行的判断步骤':'承担该部分在作品中的具体沟通任务',confidence:source==='manual'?null:(dim.key==='bgm'?.18:.82-index*.008),evidenceStrength:dim.key==='bgm'?'none':'strong',applicability:'适用于需要明确判断标准的关系内容',limitations:'不适合替代个体咨询或推断对方内心',decisionStatus:index<5?'confirmed':'pending',decision:index<5?{decision:'confirmed',createdAt:hoursAgo(2),createdByName:'陈屿'}:null,tags:SAMPLE_TAGS.filter(tag=>tag.kind===dim.key).slice(0,index%3===0?1:0),evidence:dim.key==='bgm'?[]:[{sourceId:`body:p${index%3+1}`,sourceType:'正文',quote:index%2?'先观察对方是否主动补位，再决定下一步。':'从可验证的行动证据出发，减少在关系中的反复猜测。',locator:`正文第 ${index%3+1} 段`,verified:true}]}));
+}
+let SAMPLE_RESEARCH_VERSIONS={1:[
+  {id:1,sampleId:1,revision:2,source:'ai',isCurrent:true,status:'completed',model:'gpt-4o · prompt v2',inputSha256:'9f01a4f09bde1122',createdAt:hoursAgo(2),elements:researchElements('ai')},
+  {id:2,sampleId:1,revision:1,source:'legacy',isCurrent:false,status:'completed',model:'历史分析迁移',inputSha256:'6c881f09aa118922',createdAt:hoursAgo(24),elements:researchElements('ai').map(e=>({...e,decisionStatus:'pending',decision:null}))},
+],2:[]};
+let SAMPLE_EVALUATIONS={1:[
+  {id:1,target:'traffic',source:'manual',strengths:'标题场景明确，收藏理由充分。',weaknesses:'首屏情绪张力仍可提高。',learnable:'强判断标题与三点结构。',avoid:'不要照搬两周这个时间值。',hypothesis:'给焦虑用户可执行的观察窗口，降低理解成本。',createdAt:hoursAgo(1)},
+  {id:2,target:'expertise',source:'ai',strengths:'使用行为证据而非动机猜测。',weaknesses:'样本边界没有展开。',learnable:'正反例边界和证据链。',avoid:'不能把归纳写成普遍因果。',hypothesis:'清晰判断标准形成专业可信度。',createdAt:hoursAgo(3)},
+]};
+let SAMPLE_METRICS={1:[
+  {id:1,observedAt:hoursAgo(24),likes:8200,saves:4100,comments:210,shares:54,views:68000},
+  {id:4,observedAt:hoursAgo(18),likes:null,saves:null,comments:260,shares:null,views:81000},
+  {id:2,observedAt:hoursAgo(12),likes:12600,saves:6400,comments:342,shares:91,views:96000},
+  {id:3,observedAt:hoursAgo(1),likes:16000,saves:8206,comments:436,shares:128,views:124000},
+]};
+const RESEARCH_JOBS=new Map();
+const currentResearchVersion=id=>(SAMPLE_RESEARCH_VERSIONS[id]||[]).find(v=>v.isCurrent)||null;
+const researchSummary=id=>({sampleId:id,currentAnalysisVersionId:currentResearchVersion(id)?.id||null,sourceCaptureId:id*100+1,tags:(SAMPLE_TAG_LINKS[id]||[]).map(tagId=>SAMPLE_TAGS.find(t=>t.id===tagId)).filter(Boolean),versions:(SAMPLE_RESEARCH_VERSIONS[id]||[]).map(({elements,...v})=>({...v,elementCount:elements.length,confirmedElementCount:elements.filter(e=>['confirmed','edited'].includes(e.decisionStatus)).length})),evaluations:SAMPLE_EVALUATIONS[id]||[],metrics:SAMPLE_METRICS[id]||[]});
+
 const PEOPLE = [
   { id:1, name:'陈屿', dept:'产品部' }, { id:2, name:'苏禾', dept:'内容组' },
   { id:3, name:'叶昭', dept:'运营组' }, { id:4, name:'林知远', dept:'技术组' },
@@ -342,6 +383,54 @@ export async function handle(method, path, body) {
   logApi(method, path, 200);
 
   if (p === '/api/me') return ME;
+
+  /* ---------- 样本库第二阶段 ---------- */
+  if(p==='/api/sample-research/config'&&method==='GET')return {dimensions:SAMPLE_DIMENSIONS,tags:SAMPLE_TAGS,tagsByKind:Object.fromEntries(SAMPLE_DIMENSIONS.map(dim=>[dim.key,SAMPLE_TAGS.filter(tag=>tag.kind===dim.key)])),manualEntryAllowed:true,aiConfigured:true};
+  if(p==='/api/samples/search'&&method==='POST'){
+    const keyword=String(body?.q||'').trim().toLowerCase(),platform=body?.platform,status=body?.archiveStatus;
+    const flatTagIds=Array.isArray(body?.tagIds)?body.tagIds.map(Number):[];const selectedTagRows=SAMPLE_TAGS.filter(t=>flatTagIds.includes(Number(t.id)));const tagGroups=Object.values(selectedTagRows.reduce((out,t)=>{(out[t.kind]||={tagIds:[]}).tagIds.push(t.id);return out;},{}));const conditions=Array.isArray(body?.elements)?body.elements:[];
+    const matched=SAMPLE_ITEMS.map(item=>{
+      const version=currentResearchVersion(item.id),elements=version?.elements||[],tagIds=SAMPLE_TAG_LINKS[item.id]||[];
+      const tagOk=tagGroups.every(group=>(group.tagIds||[]).some(id=>tagIds.includes(Number(id))));
+      const elementMatches=conditions.map(condition=>{const element=elements.find(e=>e.dimensionKey===condition.dimensionKey&&!['rejected'].includes(e.decisionStatus));const value=String(element?.effectiveValue||'').toLowerCase();const facets=(condition.facets||[]).map(v=>String(v).toLowerCase());const ok=element&&(condition.facetMode==='all'?facets.every(f=>value.includes(f)):facets.some(f=>value.includes(f)));return ok?{dimensionKey:condition.dimensionKey,dimensionLabel:SAMPLE_DIMENSIONS.find(d=>d.key===condition.dimensionKey)?.label,effectiveValue:element.effectiveValue}:null;});
+      if((keyword&&!`${item.title} ${item.bodyText} ${item.accountName} ${item.platformContentId||''}`.toLowerCase().includes(keyword))||(platform&&item.platform!==platform)||(status&&item.archiveStatus!==status)||!tagOk||elementMatches.some(x=>!x))return null;
+      const matchedTags=tagGroups.flatMap(group=>(group.tagIds||[]).filter(id=>tagIds.includes(Number(id))).map(id=>SAMPLE_TAGS.find(t=>t.id===Number(id)))).filter(Boolean);
+      return {...item,matchedTags,matchedElements:elementMatches.filter(Boolean),elementCount:elements.length,confirmedElementCount:elements.filter(e=>['confirmed','edited'].includes(e.decisionStatus)).length};
+    }).filter(Boolean);
+    const page=Math.max(1,Number(body?.page||1)),pageSize=Math.max(1,Number(body?.pageSize||24));
+    return {items:matched.slice((page-1)*pageSize,page*pageSize).map(({bodyText,...item})=>item),total:matched.length,page,pageSize,summary:{total:SAMPLE_ITEMS.length,complete:SAMPLE_ITEMS.filter(i=>i.archiveStatus==='complete').length,incomplete:SAMPLE_ITEMS.filter(i=>i.archiveStatus!=='complete').length}};
+  }
+  const researchMatch=p.match(/^\/api\/samples\/(\d+)\/research$/);
+  if(researchMatch&&method==='GET')return researchSummary(Number(researchMatch[1]));
+  const analysesMatch=p.match(/^\/api\/samples\/(\d+)\/analyses$/);
+  if(analysesMatch&&method==='GET')return {items:researchSummary(Number(analysesMatch[1])).versions};
+  const manualAnalysisMatch=p.match(/^\/api\/samples\/(\d+)\/analyses\/manual$/);
+  if(manualAnalysisMatch&&method==='POST'){
+    const sampleId=Number(manualAnalysisMatch[1]),list=(SAMPLE_RESEARCH_VERSIONS[sampleId]||=[]);if(body?.selectOnSuccess)list.forEach(v=>v.isCurrent=false);
+    const version={id:++researchVersionSeq,sampleId,revision:list.length+1,source:'manual',isCurrent:!!body?.selectOnSuccess,status:'completed',model:null,inputSha256:`manual-${Date.now()}`,createdAt:new Date().toISOString(),elements:researchElements('manual')};list.unshift(version);return version;
+  }
+  const analysisVersionMatch=p.match(/^\/api\/samples\/(\d+)\/analyses\/(\d+)$/);
+  if(analysisVersionMatch&&method==='GET'){const version=(SAMPLE_RESEARCH_VERSIONS[Number(analysisVersionMatch[1])]||[]).find(v=>v.id===Number(analysisVersionMatch[2]));if(!version)throw Object.assign(new Error('分析版本不存在'),{status:404});return JSON.parse(JSON.stringify(version));}
+  const selectVersionMatch=p.match(/^\/api\/samples\/(\d+)\/analyses\/(\d+)\/select$/);
+  if(selectVersionMatch&&method==='POST'){const list=SAMPLE_RESEARCH_VERSIONS[Number(selectVersionMatch[1])]||[],id=Number(selectVersionMatch[2]);if(!list.some(v=>v.id===id))throw Object.assign(new Error('分析版本不存在'),{status:404});list.forEach(v=>v.isCurrent=v.id===id);return {ok:true,currentAnalysisVersionId:id};}
+  const decisionMatch=p.match(/^\/api\/samples\/(\d+)\/analyses\/(\d+)\/elements\/([^/]+)\/decisions$/);
+  if(decisionMatch&&method==='POST'){const version=(SAMPLE_RESEARCH_VERSIONS[Number(decisionMatch[1])]||[]).find(v=>v.id===Number(decisionMatch[2])),element=version?.elements.find(e=>e.dimensionKey===decodeURIComponent(decisionMatch[3]));if(!element)throw Object.assign(new Error('元素不存在'),{status:404});element.decisionStatus=body?.decision||'confirmed';element.effectiveValue=body?.decision==='edited'?body.value:body?.decision==='rejected'?null:element.aiValue;element.decision={id:++researchDecisionSeq,decision:element.decisionStatus,value:body?.value||null,createdAt:new Date().toISOString(),createdByName:ME.name};return {element};}
+  const elementTagsMatch=p.match(/^\/api\/samples\/(\d+)\/analyses\/(\d+)\/elements\/([^/]+)\/tags$/);
+  if(elementTagsMatch&&method==='POST'){const version=(SAMPLE_RESEARCH_VERSIONS[Number(elementTagsMatch[1])]||[]).find(v=>v.id===Number(elementTagsMatch[2])),element=version?.elements.find(e=>e.dimensionKey===decodeURIComponent(elementTagsMatch[3]));if(!element)throw Object.assign(new Error('元素不存在'),{status:404});const existing=new Set((element.tags||[]).map(t=>Number(t.id)));for(const id of body?.tagIds||[]){const tag=SAMPLE_TAGS.find(t=>t.id===Number(id)&&t.kind===element.dimensionKey);if(tag&&!existing.has(tag.id)){(element.tags||=[]).push(tag);existing.add(tag.id);}}return {items:element.tags||[]};}
+  const jobsCreateMatch=p.match(/^\/api\/samples\/(\d+)\/analysis-jobs$/);
+  if(jobsCreateMatch&&method==='POST'){const sampleId=Number(jobsCreateMatch[1]),id=++researchJobSeq,job={id,jobId:id,sampleId,status:'queued',progress:5,message:'正在准备证据…',polls:0,selectOnSuccess:body?.selectOnSuccess!==false};RESEARCH_JOBS.set(id,job);return {...job};}
+  const jobMatch=p.match(/^\/api\/samples\/(\d+)\/analysis-jobs\/(\d+)$/);
+  if(jobMatch&&method==='GET'){const job=RESEARCH_JOBS.get(Number(jobMatch[2]));if(!job)throw Object.assign(new Error('任务不存在'),{status:404});job.polls++;if(job.polls===1)Object.assign(job,{status:'running',progress:48,message:'正在核验证据与十五个维度…'});if(job.polls>=2){const list=(SAMPLE_RESEARCH_VERSIONS[job.sampleId]||=[]);if(!job.versionId){if(job.selectOnSuccess)list.forEach(v=>v.isCurrent=false);const version={id:++researchVersionSeq,sampleId:job.sampleId,revision:list.length+1,source:'ai',isCurrent:job.selectOnSuccess,status:'completed',model:'gpt-4o · prompt v3',inputSha256:`demo-${Date.now()}`,createdAt:new Date().toISOString(),elements:researchElements('ai').map(e=>({...e,decisionStatus:'pending',decision:null}))};list.unshift(version);job.versionId=version.id;}Object.assign(job,{status:'completed',progress:100,message:'拆解完成'});}return {...job};}
+  const sampleTagsMatch=p.match(/^\/api\/samples\/(\d+)\/tags$/);
+  if(sampleTagsMatch&&method==='GET')return {items:(SAMPLE_TAG_LINKS[Number(sampleTagsMatch[1])]||[]).map(id=>SAMPLE_TAGS.find(t=>t.id===id)).filter(Boolean)};
+  if(sampleTagsMatch&&method==='POST'){SAMPLE_TAG_LINKS[Number(sampleTagsMatch[1])]=[...new Set((body?.tagIds||[]).map(Number))];return {items:SAMPLE_TAG_LINKS[Number(sampleTagsMatch[1])].map(id=>SAMPLE_TAGS.find(t=>t.id===id)).filter(Boolean)};}
+  const evaluationsMatch=p.match(/^\/api\/samples\/(\d+)\/evaluations$/);
+  if(evaluationsMatch&&method==='GET')return {items:SAMPLE_EVALUATIONS[Number(evaluationsMatch[1])]||[]};
+  if(evaluationsMatch&&method==='POST'){const sampleId=Number(evaluationsMatch[1]),value={id:++researchEvaluationSeq,...body,createdAt:new Date().toISOString(),createdByName:ME.name};(SAMPLE_EVALUATIONS[sampleId]||=[]).unshift(value);return {evaluation:value};}
+  const aiEvaluationMatch=p.match(/^\/api\/samples\/(\d+)\/evaluations\/ai$/);
+  if(aiEvaluationMatch&&method==='POST'){const sampleId=Number(aiEvaluationMatch[1]),value={id:++researchEvaluationSeq,target:body?.target||'traffic',source:'ai',analysisVersionId:body?.analysisVersionId||null,strengths:['标题价值承诺清晰，进入正文前已完成受众筛选。'],weaknesses:['证据样本仍少，不能把当前表现解释成因果。'],worthLearning:['场景化强判断标题','逐步推进的案例结构'],avoidCopying:['不要照搬具体时间值和关系结论'],effectHypotheses:['明确判断标准降低理解成本，可能提升收藏。'],createdAt:new Date().toISOString(),createdByName:'AI'};(SAMPLE_EVALUATIONS[sampleId]||=[]).unshift(value);return value;}
+  const metricsMatch=p.match(/^\/api\/samples\/(\d+)\/metrics$/);
+  if(metricsMatch&&method==='GET')return {items:SAMPLE_METRICS[Number(metricsMatch[1])]||[]};
 
   /* ---------- 样本库阶段一 ---------- */
   if (p === '/api/samples' && method === 'GET') {
@@ -578,8 +667,9 @@ export async function handle(method, path, body) {
   /* ---------- 团队资料库：演示模式读取 ---------- */
   if (p === '/api/tags' && method === 'GET') {
     const byKind = {};
-    for (const t of TAGS) (byKind[t.kind] ||= []).push(t);
-    return { items: TAGS, byKind, kinds: Object.keys(byKind) };
+    const items=[...TAGS,...SAMPLE_TAGS];
+    for (const t of items) (byKind[t.kind] ||= []).push(t);
+    return { items, byKind, kinds: Object.keys(byKind) };
   }
   if (p === '/api/users' && method === 'GET') return { items: PEOPLE };
   if (p === '/api/admin/api-keys' && method === 'GET') return { items: [] };

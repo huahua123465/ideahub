@@ -12,14 +12,70 @@ export const TAG_KINDS = {
   problem_type:   '问题类型',
   demand:         '用户需求',
   content_type:   '内容类型',
+  audience:               '样本·用户对象',
+  user_need:              '样本·用户需求',
+  topic:                  '样本·选题',
+  core_viewpoint:         '样本·核心观点',
+  breakout_point:         '样本·爆点',
+  title_mechanism:        '样本·标题机制',
+  opening_method:         '样本·开头方式',
+  content_structure:      '样本·内容结构',
+  argumentation_method:   '样本·论证方式',
+  language_style:         '样本·语言风格',
+  length:                 '样本·篇幅',
+  layout:                 '样本·排版',
+  visual_style:           '样本·视觉风格',
+  bgm:                    '样本·BGM',
+  cta:                    '样本·CTA',
 };
 
+export const SAMPLE_ELEMENT_TAG_KINDS = Object.freeze([
+  'audience', 'user_need', 'topic', 'core_viewpoint', 'breakout_point',
+  'title_mechanism', 'opening_method', 'content_structure', 'argumentation_method',
+  'language_style', 'length', 'layout', 'visual_style', 'bgm', 'cta',
+]);
+
+export const TAG_NAME_MAX = 80;
+export const TAG_KIND_MAX = 64;
+
 export const isTagKind = (k) => Object.prototype.hasOwnProperty.call(TAG_KINDS, k);
+export const isSampleElementTagKind = (k) => SAMPLE_ELEMENT_TAG_KINDS.includes(k);
 
 export const tagRow = (r) => ({
   id: Number(r.id), kind: r.kind, kindLabel: TAG_KINDS[r.kind] || r.kind,
   name: r.name, sort: Number(r.sort) || 0, active: r.active !== false,
+  researchDimension: isSampleElementTagKind(r.kind),
 });
+
+const normalizedTagIds = (tagIds) => [...new Set((tagIds || [])
+  .map(Number).filter(id => Number.isSafeInteger(id) && id > 0))];
+
+/**
+ * Resolve only existing, active dictionary values. AI callers must use this rather than
+ * creating free-text tags: the returned Map also lets them verify kind=dimension_key.
+ */
+export async function activeTagsByIds(tagIds) {
+  const ids = normalizedTagIds(tagIds);
+  if (!ids.length) return new Map();
+  const { rows } = await query(
+    `SELECT id,kind,name,sort,active FROM tags
+      WHERE active AND id = ANY($1::bigint[])
+      ORDER BY kind,sort,id`, [ids]);
+  return new Map(rows.map(row => [Number(row.id), tagRow(row)]));
+}
+
+export async function requireActiveTagIds(tagIds, { kinds = null } = {}) {
+  const ids = normalizedTagIds(tagIds);
+  const found = await activeTagsByIds(ids);
+  const missing = ids.filter(id => !found.has(id));
+  if (missing.length) throw badRequest(`标签不存在或已停用：${missing.join(', ')}`);
+  if (kinds) {
+    const allowed = new Set(kinds);
+    const wrong = [...found.values()].filter(tag => !allowed.has(tag.kind));
+    if (wrong.length) throw badRequest(`标签类型不适用于这里：${wrong.map(tag => tag.name).join('、')}`);
+  }
+  return found;
+}
 
 /**
  * 批量取一组记录的标签。
@@ -29,7 +85,7 @@ export const tagRow = (r) => ({
  * 返回 Map<entityId, tag[]>。
  */
 export async function loadTags(entity, ids) {
-  const list = [...new Set((ids || []).map(Number).filter(Number.isFinite))];
+  const list = normalizedTagIds(ids);
   const map = new Map(list.map(id => [id, []]));
   if (!list.length) return map;
   const { rows } = await query(
@@ -50,10 +106,11 @@ export async function tagsOf(entity, id) {
  * 覆盖式设置标签。传 null / undefined 表示「这次不动标签」，传 [] 表示「清空」——
  * 两者必须区分开，否则任何一次只改标题的保存都会顺手把标签清光。
  */
-export async function setTags(entity, id, tagIds) {
+export async function setTags(entity, id, tagIds, { requireActive = false, kinds = null } = {}) {
   if (tagIds == null) return;
   if (!Array.isArray(tagIds)) throw badRequest('tagIds 必须是数组');
-  const ids = [...new Set(tagIds.map(Number).filter(Number.isFinite))];
+  const ids = normalizedTagIds(tagIds);
+  if (requireActive || kinds) await requireActiveTagIds(ids, { kinds });
   await query('DELETE FROM entity_tags WHERE entity = $1 AND entity_id = $2', [entity, id]);
   if (!ids.length) return;
   // 一次插完。逐条 INSERT 在有 6 个标签时就是 6 次往返
@@ -84,7 +141,7 @@ export async function clearTags(entity, id) {
  * 这样不用在应用层先查一次标签的 kind 再拼 SQL。
  */
 export function tagWhere(entity, tagIds, args, alias = 'id') {
-  const ids = [...new Set((tagIds || []).map(Number).filter(Number.isFinite))];
+  const ids = normalizedTagIds(tagIds);
   if (!ids.length) return null;
   args.push(entity); const pe = '$' + args.length;
   args.push(ids);    const pt = '$' + args.length;

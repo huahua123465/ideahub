@@ -35,6 +35,7 @@ import * as smartImport from './routes/smart-import.mjs';
 import * as learning from './routes/learning.mjs';
 import * as collector from './routes/collector.mjs';
 import * as samples from './routes/samples.mjs';
+import * as sampleResearch from './routes/sample-research.mjs';
 import { archiveStaleIdeas } from './routes/status.mjs';
 import { publish, closeAll, clientCount } from './lib/bus.mjs';
 
@@ -101,6 +102,7 @@ smartImport.mount(router);
 learning.mount(router);
 collector.mount(router);
 samples.mount(router);
+sampleResearch.mount(router);
 
 
 /* ---------- 登录闸门 ---------- */
@@ -221,7 +223,8 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('access-control-allow-origin', origin);
     res.setHeader('vary', 'Origin');
     res.setHeader('access-control-allow-credentials', 'true');   // 不加这个，跨域时 cookie 不会带
-    res.setHeader('access-control-allow-headers', 'content-type, authorization, x-user-id, last-event-id');
+    res.setHeader('access-control-allow-headers',
+      'content-type, authorization, x-user-id, last-event-id, idempotency-key, x-idempotency-key');
     res.setHeader('access-control-allow-methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   }
   if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; }

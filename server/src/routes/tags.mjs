@@ -8,7 +8,7 @@
 import { query } from '../db/index.mjs';
 import { readJson, sendJson, q, need, badRequest, notFound, forbidden } from '../lib/http.mjs';
 import { currentUser } from '../lib/auth.mjs';
-import { TAG_KINDS, isTagKind, tagRow } from '../lib/tags.mjs';
+import { TAG_KINDS, TAG_NAME_MAX, isTagKind, tagRow } from '../lib/tags.mjs';
 import { publish } from '../lib/bus.mjs';
 
 async function assertAdmin(req) {
@@ -41,7 +41,13 @@ export function mount(router) {
 
     // 每类下面挂了多少条资料，管理员删标签前能看到影响面
     const { rows: used } = await query(
-      `SELECT tag_id, count(*)::int AS n FROM entity_tags GROUP BY tag_id`);
+      `SELECT tag_id,sum(n)::int AS n
+         FROM (
+           SELECT tag_id,count(*)::int AS n FROM entity_tags GROUP BY tag_id
+           UNION ALL
+           SELECT tag_id,count(*)::int AS n FROM sample_element_tags GROUP BY tag_id
+         ) usage
+        GROUP BY tag_id`);
     const usage = Object.fromEntries(used.map(r => [Number(r.tag_id), r.n]));
     for (const t of items) t.usedBy = usage[t.id] || 0;
 
@@ -52,7 +58,7 @@ export function mount(router) {
     await assertAdmin(req);
     const b = await readJson(req);
     if (!isTagKind(b.kind)) throw badRequest('标签类型只能是：' + Object.keys(TAG_KINDS).join(' / '));
-    const name = need(b, 'name', { max: 20, label: '标签名' });
+    const name = need(b, 'name', { max: TAG_NAME_MAX, label: '标签名' });
 
     // 同类下重名直接把老的那条返回回去，不报错 ——
     // 管理员看到的结果（这个标签存在）和他想要的一致，弹个「已存在」的红框没有意义
@@ -68,7 +74,7 @@ export function mount(router) {
     await assertAdmin(req);
     const b = await readJson(req);
     const sets = [], args = [];
-    if (b.name !== undefined) { args.push(need(b, 'name', { max: 20, label: '标签名' })); sets.push(`name = $${args.length}`); }
+    if (b.name !== undefined) { args.push(need(b, 'name', { max: TAG_NAME_MAX, label: '标签名' })); sets.push(`name = $${args.length}`); }
     if (b.sort !== undefined) { args.push(Number(b.sort) || 0); sets.push(`sort = $${args.length}`); }
     if (b.active !== undefined) { args.push(!!b.active); sets.push(`active = $${args.length}`); }
     if (!sets.length) throw badRequest('没有要修改的字段');
@@ -90,13 +96,16 @@ export function mount(router) {
     await assertAdmin(req);
     const id = Number(params.id);
     const { rows: used } = await query(
-      'SELECT count(*)::int AS n FROM entity_tags WHERE tag_id = $1', [id]);
-    if (used[0].n > 0) {
+      `SELECT
+         (SELECT count(*) FROM entity_tags WHERE tag_id=$1) +
+         (SELECT count(*) FROM sample_element_tags WHERE tag_id=$1) AS n`, [id]);
+    const usedBy = Number(used[0]?.n) || 0;
+    if (usedBy > 0) {
       const { rows } = await query(
         'UPDATE tags SET active = false WHERE id = $1 RETURNING *', [id]);
       if (!rows[0]) throw notFound('没有这个标签');
-      sendJson(res, 200, { ok: true, disabled: true, usedBy: used[0].n,
-        message: `这个标签已经用在 ${used[0].n} 条资料上，已停用（不再出现在下拉里），历史资料保持不变` });
+      sendJson(res, 200, { ok: true, disabled: true, usedBy,
+        message: `这个标签已经用在 ${usedBy} 条资料上，已停用（不再出现在下拉里），历史资料保持不变` });
     } else {
       const { rows } = await query('DELETE FROM tags WHERE id = $1 RETURNING id', [id]);
       if (!rows[0]) throw notFound('没有这个标签');

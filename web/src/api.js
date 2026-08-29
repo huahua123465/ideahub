@@ -38,12 +38,12 @@ export async function probe() {
   return state.mode;
 }
 
-async function call(method, path, body) {
+async function call(method, path, body, extraHeaders = {}) {
   if (state.mode === 'mock') return mock.handle(method, path, body);
 
   const r = await fetch(BASE + path, {
     method,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...extraHeaders },
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'include',      // 登录态在 HttpOnly cookie 里，跨域时必须显式带
   });
@@ -267,6 +267,27 @@ export const api = {
   samplePatch:          (id, payload) => call('PATCH',  `/api/samples/${encodeURIComponent(id)}`, payload),
   sampleCaptureRaw:     (sampleId, captureId) => call('GET', `/api/samples/${encodeURIComponent(sampleId)}/captures/${encodeURIComponent(captureId)}/raw`),
   sampleCaptures:       (sampleId, opts = {}) => call('GET', `/api/samples/${encodeURIComponent(sampleId)}/captures` + qs(opts)),
+  /* ---------- 样本研究台（第二阶段） ----------
+     列表组合筛选使用 POST，避免四五组条件塞进 URL；分析、确认和评价都采用
+     追加版本，前端不会原地覆盖 AI 原值。 */
+  sampleSearch:         (payload = {}) => call('POST', '/api/samples/search', payload),
+  sampleResearchConfig: () => call('GET', '/api/sample-research/config'),
+  sampleTagDictionary:  () => call('GET', '/api/tags'),
+  sampleResearch:       (id) => call('GET', `/api/samples/${encodeURIComponent(id)}/research`),
+  sampleAnalysisStart:  (id, payload = {}, idempotencyKey = `${id}-${Date.now()}`) => call('POST', `/api/samples/${encodeURIComponent(id)}/analysis-jobs`, payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleAnalysisJob:    (id, jobId) => call('GET', `/api/samples/${encodeURIComponent(id)}/analysis-jobs/${encodeURIComponent(jobId)}`),
+  sampleAnalyses:       (id) => call('GET', `/api/samples/${encodeURIComponent(id)}/analyses`),
+  sampleAnalysisManual: (id, payload = {}) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/manual`, payload),
+  sampleAnalysis:       (id, versionId) => call('GET', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}`),
+  sampleAnalysisSelect: (id, versionId) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}/select`, {}),
+  sampleElementDecision:(id, versionId, key, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}/elements/${encodeURIComponent(key)}/decisions`, payload),
+  sampleElementTags:    (id, versionId, key, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}/elements/${encodeURIComponent(key)}/tags`, payload),
+  sampleTags:           (id) => call('GET', `/api/samples/${encodeURIComponent(id)}/tags`),
+  sampleTagsSave:       (id, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/tags`, payload),
+  sampleEvaluations:    (id, opts = {}) => call('GET', `/api/samples/${encodeURIComponent(id)}/evaluations` + qs(opts)),
+  sampleEvaluationCreate:(id, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/evaluations`, payload),
+  sampleEvaluationAi:   (id, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/evaluations/ai`, payload),
+  sampleMetrics:        (id) => call('GET', `/api/samples/${encodeURIComponent(id)}/metrics`),
   sampleAssetUpload:    async (sampleId, file, meta = {}) => {
     const path = sampleId ? `/api/samples/${encodeURIComponent(sampleId)}/assets` : '/api/samples/assets';
     const params = new URLSearchParams({ name:file.name, title:meta.title || file.name });

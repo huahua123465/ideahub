@@ -17,6 +17,7 @@ import {
   upsertSampleWithCapture,
 } from '../lib/sample-archive.mjs';
 import { HttpError, badRequest, notFound, q, qInt, readJson, sendJson } from '../lib/http.mjs';
+import { recordMetricSnapshot } from '../lib/sample-research.mjs';
 
 const ASSET_ROOT = defaultSampleAssetDir();
 const ASSET_KINDS = new Set(['cover', 'image', 'video', 'audio', 'other']);
@@ -198,6 +199,15 @@ function inlineImage(value) {
 function maxAssetBytes() {
   const configured = Number(process.env.SAMPLE_ASSET_MAX_BYTES);
   return Number.isSafeInteger(configured) && configured > 0 ? configured : 500 * 1024 * 1024;
+}
+
+async function recordCaptureMetrics(result, input, createdBy = null, db = { query }) {
+  if (!result?.sample?.id || !result?.capture?.id) return null;
+  return recordMetricSnapshot(db, {
+    sampleId:Number(result.sample.id), captureId:Number(result.capture.id),
+    observedAt:input?.capturedAt || input?.captured_at || result.capture.captured_at,
+    metrics:input?.metrics || input?.engagement || {}, createdBy,
+  });
 }
 
 function strictId(value, label = 'id') {
@@ -416,7 +426,11 @@ export function mount(router) {
       throw badRequest('A single sample cannot archive more than 50 images');
     }
     const input = collectorPayloadToSampleInput(payload);
-    const result = await tx(client => upsertSampleWithCapture(client, input, null));
+    const result = await tx(async client => {
+      const saved=await upsertSampleWithCapture(client,input,null);
+      await recordCaptureMetrics(saved,input,null,client);
+      return saved;
+    });
     const sampleId = Number(result.sample.id);
     const captureId = result.capture?.id == null ? null : Number(result.capture.id);
     const media = await archiveCollectorAssets(sampleId, captureId, payload);
@@ -581,9 +595,11 @@ export function mount(router) {
     if (conflicts[0]) {
       throw new HttpError(409, '该原始链接或作品 ID 已属于另一篇样本，请打开已有样本继续补充');
     }
-    const result = await tx(client => upsertSampleWithCapture(
-      client,input,me.id,{ canonicalKey:sample.canonical_key },
-    ));
+    const result = await tx(async client => {
+      const saved=await upsertSampleWithCapture(client,input,me.id,{ canonicalKey:sample.canonical_key });
+      await recordCaptureMetrics(saved,input,me.id,client);
+      return saved;
+    });
     await refreshCompleteness(Number(sample.id));
     const fresh = await loadSample(Number(sample.id));
     sendJson(res, 200, {
@@ -600,7 +616,11 @@ export function mount(router) {
     if (requested && requested !== 'manual' && requested !== 'link') {
       throw badRequest('此入口只接受手动录入或链接归档');
     }
-    const result = await tx(client => upsertSampleWithCapture(client, body, me.id));
+    const result = await tx(async client => {
+      const saved=await upsertSampleWithCapture(client,body,me.id);
+      await recordCaptureMetrics(saved,body,me.id,client);
+      return saved;
+    });
     const fresh = await loadSample(Number(result.sample.id));
     sendJson(res, result.inserted ? 201 : 200, {
       sample: sampleListItem(fresh || result.sample),
@@ -622,7 +642,11 @@ export function mount(router) {
       contentType: q(url, 'contentType'),
       rawPayload: { source: 'raw_media_upload' },
     };
-    const result = await tx(client => upsertSampleWithCapture(client, input, me.id));
+    const result = await tx(async client => {
+      const saved=await upsertSampleWithCapture(client,input,me.id);
+      await recordCaptureMetrics(saved,input,me.id,client);
+      return saved;
+    });
     if (!url.searchParams.has('captureId') && result.capture?.id) {
       url.searchParams.set('captureId', String(result.capture.id));
     }

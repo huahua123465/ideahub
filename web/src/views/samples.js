@@ -1,8 +1,9 @@
-/** 内容样本库第一阶段：原始作品归档、完整度与三种录入入口。 */
+/** 内容样本库：原始归档入口 + 第二阶段内容研究工作台。 */
 import { api } from '../api.js';
 import { $, esc, fromNow } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
+import { openResearch, leaveResearch } from './sample-research.js';
 
 let active = false;
 let initialized = false;
@@ -21,6 +22,15 @@ let listSeq = 0;
 let linkTimer = null;
 let linkJob = null;
 let intakeMode = 'link';
+let intakeOpen = false;
+let filtersOpen = false;
+let researchConfig = null;
+let researchConfigError = '';
+let elementConditions = [];
+let listError = '';
+let listLoading = false;
+let listScrollTop = 0;
+let researchPaused = false;
 
 const root = () => $('#v-samples');
 const MISSING = {
@@ -34,6 +44,8 @@ const STATUS = {
 
 export function leave() {
   active = false;
+  researchPaused=Boolean(selectedId&&detail);
+  leaveResearch();
   clearTimeout(linkTimer);
   linkTimer = null;
 }
@@ -41,7 +53,9 @@ export function leave() {
 export async function render() {
   active = true;
   if (!initialized) scaffold();
+  loadResearchConfig();
   await loadSamples();
+  if(researchPaused&&selectedId&&detail){researchPaused=false;await openResearch($('#samplesDetail'),detail,researchOptions());}
   if (linkJob) { paintLinkProgress(); pollLinkJob(true); }
 }
 
@@ -51,18 +65,18 @@ function scaffold() {
       <div class="sub">先保存原始作品，再逐步拆解、比较和沉淀可复用元素。</div></div>
       <div class="samples-head-stats" id="samplesHeadStats"></div></div>
 
-    <section class="samples-intake">
-      <header><div><span>建立样本</span><h2>三种方式进入同一套归档</h2></div>
-        <nav aria-label="样本录入方式"><button class="on" data-sample-mode="link">链接采集</button><button data-sample-mode="manual">手动录入</button><button data-sample-mode="upload">媒体上传</button></nav></header>
-      <div id="sampleIntakeBody"></div>
+    <section class="samples-intake compact" id="samplesIntake">
+      <header><button type="button" class="samples-intake-toggle" id="samplesIntakeToggle" aria-expanded="false"><span>＋</span><div><small>建立样本</small><h2>新增内容样本</h2><p>链接采集、手动录入或直接上传媒体</p></div><b>展开</b></button></header>
+      <div class="samples-intake-body" id="samplesIntakePanel" hidden><nav aria-label="样本录入方式" role="tablist"><button role="tab" aria-selected="true" class="on" data-sample-mode="link">链接采集</button><button role="tab" aria-selected="false" data-sample-mode="manual">手动录入</button><button role="tab" aria-selected="false" data-sample-mode="upload">媒体上传</button></nav><div id="sampleIntakeBody"></div></div>
     </section>
 
     <section class="samples-toolbar">
       <label>${ICON.search}<input id="sampleQuery" placeholder="搜索标题、正文、账号或作品 ID"></label>
       <select id="samplePlatform" aria-label="平台筛选"><option value="">全部平台</option><option value="xiaohongshu">小红书</option><option value="douyin">抖音</option><option value="manual">手动归档</option></select>
       <select id="sampleArchiveStatus" aria-label="完整度筛选"><option value="">全部完整度</option><option value="complete">完整归档</option><option value="usable">可用但有缺项</option><option value="partial">部分归档</option></select>
-      <button type="button" id="sampleReload">刷新</button>
+      <button type="button" id="sampleFiltersToggle" aria-expanded="false">组合筛选</button><button type="button" id="sampleReload">刷新</button>
     </section>
+    <section class="sample-filter-builder" id="sampleFilterBuilder" hidden><div class="sample-filter-loading">正在读取标签和元素字典…</div></section>
     <div class="samples-pager" id="samplesPager"></div>
 
     <section class="samples-workspace">
@@ -76,11 +90,18 @@ function scaffold() {
 
 function bind() {
   root().addEventListener('click', event => {
+    if (event.target.closest('#samplesIntakeToggle')) { setIntakeOpen(!intakeOpen); return; }
+    if (event.target.closest('#sampleFiltersToggle')) { filtersOpen=!filtersOpen;paintFilterBuilder();return; }
+    if(event.target.closest('[data-filter-config-retry]')){researchConfig=null;researchConfigError='';loadResearchConfig();return;}
+    if (event.target.closest('[data-filter-add]')) { if(elementConditions.length<15){elementConditions.push({dimensionKey:'audience',mode:'any',facets:''});paintFilterBuilder();} return; }
+    const removeCondition=event.target.closest('[data-filter-remove]');
+    if(removeCondition){elementConditions.splice(Number(removeCondition.dataset.filterRemove),1);paintFilterBuilder();page=1;loadSamples();return;}
+    if(event.target.closest('[data-filter-clear]')){elementConditions=[];root().querySelectorAll('[name="sampleTagIds"]:checked').forEach(input=>input.checked=false);paintFilterBuilder();page=1;loadSamples();return;}
     const mode = event.target.closest('[data-sample-mode]');
     if (mode) { intakeMode = mode.dataset.sampleMode; paintIntake(); return; }
-    if (event.target.closest('[data-sample-edit]')) { intakeMode='manual'; paintIntake(); root().querySelector('.samples-intake')?.scrollIntoView({behavior:'smooth'}); return; }
-    if (event.target.closest('[data-sample-attach]')) { intakeMode='upload'; paintIntake(); root().querySelector('.samples-intake')?.scrollIntoView({behavior:'smooth'}); return; }
-    if (event.target.closest('[data-sample-back]')) { $('#samplesList')?.scrollIntoView({behavior:'smooth'}); return; }
+    if (event.target.closest('[data-sample-edit]')) { intakeMode='manual'; setIntakeOpen(true); paintIntake(); root().querySelector('.samples-intake')?.scrollIntoView({behavior:'smooth'}); return; }
+    if (event.target.closest('[data-sample-attach]')) { intakeMode='upload'; setIntakeOpen(true); paintIntake(); root().querySelector('.samples-intake')?.scrollIntoView({behavior:'smooth'}); return; }
+    if (event.target.closest('[data-sample-back]')) { closeMobileDetail(); return; }
     const rawButton=event.target.closest('[data-capture-raw]');
     if(rawButton){loadCaptureRaw(rawButton);return;}
     if(event.target.closest('[data-captures-more]')){loadMoreCaptures();return;}
@@ -98,10 +119,20 @@ function bind() {
   });
   root().addEventListener('input', event => {
     if (event.target.id === 'sampleQuery') { page=1; debounceLoad(); }
+    if(event.target.matches('[data-element-condition][data-field="facets"]')){const index=Number(event.target.dataset.index);if(elementConditions[index])elementConditions[index].facets=event.target.value;page=1;debounceLoad();}
   });
   root().addEventListener('change', event => {
     if (['samplePlatform','sampleArchiveStatus'].includes(event.target.id)) { page=1; loadSamples(); }
+    if(event.target.name==='sampleTagIds'){page=1;loadSamples();}
+    if(event.target.matches('[data-element-condition]')){const index=Number(event.target.dataset.index);const key=event.target.dataset.field;if(elementConditions[index]&&key)elementConditions[index][key]=event.target.value;page=1;debounceLoad();}
   });
+  root().addEventListener('keydown', event=>{
+    if((event.key==='Enter'||event.key===' ')&&event.target.matches('.sample-card')){event.preventDefault();selectSample(event.target.dataset.sampleId);}
+  });
+}
+
+function setIntakeOpen(value){
+  intakeOpen=!!value;const panel=$('#samplesIntakePanel'),toggle=$('#samplesIntakeToggle');if(panel)panel.hidden=!intakeOpen;if(toggle){toggle.setAttribute('aria-expanded',String(intakeOpen));toggle.querySelector(':scope>b').textContent=intakeOpen?'收起':'展开';}root()?.querySelector('#samplesIntake')?.classList.toggle('open',intakeOpen);if(intakeOpen)paintIntake();
 }
 
 function localDateTime(value) {
@@ -117,7 +148,7 @@ function isoFromLocalDateTime(value) {
 }
 
 function paintIntake() {
-  root().querySelectorAll('[data-sample-mode]').forEach(button => button.classList.toggle('on', button.dataset.sampleMode === intakeMode));
+  root().querySelectorAll('[data-sample-mode]').forEach(button => {const on=button.dataset.sampleMode===intakeMode;button.classList.toggle('on',on);button.setAttribute('aria-selected',String(on));});
   const body = $('#sampleIntakeBody');
   const current = selectedId && detail && Number(detail.id) === Number(selectedId) ? detail : null;
   if (intakeMode === 'link') {
@@ -168,25 +199,43 @@ function paintIntake() {
 let loadTimer = null;
 function debounceLoad() { clearTimeout(loadTimer); loadTimer = setTimeout(loadSamples, 260); }
 
+async function loadResearchConfig(){
+  if(researchConfig)return;
+  researchConfigError='';paintFilterBuilder();
+  try{const [config,dictionary]=await Promise.all([api.sampleResearchConfig(),api.sampleTagDictionary()]);researchConfig={...config,tags:dictionary?.items||[]};paintFilterBuilder();}
+  catch(error){researchConfigError=error.message||'筛选字典读取失败';paintFilterBuilder();}
+}
+function paintFilterBuilder(){
+  const el=$('#sampleFilterBuilder');const toggle=$('#sampleFiltersToggle');if(!el)return;
+  el.hidden=!filtersOpen;toggle?.setAttribute('aria-expanded',String(filtersOpen));if(!filtersOpen)return;
+  if(researchConfigError){el.innerHTML=`<div class="sample-filter-error"><span>${esc(researchConfigError)}</span><button type="button" data-filter-config-retry>重试</button></div>`;return;}
+  if(!researchConfig){el.innerHTML='<div class="sample-filter-loading">正在读取标签和元素字典…</div>';return;}
+  const tags=researchConfig.tags||researchConfig.tagDictionary||[];const dimensions=researchConfig.dimensions||[];
+  const selected=new Set([...root().querySelectorAll('[name="sampleTagIds"]:checked')].map(input=>String(input.value)));
+  const groups=tags.reduce((out,tag)=>{const key=tag.kindLabel||tag.kind||'其他';(out[key]||=[]).push(tag);return out;},{});
+  el.innerHTML=`<header><div><b>组合筛选</b><span>同类标签任意命中，跨类标签同时满足；不同元素条件之间也是同时满足。</span></div><button type="button" data-filter-clear>清空全部</button></header>
+    <div class="sample-tag-filters">${Object.entries(groups).map(([name,list])=>`<fieldset><legend>${esc(name)} <small>任选</small></legend>${list.map(tag=>`<label><input type="checkbox" name="sampleTagIds" value="${tag.id}" ${selected.has(String(tag.id))?'checked':''}><span>${esc(tag.name)}</span></label>`).join('')}</fieldset>`).join('')||'<p>标签字典暂无可用标签。</p>'}</div>
+    <div class="sample-element-filters"><header><b>元素条件</b><span>最多 15 条，条件之间同时满足</span></header>${elementConditions.map((condition,index)=>`<div class="sample-element-condition"><select data-element-condition data-index="${index}" data-field="dimensionKey" aria-label="元素维度">${dimensions.map(d=>`<option value="${esc(d.key||d.dimensionKey)}" ${(d.key||d.dimensionKey)===condition.dimensionKey?'selected':''}>${esc(d.label||d.name||d.dimensionKey)}</option>`).join('')}</select><select data-element-condition data-index="${index}" data-field="mode" aria-label="匹配方式"><option value="any" ${condition.mode==='any'?'selected':''}>任意词命中</option><option value="all" ${condition.mode==='all'?'selected':''}>全部词命中</option></select><input data-element-condition data-index="${index}" data-field="facets" value="${esc(condition.facets)}" placeholder="输入关键词，用逗号分隔" aria-label="元素关键词"><button type="button" data-filter-remove="${index}" aria-label="删除元素条件">删除</button></div>`).join('')||'<p>还没有元素条件，可以按标题机制、用户需求、内容结构等组合查询。</p>'}<button type="button" data-filter-add ${elementConditions.length>=15?'disabled':''}>＋ 添加元素条件</button></div>`;
+}
+
+function currentFilterPayload(){
+  const tags=(researchConfig?.tags||researchConfig?.tagDictionary||[]);const selectedIds=new Set([...root().querySelectorAll('[name="sampleTagIds"]:checked')].map(input=>Number(input.value)));
+  const tagGroups=Object.values(tags.filter(t=>selectedIds.has(Number(t.id))).reduce((out,t)=>{const key=t.kind||t.kindLabel||'other';(out[key]||={kind:key,tagIds:[]}).tagIds.push(Number(t.id));return out;},{}));
+  return {q:$('#sampleQuery')?.value?.trim()||undefined,platform:$('#samplePlatform')?.value||undefined,archiveStatus:$('#sampleArchiveStatus')?.value||undefined,tagIds:tagGroups.flatMap(group=>group.tagIds),elements:elementConditions.filter(c=>String(c.facets||'').trim()).map(c=>({dimensionKey:c.dimensionKey,facetMode:c.mode,facets:String(c.facets).split(/[,，]/).map(v=>v.trim()).filter(Boolean)})),page,pageSize:PAGE_SIZE};
+}
+
 async function loadSamples() {
   const seq=++listSeq;
-  const opts = {
-    q:$('#sampleQuery')?.value?.trim() || undefined,
-    platform:$('#samplePlatform')?.value || undefined,
-    archiveStatus:$('#sampleArchiveStatus')?.value || undefined,
-    page,
-    pageSize:PAGE_SIZE,
-  };
+  const opts=currentFilterPayload();listLoading=true;listError='';paintList();
   try {
-    const data = await api.samples(opts);
+    const data = await api.sampleSearch(opts);
     if (!active||seq!==listSeq) return;
     items = data.items || []; total = Number(data.total || items.length);
     summary = data.summary || {total,complete:items.filter(item=>item.archiveStatus==='complete').length,incomplete:items.filter(item=>item.archiveStatus!=='complete').length};
     if (!items.length && total > 0 && page > 1) { page=1; return loadSamples(); }
-    paintStats(); paintList(); paintPager();
-    if (selectedId && items.some(item => String(item.id) === String(selectedId))) loadDetail(selectedId, true);
-    else if (selectedId) { selectedId = null; detail = null; paintDetail(); }
-  } catch (error) { if(seq===listSeq)toast('info', error.message || '样本读取失败'); }
+    listLoading=false;paintStats(); paintList(); paintPager();
+    if (selectedId && items.some(item => String(item.id) === String(selectedId))) paintList();
+  } catch (error) { if(seq===listSeq){listLoading=false;listError=error.message||'样本读取失败';paintList();paintPager();} }
 }
 
 function paintStats() {
@@ -211,32 +260,45 @@ function metricBadges(engagement) {
 
 function paintList() {
   const list = $('#samplesList');
+  if(listLoading){list.innerHTML='<div class="samples-list-state"><i></i><b>正在筛选样本…</b><span>组合条件只查询当前有效且未驳回的元素。</span></div>';return;}
+  if(listError){list.innerHTML=`<div class="samples-list-state error"><b>样本列表没有读出来</b><span>${esc(listError)}</span><button type="button" id="sampleReload">重试</button></div>`;return;}
   if (!items.length) { list.innerHTML = `<div class="samples-empty-list">${ICON.layers}<b>还没有符合条件的样本</b><span>可以从链接、手动信息或媒体文件开始建立。</span></div>`; return; }
   list.innerHTML = items.map(item => {
     const status = statusInfo(item.archiveStatus);
     const missing = (item.missingFields || []).slice(0, 3).map(key => MISSING[key] || key);
-    return `<article class="sample-card ${String(item.id) === String(selectedId) ? 'on' : ''}" data-sample-id="${item.id}" tabindex="0">
+    const matched=[...(item.matchedTags||[]).map(t=>t.name||t.label||t),...(item.matchedElements||[]).map(e=>`${e.dimensionLabel||e.label||dimensionLabel(e.dimensionKey)}：${formatElementValue(e.effectiveValue??e.value??e.matchedValue)}`)].filter(Boolean);
+    const confirmed=item.confirmedElementCount??item.confirmedCount??null,analyzed=Number(item.analyzedElementCount??item.elementCount??(item.currentAnalysisVersionId?15:0));
+    return `<article class="sample-card ${String(item.id) === String(selectedId) ? 'on' : ''}" data-sample-id="${item.id}" tabindex="0" role="button" aria-pressed="${String(item.id)===String(selectedId)}" aria-label="打开样本：${esc(item.title||'未命名样本')}">
       <div class="sample-cover">${coverUrl(item) ? `<img loading="lazy" src="${coverUrl(item)}" alt="${esc(item.title || '样本封面')}">` : `<span>${ICON.layers}</span>`}<i>${esc(item.platformLabel || item.platform || '样本')}</i></div>
       <div class="sample-card-main"><header><span class="sample-status ${status[1]}"><i></i>${esc(status[0])}</span><b>${Number(item.completenessScore || 0)}%</b></header>
         <h3>${esc(item.title || '未命名样本')}</h3><p>${esc(item.bodyExcerpt || '原始正文待补充')}</p>
-        <div class="sample-meta"><span>${esc(item.accountName || '账号待补')}</span><span>${item.publishedAt ? esc(new Date(item.publishedAt).toLocaleDateString('zh-CN')) : '时间待补'}</span><span>${Number(item.assetCount || 0)} 份媒体</span></div>
+        <div class="sample-meta"><span>${esc(item.accountName || '账号待补')}</span><span>${item.publishedAt ? esc(new Date(item.publishedAt).toLocaleDateString('zh-CN')) : '时间待补'}</span><span>${Number(item.assetCount || 0)} 份媒体</span>${analyzed?`<span class="sample-review-progress">${confirmed==null?'15维已拆解':`已确认 ${confirmed}/15`}</span>`:'<span class="sample-review-progress pending">待拆解</span>'}</div>
         <div class="sample-metrics">${metricBadges(item.metrics)}</div>
+        ${matched.length?`<div class="sample-match-reasons"><b>命中原因</b>${matched.slice(0,4).map(value=>`<span>${esc(value)}</span>`).join('')}</div>`:''}
         ${missing.length ? `<footer>还缺：${missing.map(esc).join('、')}${(item.missingFields || []).length > 3 ? ` 等 ${item.missingFields.length} 项` : ''}</footer>` : '<footer class="done">原始档案已达到完整标准</footer>'}
       </div></article>`;
   }).join('');
 }
+function dimensionLabel(key){return (researchConfig?.dimensions||[]).find(d=>(d.key||d.dimensionKey)===key)?.label||key||'元素';}
+function formatElementValue(value){if(value==null)return '';if(typeof value==='string')return value;if(Array.isArray(value))return value.join('、');if(typeof value==='object')return Object.values(value).join('、');return String(value);}
 
-function selectSample(id) { captureSeq+=1;captureLoading=false;selectedId = Number(id); detail = null; paintList(); loadDetail(selectedId); }
+function selectSample(id) { captureSeq+=1;captureLoading=false;listScrollTop=window.scrollY;selectedId = Number(id); detail = null; paintList();root()?.classList.add('samples-detail-mode');loadDetail(selectedId); }
 async function loadDetail(id, silent = false) {
   const seq = ++loadSeq;
-  if (!silent) { loadingDetail = true; paintDetail(); }
+  if (!silent) { loadingDetail = true; const el=$('#samplesDetail');if(el)el.innerHTML='<div class="samples-detail-loading"><i></i><span>正在打开研究档案…</span></div>'; }
   try {
     const data = await api.sample(id);
     if (!active || seq !== loadSeq || Number(selectedId) !== Number(id)) return;
-    detail = data; loadingDetail = false; paintDetail();
-    if (!silent && matchMedia('(max-width:1100px)').matches) $('#samplesDetail')?.scrollIntoView({behavior:'smooth',block:'start'});
-  } catch (error) { if (seq === loadSeq) { loadingDetail = false; paintDetail(); toast('info', error.message || '样本详情读取失败'); } }
+    detail = data; loadingDetail = false; await openResearch($('#samplesDetail'),detail,researchOptions());
+    if (!silent && matchMedia('(max-width:1100px)').matches) $('#samplesDetail')?.scrollIntoView({behavior:'instant',block:'start'});
+  } catch (error) { if (seq === loadSeq) { loadingDetail = false; const el=$('#samplesDetail');if(el)el.innerHTML=`<div class="samples-detail-error"><b>样本详情没有打开</b><span>${esc(error.message||'读取失败')}</span><button type="button" data-sample-id="${id}">重试</button><button type="button" data-sample-back>返回列表</button></div>`; } }
 }
+
+function closeMobileDetail(){
+  leaveResearch();root()?.classList.remove('samples-detail-mode');if(matchMedia('(max-width:1100px)').matches){requestAnimationFrame(()=>window.scrollTo({top:listScrollTop,behavior:'instant'}));}
+}
+function openIntakeForSelected(mode){root()?.classList.remove('samples-detail-mode');intakeMode=mode;setIntakeOpen(true);paintIntake();requestAnimationFrame(()=>$('#samplesIntake')?.scrollIntoView({behavior:'smooth',block:'start'}));}
+function researchOptions(){return {onBack:closeMobileDetail,onUpdated:loadSamples,onEdit:()=>openIntakeForSelected('manual'),onAttach:()=>openIntakeForSelected('upload')};}
 
 function paintDetail() {
   const el = $('#samplesDetail');
@@ -375,7 +437,7 @@ async function submitUpload(form) {
     const targetId=data.get('sampleId')?Number(data.get('sampleId')):null;
     uploaded=await api.sampleAssetUpload(targetId,media,{title:data.get('title'),platform:data.get('platform'),contentType:data.get('contentType'),sourceUrl:data.get('sourceUrl'),kind,archiveQuality:'user_upload',...info});
     if(cover instanceof File&&cover.size){
-      try{const coverInfo=await mediaMetadata(cover);await api.sampleAssetUpload(uploaded.sampleId,cover,{kind:'cover',archiveQuality:'user_upload',...coverInfo});}
+      try{const coverInfo=await mediaMetadata(cover);await api.sampleAssetUpload(uploaded.sampleId,cover,{kind:'cover',captureId:uploaded.captureId,archiveQuality:'user_upload',...coverInfo});}
       catch(error){form.reset();await loadSamples();selectSample(uploaded.sampleId);toast('info',`原始媒体已保存，但封面失败：${error.message||'请稍后补传'}`);return;}
     }
     form.reset();if(!targetId)page=1;await loadSamples();selectSample(uploaded.sampleId);toast('ok',targetId?'媒体已补充到当前样本':'原始媒体已经永久归档');
