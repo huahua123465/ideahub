@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict wVtFbWLvhJHrfzyYxsvuDxzKOfN4Ut1tNv4yBhCqRMKbLOTmpOHdBWSClQzLjJa
+\restrict qAQT0lMMDYCPMC3FU20Wokp3KQ66jJaeLPN9Ms9RZak1SWsOhhGaKpIU2bSmmvq
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -1233,6 +1233,7 @@ COPY public.api_keys (id, name, key_hash, scopes, created_by, created_at, last_u
 17	技术1	bfab7b9a2329555e84c55e151346ec8909ccf646ce8c08fa209f50990d624cfa	{tech1}	1	2026-08-25 07:12:31.252352+00	2026-08-26 08:56:23.367093+00	\N
 19	技术1（图文自测 08-25，用完即停）	a195301f9497295cfda59e7162e5f18d8b018598c8c9cd9b056f498652a7627b	{tech1}	\N	2026-08-25 08:33:54.131209+00	2026-08-25 08:33:54.260188+00	2026-08-25 08:36:53.709694+00
 20	技术1（翻页自测 08-25，用完即停）	b38b185c79dbb1972fb4e54be4371342d1815f8132f497888f09cb52eecc4c23	{tech1}	\N	2026-08-25 08:50:22.821166+00	2026-08-25 08:50:22.935007+00	2026-08-25 08:52:04.660016+00
+22	技术1	c7389f12c7608b2d9022ee7b7d08e6b8db563a6d7a8ec215401f145a397ca7fe	{tech1}	1	2026-08-28 14:32:31.506534+00	2026-08-28 14:50:57.672936+00	\N
 14	技术2	e394cef8a28b0a4c3fb023cd4e0c7cccb327c18de3641bef1b7615aec80b4dc5	{tech2}	1	2026-08-25 02:35:22.902497+00	2026-08-25 03:00:55.343314+00	\N
 15	技术1（联调自测，用完就停）	7423c9c623ae4b21f5cc76d7cdd8160384853d765eb87216ee18a3d63aaaaf45	{tech1}	\N	2026-08-25 06:34:47.612673+00	2026-08-25 06:41:31.323016+00	2026-08-25 06:48:08.67567+00
 21	技术1（压测 08-25，用完即停）	bcf81180c79265c0a625e9089adf173422a640cbbd0a104322fd19dd1b0d5e6d	{tech1}	\N	2026-08-25 14:59:49.693824+00	2026-08-25 15:01:29.436105+00	2026-08-25 15:03:45.882503+00
@@ -1321,6 +1322,7 @@ COPY public.channel_accounts (id, channel, side, platform, handle, url, follower
 18	persona	benchmark	小红书	枕书凉.	https://www.xiaohongshu.com/user/profile/6a2fc1700000000010000c01	230	8️⃣年心理研究专家\n擅长分析情感困惑，带你理性恋爱\n🉑  1v1文字or语音☎️ （非公益）咨-询\n亲密关系/自我提升/关系修复	\N	2026-08-25 09:21:42.313642+00	2026-08-26 02:41:01.794109+00	\N
 12	matrix	benchmark	小红书	野生老板商业思维	https://www.xiaohongshu.com/user/profile/5dd7f2730000000001007929	27558	2020福布斯U30，地产资管公司创始人\n强势文化｜国学智慧｜关系运作｜商业思维\n@野生老板 官方授权	\N	2026-08-25 07:15:31.145945+00	2026-08-26 02:42:00.352867+00	\N
 24	persona	benchmark	小红书	谢小树	https://www.xiaohongshu.com/user/profile/5db778250000000001008987	183814	👑  12年心理咨询师｜ 17年深耕易学\n👑  直播切片 ：@谢小树🌲宝藏树 \n     ✉️✉️找到我✉️✉️\n【直播、连麦】：每月第一个周日12-15点	\N	2026-08-26 08:56:23.851615+00	2026-08-26 08:56:23.851615+00	\N
+25	matrix	benchmark	小红书	糯米爱养生	https://www.xiaohongshu.com/user/profile/64ca2f03000000000e02495f	1000	🌱 养生亦养心\n🌻 悦享健康，自在成长\n🌸 我是糯米，与你一同奔赴更好	\N	2026-08-28 14:50:57.681479+00	2026-08-28 14:50:57.681479+00	\N
 \.
 
 
@@ -1474,9 +1476,9 @@ COPY public.chat_messages (id, from_id, to_id, body, read_at, created_at, group_
 120	4	8	\N	2026-08-26 03:00:22.47987+00	2026-08-26 03:00:09.054294+00	\N	\N	\N	\N
 121	4	8	先测试一下	2026-08-26 03:00:25.437348+00	2026-08-26 03:00:24.392913+00	\N	\N	\N	\N
 122	8	4	ok	2026-08-26 03:00:31.560024+00	2026-08-26 03:00:30.388688+00	\N	\N	\N	\N
-123	8	4	就是根据聊天记录等这些信息结合这个去推是吧	\N	2026-08-26 03:01:38.464986+00	\N	\N	\N	\N
-125	8	4	有聊天记录吗我测试一下	\N	2026-08-26 06:18:25.967084+00	\N	\N	\N	\N
 124	1	7	测试	2026-08-26 06:18:32.78953+00	2026-08-26 03:58:07.15798+00	\N	\N	\N	\N
+123	8	4	就是根据聊天记录等这些信息结合这个去推是吧	2026-08-28 06:33:39.174929+00	2026-08-26 03:01:38.464986+00	\N	\N	\N	\N
+125	8	4	有聊天记录吗我测试一下	2026-08-28 06:33:39.174929+00	2026-08-26 06:18:25.967084+00	\N	\N	\N	\N
 \.
 
 
@@ -1779,23 +1781,23 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 --
 
 COPY public.ideas (id, code, title, content, category, tags, status, author_id, is_anonymous, vote_count, comment_count, view_count, hot_score, owner_id, adopted_at, adopted_by, progress, doc_url, created_at, updated_at, source_type, source_url, source_ref, deleted_at, promoted_at) FROM stdin;
-10	\N	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	pending	1	f	4	1	10	0.34622416	\N	\N	\N	0	\N	2026-08-20 17:10:31.219804+00	2026-08-21 02:12:34.699823+00	manual	\N	\N	\N	\N
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	5	1	4	0.415469	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-08-22 02:17:55.378265+00	manual	\N	\N	\N	\N
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.071044005	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.11092601	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	1	1	5	0.29218856	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-08-26 16:03:05.056618+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
+10	\N	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	pending	1	f	4	1	10	0.2973053	\N	\N	\N	0	\N	2026-08-20 17:10:31.219804+00	2026-08-21 02:12:34.699823+00	manual	\N	\N	\N	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	5	1	4	0.35676634	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-08-22 02:17:55.378265+00	manual	\N	\N	\N	\N
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.055950437	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.0946381	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	1	1	5	0.22916466	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-08-26 16:03:05.056618+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	163	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	17	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	11	6	52	1.0040499	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-08-24 08:59:20.530318+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.07104997	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.110881336	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-8	\N	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	pending	1	f	6	5	9	0.62320346	\N	\N	\N	0	\N	2026-08-20 17:10:31.191758+00	2026-08-24 02:28:26.910113+00	manual	\N	\N	\N	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	11	6	52	0.86218524	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-08-24 08:59:20.530318+00	manual	\N	\N	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.055954445	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.09460382	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+8	\N	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	pending	1	f	6	5	9	0.5351495	\N	\N	\N	0	\N	2026-08-20 17:10:31.191758+00	2026-08-24 02:28:26.910113+00	manual	\N	\N	\N	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
 \.
 
@@ -1818,10 +1820,12 @@ COPY public.notifications (id, user_id, actor_id, kind, title, body, board, ref_
 5	4	1	report_assigned	华俊杰 提交了「测试」等你审核	\N	reports	4	2026-08-21 07:52:51.005888+00	2026-08-21 07:52:18.430887+00
 7	7	11	report_assigned	李敏 提交了「情感赛道」等你审核	\N	reports	5	2026-08-21 07:59:39.631077+00	2026-08-21 07:59:20.110319+00
 6	1	4	report_feedback	朱涛 反馈了你的「测试」	111111	reports	4	2026-08-21 08:03:46.71388+00	2026-08-21 07:53:24.173705+00
+25	10	4	report_feedback	朱涛 反馈了你的「表格」	1	reports	23	\N	2026-08-28 06:39:12.429015+00
 16	1	7	report_assigned	李年 提交了「情感赛道」等你审核	\N	reports	19	2026-08-25 08:28:05.711786+00	2026-08-25 08:27:16.803369+00
 13	10	4	report_feedback	朱涛 反馈了你的「表格」	多找作品高收藏 500+，小于3000粉丝量的作品	reports	16	2026-08-25 08:41:14.559615+00	2026-08-25 07:37:28.203036+00
 15	1	\N	report_assigned	上传自测（用完即删） 提交了「上传自测（用完即删）」等你审核	\N	reports	18	2026-08-25 08:48:10.417847+00	2026-08-25 08:14:21.505019+00
 17	7	1	report_assigned	华俊杰 提交了「测试」等你审核	\N	reports	20	2026-08-25 08:51:26.223862+00	2026-08-25 08:51:08.366498+00
+26	10	4	report_feedback	朱涛 反馈了你的「作品」	1	reports	22	\N	2026-08-28 06:39:22.505643+00
 18	1	\N	report_assigned	翻页自测（用完即删） 提交了「翻页自测·单图（用完即删）」等你审核	\N	reports	21	2026-08-25 09:09:23.55237+00	2026-08-25 08:51:33.960174+00
 21	4	7	report_assigned	李年 提交了「图文」等你审核	\N	reports	24	2026-08-26 03:01:30.057428+00	2026-08-25 10:01:38.483562+00
 20	4	10	report_assigned	杨池 提交了「表格」等你审核	\N	reports	23	2026-08-26 03:03:38.751046+00	2026-08-25 09:28:31.954217+00
@@ -2001,10 +2005,10 @@ COPY public.work_reports (id, author_id, reviewer_id, report_date, title, summar
 15	7	4	2026-08-24	表格	填完了	1	2026-08-25 07:37:36.961506+00	4	2026-08-24 07:53:08.084396+00	2026-08-25 07:37:36.961506+00	\N	\N	\N
 19	7	1	2026-08-25	情感赛道	\N	\N	\N	\N	2026-08-25 08:27:16.794467+00	2026-08-25 08:27:16.794467+00	\N	\N	\N
 20	1	7	2026-08-25	测试	测试	\N	\N	\N	2026-08-25 08:51:08.355649+00	2026-08-25 08:51:08.355649+00	\N	错误	测试
-22	10	4	2026-08-25	作品	标题：0-3岁没有被满足的安全感，会影响90%的亲密关系\n文案：有些女性并不是没有感情，而是不习惯面对和表达自己的恐惧、委屈、孤独、羞耻与愤怒。\n她可能关心伴侣的工作、生活和安排，却很少主动谈论彼此的感受。面对情绪时，她常说：\n“没事。”\n“别想太多。”\n“我自己消化一下就好。”\n“我也不知道自己怎么了。”\n这不一定代表冷漠，更可能是她长期习惯了压低、切断或隐藏情绪。\n常见表现\n- 很难说清自己真实的感受\n- 难过时习惯独自消化，不愿求助\n- 表达需求时感到羞耻，担心给别人添麻烦\n- 能处理现实问题，却不知道如何面对情绪\n- 被关心、安慰或拥抱时，反而僵硬、尴尬或想逃\n- 讲事情很清楚，却很少谈自己的感受\n- 发生冲突后沉默、转移话题或暂时退出关系\n在亲密关系中的复现\n她可能渴望被理解，却不知道怎样直接表达需要；期待伴侣主动看懂自己，但当对方真正靠近时，又会感到不自在。\n她也可能更容易被情绪不可得的人吸引，因为冷淡是熟悉的，而持续、稳定的温柔反而让她无所适从。\n关系中的核心矛盾是：\n渴望被看见，却不知道如何让别人看见；渴望靠近，又害怕靠近后的脆弱。\n如何判断是不是情感回避？\n不要因为一次沉默、冷淡或争吵就下结论，而要观察这种模式是否：\n- 在亲密关系中长期存在\n- 面对情绪和冲突时反复出现\n- 伴随僵硬、逃避、麻木或强颜欢笑等反应\n- 已经影响需求表达、接受安慰和建立亲密连接的能力\n可以试着观察：\n- 她难过时，会不会允许伴侣听她说完？\n- 发生冲突后，她是表达感受，还是立刻关闭自己？\n- 被关心时，她感到安心，还是尴尬、警惕甚至想逃？\n- 她能否直接说出“我需要你陪我”或“这件事让我受伤”？\n情感回避不等于她不爱，也不能仅凭几个表现给一个人贴标签。\n它更可能意味着：她有感受，也渴望连接，只是还没有学会识别、表达和接住自己的情绪。\n看见这种模式，不是为了责怪谁，而是为了让关系有机会从回避走向理解。	\N	\N	\N	2026-08-25 09:27:41.47813+00	2026-08-25 09:27:41.47813+00	\N	\N	\N
 24	7	4	2026-08-25	图文	图文	依托答辩	2026-08-26 03:03:23.30422+00	4	2026-08-25 10:01:38.47731+00	2026-08-26 03:03:23.30422+00	\N	\N	\N
-23	10	4	2026-08-25	表格	\N	\N	2026-08-26 03:04:20.6113+00	4	2026-08-25 09:28:31.947848+00	2026-08-26 03:04:20.6113+00	\N	\N	\N
 26	1	\N	2026-08-26	测试	\N	\N	\N	\N	2026-08-26 15:02:01.097756+00	2026-08-26 15:02:01.097756+00	\N	\N	\N
+23	10	4	2026-08-25	表格	\N	1	2026-08-28 06:39:12.421778+00	4	2026-08-25 09:28:31.947848+00	2026-08-28 06:39:12.421778+00	\N	\N	\N
+22	10	4	2026-08-25	作品	标题：0-3岁没有被满足的安全感，会影响90%的亲密关系\n文案：有些女性并不是没有感情，而是不习惯面对和表达自己的恐惧、委屈、孤独、羞耻与愤怒。\n她可能关心伴侣的工作、生活和安排，却很少主动谈论彼此的感受。面对情绪时，她常说：\n“没事。”\n“别想太多。”\n“我自己消化一下就好。”\n“我也不知道自己怎么了。”\n这不一定代表冷漠，更可能是她长期习惯了压低、切断或隐藏情绪。\n常见表现\n- 很难说清自己真实的感受\n- 难过时习惯独自消化，不愿求助\n- 表达需求时感到羞耻，担心给别人添麻烦\n- 能处理现实问题，却不知道如何面对情绪\n- 被关心、安慰或拥抱时，反而僵硬、尴尬或想逃\n- 讲事情很清楚，却很少谈自己的感受\n- 发生冲突后沉默、转移话题或暂时退出关系\n在亲密关系中的复现\n她可能渴望被理解，却不知道怎样直接表达需要；期待伴侣主动看懂自己，但当对方真正靠近时，又会感到不自在。\n她也可能更容易被情绪不可得的人吸引，因为冷淡是熟悉的，而持续、稳定的温柔反而让她无所适从。\n关系中的核心矛盾是：\n渴望被看见，却不知道如何让别人看见；渴望靠近，又害怕靠近后的脆弱。\n如何判断是不是情感回避？\n不要因为一次沉默、冷淡或争吵就下结论，而要观察这种模式是否：\n- 在亲密关系中长期存在\n- 面对情绪和冲突时反复出现\n- 伴随僵硬、逃避、麻木或强颜欢笑等反应\n- 已经影响需求表达、接受安慰和建立亲密连接的能力\n可以试着观察：\n- 她难过时，会不会允许伴侣听她说完？\n- 发生冲突后，她是表达感受，还是立刻关闭自己？\n- 被关心时，她感到安心，还是尴尬、警惕甚至想逃？\n- 她能否直接说出“我需要你陪我”或“这件事让我受伤”？\n情感回避不等于她不爱，也不能仅凭几个表现给一个人贴标签。\n它更可能意味着：她有感受，也渴望连接，只是还没有学会识别、表达和接住自己的情绪。\n看见这种模式，不是为了责怪谁，而是为了让关系有机会从回避走向理解。	1	2026-08-28 06:39:22.497575+00	4	2026-08-25 09:27:41.47813+00	2026-08-28 06:39:22.497575+00	\N	\N	\N
 \.
 
 
@@ -2029,6 +2033,8 @@ COPY public.works (id, channel, side, account_id, title, url, pillar, published_
 210	persona	benchmark	20	双视角曝光，大家看看我有念稿感吗	https://www.xiaohongshu.com/discovery/item/6a8d06aa000000000f01f94b?source=webshare&xhsshare=pc_web&xsec_token=AB4ooOlAU6DVGQdYtgNJSEXoLqm7AAJIhkCkGCxOvNQ1A=&xsec_source=pc_share	\N	\N	{"收藏": 205, "点赞": 161, "评论": 7}	这条视频主要讲如何通过两个训练方法去除视频拍摄中的念稿感，提升表达的自然度。	\N	2026-08-26 01:41:17.904798+00	2026-08-26 02:41:06.946254+00	tech1	https://www.xiaohongshu.com/discovery/item/6a8d06aa000000000f01f94b?source=webshare&xhsshare=pc_web&xsec_token=AB4ooOlAU6DVGQdYtgNJSEXoLqm7AAJIhkCkGCxOvNQ1A=&xsec_source=pc_share	t1:d2f5523e8cea:persona	\N
 5	persona	benchmark	2	（待填）把对标账号的爆款链接贴进来	\N	A 强判断内容	2026-08-06	{"完播": 0, "收藏": 0, "曝光": 0, "私信": 0, "主页访问": 0}	PDF 00 流量系统：选题库 / 爆款库 / 脚本库 —— 对标作品是爆款库的来源	\N	2026-08-21 04:19:32.281111+00	2026-08-21 04:19:32.281111+00	manual	\N	\N	2026-08-25 09:23:20.301351+00
 10	matrix	benchmark	6	（待填）对标矩阵号的高播放作品	\N	高频问题	2026-07-22	{"完播": 0, "收藏": 0, "曝光": 0, "私信": 0, "主页访问": 0}	对标理由：选题密度高，可直接进选题库	\N	2026-08-21 04:19:32.287042+00	2026-08-21 04:19:32.287042+00	manual	\N	\N	2026-08-25 14:46:41.232482+00
+222	persona	benchmark	\N	图文	11 【很多人对“主体性”概念的理解其实是错的 - 沈奕斐博士 | 小红书 - 你的生活兴趣社区】 😆 fdfFxj03THR1LOC 😆 https://www.xiaohongshu.com/discovery/item/6a746acf00000000260340a6?source=webshare&xhsshare=pc_web&xsec_token=AB8FHrvix3daUnZRyIEVy_gXL8lmoKTq7kZjK-Aq8xLYw=&xsec_source=pc_share	\N	2026-08-28	{"完播": 0, "收藏": 0, "曝光": 0, "私信": 0, "主页访问": 0}	\N	4	2026-08-28 06:45:02.620364+00	2026-08-28 06:45:02.620364+00	manual	\N	\N	\N
+223	persona	benchmark	\N	图文	33 【真正的强者敢于薅头发 - 谢胜子 | 小红书 - 你的生活兴趣社区】 😆 ELGSlc5J4roM0Y1 😆 https://www.xiaohongshu.com/discovery/item/6a8c184500000000160214bd?source=webshare&xhsshare=pc_web&xsec_token=ABg7xcxPcGQA5ZS9viuh5gpfsVFz6oBbhaNYUl0PV7HJI=&xsec_source=pc_share	\N	2026-08-28	{"完播": 0, "收藏": 0, "曝光": 0, "私信": 0, "主页访问": 0}	\N	4	2026-08-28 06:46:58.849495+00	2026-08-28 06:46:58.849495+00	manual	\N	\N	\N
 181	persona	benchmark	9	女孩子无聊的本质是生命力的匮乏	https://www.xiaohongshu.com/discovery/item/6a755421000000002c0019e4?app_platform=ios&app_version=9.33.4&share_from_user_hidden=true&xsec_source=app_share&type=video&xsec_token=CB0RgZFfPxrma9jCLOAVaOdEWXV8QfXUBC8Mt_UBmF9ow=&author_share=1&xhsshare=CopyLink&shareRedId=OD06MEg5NUA2NzUyOTgwNjY7OThHN0xN&apptime=1787556025&share_id=138f6272491e47faa5b66b454dfd55d1	\N	\N	{"收藏": 32000, "点赞": 40000, "评论": 647}	分析女性感到无趣、生活平淡的深层原因，提出是内在生命力匮乏而非性格或社交技巧问题，并给出恢复生命力的方法。	\N	2026-08-25 07:04:07.118378+00	2026-08-25 07:04:07.118378+00	tech1	https://www.xiaohongshu.com/discovery/item/6a755421000000002c0019e4?app_platform=ios&app_version=9.33.4&share_from_user_hidden=true&xsec_source=app_share&type=video&xsec_token=CB0RgZFfPxrma9jCLOAVaOdEWXV8QfXUBC8Mt_UBmF9ow=&author_share=1&xhsshare=CopyLink&shareRedId=OD06MEg5NUA2NzUyOTgwNjY7OThHN0xN&apptime=1787556025&share_id=138f6272491e47faa5b66b454dfd55d1	t1:ZZTEST0825:persona	2026-08-25 07:10:02.566912+00
 182	matrix	benchmark	10	女孩子无聊的本质是生命力的匮乏	https://www.xiaohongshu.com/discovery/item/6a755421000000002c0019e4?app_platform=ios&app_version=9.33.4&share_from_user_hidden=true&xsec_source=app_share&type=video&xsec_token=CB0RgZFfPxrma9jCLOAVaOdEWXV8QfXUBC8Mt_UBmF9ow=&author_share=1&xhsshare=CopyLink&shareRedId=OD06MEg5NUA2NzUyOTgwNjY7OThHN0xN&apptime=1787556025&share_id=138f6272491e47faa5b66b454dfd55d1	\N	\N	{"收藏": 32000, "点赞": 40000, "评论": 647}	分析女性感到无趣、生活平淡的深层原因，提出是内在生命力匮乏而非性格或社交技巧问题，并给出恢复生命力的方法。	\N	2026-08-25 07:04:07.182037+00	2026-08-25 07:04:07.182037+00	tech1	https://www.xiaohongshu.com/discovery/item/6a755421000000002c0019e4?app_platform=ios&app_version=9.33.4&share_from_user_hidden=true&xsec_source=app_share&type=video&xsec_token=CB0RgZFfPxrma9jCLOAVaOdEWXV8QfXUBC8Mt_UBmF9ow=&author_share=1&xhsshare=CopyLink&shareRedId=OD06MEg5NUA2NzUyOTgwNjY7OThHN0xN&apptime=1787556025&share_id=138f6272491e47faa5b66b454dfd55d1	t1:ZZTEST0825:matrix	2026-08-25 07:10:02.607002+00
 174	persona	benchmark	9	女孩子无聊的本质是生命力的匮乏	https://www.xiaohongshu.com/discovery/item/6a755421000000002c0019e4?app_platform=ios&app_version=9.33.4&share_from_user_hidden=true&xsec_source=app_share&type=video&xsec_token=CB0RgZFfPxrma9jCLOAVaOdEWXV8QfXUBC8Mt_UBmF9ow=&author_share=1&xhsshare=CopyLink&shareRedId=OD06MEg5NUA2NzUyOTgwNjY7OThHN0xN&apptime=1787556025&share_id=138f6272491e47faa5b66b454dfd55d1	\N	\N	{"收藏": 32000, "点赞": 40000, "评论": 648}	分析女性感到无趣、生活平淡的深层原因，提出是内在生命力匮乏而非性格或社交技巧问题，并给出恢复生命力的方法。	\N	2026-08-25 06:36:40.164413+00	2026-08-25 09:20:56.490278+00	tech1	https://www.xiaohongshu.com/discovery/item/6a755421000000002c0019e4?app_platform=ios&app_version=9.33.4&share_from_user_hidden=true&xsec_source=app_share&type=video&xsec_token=CB0RgZFfPxrma9jCLOAVaOdEWXV8QfXUBC8Mt_UBmF9ow=&author_share=1&xhsshare=CopyLink&shareRedId=OD06MEg5NUA2NzUyOTgwNjY7OThHN0xN&apptime=1787556025&share_id=138f6272491e47faa5b66b454dfd55d1	t1:f90d29b0a27b:persona	2026-08-25 09:22:22.085164+00
@@ -2049,7 +2055,7 @@ COPY public.works (id, channel, side, account_id, title, url, pillar, published_
 -- Name: api_keys_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.api_keys_id_seq', 21, true);
+SELECT pg_catalog.setval('public.api_keys_id_seq', 22, true);
 
 
 --
@@ -2070,7 +2076,7 @@ SELECT pg_catalog.setval('public.cases_id_seq', 68, true);
 -- Name: channel_accounts_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.channel_accounts_id_seq', 24, true);
+SELECT pg_catalog.setval('public.channel_accounts_id_seq', 25, true);
 
 
 --
@@ -2154,7 +2160,7 @@ SELECT pg_catalog.setval('public.links_id_seq', 24, true);
 -- Name: notifications_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.notifications_id_seq', 24, true);
+SELECT pg_catalog.setval('public.notifications_id_seq', 26, true);
 
 
 --
@@ -2189,7 +2195,7 @@ SELECT pg_catalog.setval('public.work_reports_id_seq', 26, true);
 -- Name: works_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.works_id_seq', 221, true);
+SELECT pg_catalog.setval('public.works_id_seq', 224, true);
 
 
 --
@@ -3104,5 +3110,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict wVtFbWLvhJHrfzyYxsvuDxzKOfN4Ut1tNv4yBhCqRMKbLOTmpOHdBWSClQzLjJa
+\unrestrict qAQT0lMMDYCPMC3FU20Wokp3KQ66jJaeLPN9Ms9RZak1SWsOhhGaKpIU2bSmmvq
 
