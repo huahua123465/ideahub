@@ -348,8 +348,8 @@ function toggleCompareSelection(id,checked,control){
 }
 function paintComparisonTray(){
   const tray=$('#sampleComparisonTray');if(!tray)return;
-  if(libraryMode!=='samples'){tray.hidden=true;return;}tray.hidden=false;
   const count=compareSelection.length;
+  if(libraryMode!=='samples'||count===0){tray.hidden=true;tray.innerHTML='';return;}tray.hidden=false;
   tray.innerHTML=`<div class="sample-comparison-tray-copy"><span>横向比较</span><b>${count}/6 篇</b><small>${count<2?'再选择 '+(2-count)+' 篇即可开始':count===6?'已达到本次上限':'可跨筛选和分页继续选择'}</small></div><div class="sample-comparison-tray-items">${compareSelection.map(item=>`<span><i>${esc(item.platform)}</i><b>${esc(item.title)}</b><button type="button" data-compare-remove="${item.id}" aria-label="从比较中移除：${esc(item.title)}">×</button></span>`).join('')||'<p>在卡片左上角勾选“比较”，打开样本仍由卡片本身完成。</p>'}</div><div class="sample-comparison-tray-actions">${count?'<button type="button" data-compare-clear>清空</button>':''}<button type="button" class="stage3-primary" data-compare-start ${count<2||count>6||comparisonBusy?'disabled':''}>开始比较</button></div>`;
 }
 function openComparisonCreateDialog(trigger){

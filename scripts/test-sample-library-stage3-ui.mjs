@@ -35,12 +35,12 @@ try{
     nativeCheckbox:document.querySelector('[data-compare-toggle]')?.tagName,
     trayHidden:document.querySelector('#sampleComparisonTray')?.hidden,
   }));
-  assert.deepEqual(state,{overflow:0,modes:4,cards:24,nativeCheckbox:'INPUT',trayHidden:false});
+  assert.deepEqual(state,{overflow:0,modes:4,cards:24,nativeCheckbox:'INPUT',trayHidden:true});
 
   // One selection cannot start; two can. The second selection survives page changes.
   await selectSampleForComparison(page,1);
-  state=await page.evaluate(()=>({count:document.querySelectorAll('#sampleComparisonTray [data-compare-remove]').length,disabled:document.querySelector('[data-compare-start]').disabled,research:!!document.querySelector('.research-tabs')}));
-  assert.deepEqual(state,{count:1,disabled:true,research:false});
+  state=await page.evaluate(()=>{const tray=document.querySelector('#sampleComparisonTray'),chat=document.querySelector('#chatBtn'),a=tray.getBoundingClientRect(),b=chat.getBoundingClientRect();return{count:tray.querySelectorAll('[data-compare-remove]').length,disabled:tray.querySelector('[data-compare-start]').disabled,research:!!document.querySelector('.research-tabs'),trayHidden:tray.hidden,overlap:Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top))};});
+  assert.deepEqual(state,{count:1,disabled:true,research:false,trayHidden:false,overlap:0});
   await page.click('[data-sample-page="2"]');
   await page.waitForFunction(()=>document.querySelector('.samples-pager b')?.textContent.includes('2 / 2'));
   const secondPageId=await page.$eval('[data-compare-toggle]',node=>Number(node.value));
@@ -183,6 +183,11 @@ try{
   await page.setViewport({width:390,height:844,deviceScaleFactor:1});
   await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
   await page.goto(`${BASE}/?stage3=1&mock=1`,{waitUntil:'domcontentloaded'});await openSamples(page);
+  await selectSampleForComparison(page,1);await page.waitForSelector('#sampleComparisonTray:not([hidden])');
+  state=await page.evaluate(()=>{const tray=document.querySelector('#sampleComparisonTray'),chat=document.querySelector('#chatBtn'),a=tray.getBoundingClientRect(),b=chat.getBoundingClientRect();return{overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,overlap:Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)),chatAboveTray:b.bottom<=a.top,contentPadding:parseFloat(getComputedStyle(document.querySelector('#sampleLibrarySamples')).paddingBottom)};});
+  assert.equal(state.overflow,0);assert.equal(state.overlap,0);assert.equal(state.chatAboveTray,true);assert.ok(state.contentPadding>=196,state);
+  await page.screenshot({path:join(artifacts,'stage3-mobile-tray-390.png')});
+  await page.click('#sampleComparisonTray [data-compare-remove="1"]');await page.waitForSelector('#sampleComparisonTray[hidden]');
   await page.click('[data-library-mode="comparisons"]');await page.waitForSelector('.comparison-record-card');await page.click('.comparison-record-card [data-comparison-id="31"]');await page.waitForSelector('.comparison-mobile-dimension');
   await page.click('.comparison-frozen-note summary');await page.waitForSelector('.comparison-frozen-grid article');
   state=await page.evaluate(()=>{
