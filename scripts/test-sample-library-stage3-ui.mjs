@@ -39,13 +39,15 @@ try{
 
   // One selection cannot start; two can. The second selection survives page changes.
   await selectSampleForComparison(page,1);
-  state=await page.evaluate(()=>{const tray=document.querySelector('#sampleComparisonTray'),chat=document.querySelector('#chatBtn'),a=tray.getBoundingClientRect(),b=chat.getBoundingClientRect();return{count:tray.querySelectorAll('[data-compare-remove]').length,disabled:tray.querySelector('[data-compare-start]').disabled,research:!!document.querySelector('.research-tabs'),trayHidden:tray.hidden,overlap:Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top))};});
-  assert.deepEqual(state,{count:1,disabled:true,research:false,trayHidden:false,overlap:0});
+  state=await page.evaluate(()=>{const tray=document.querySelector('#sampleComparisonTray'),chat=document.querySelector('#chatBtn'),start=tray.querySelector('[data-compare-start]'),style=getComputedStyle(start),a=tray.getBoundingClientRect(),b=chat.getBoundingClientRect();return{count:tray.querySelectorAll('[data-compare-remove]').length,disabled:start.disabled,research:!!document.querySelector('.research-tabs'),trayHidden:tray.hidden,overlap:Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)),startText:start.textContent.trim(),startColor:style.color,startBackground:style.backgroundColor};});
+  assert.equal(state.count,1);assert.equal(state.disabled,true);assert.equal(state.research,false);assert.equal(state.trayHidden,false);assert.equal(state.overlap,0);assert.equal(state.startText,'开始比较');assert.notEqual(state.startColor,state.startBackground);
   await page.click('[data-sample-page="2"]');
   await page.waitForFunction(()=>document.querySelector('.samples-pager b')?.textContent.includes('2 / 2'));
   const secondPageId=await page.$eval('[data-compare-toggle]',node=>Number(node.value));
   await selectSampleForComparison(page,secondPageId);
   assert.equal(await page.$$eval('#sampleComparisonTray [data-compare-remove]',nodes=>nodes.length),2);
+  state=await page.$eval('#sampleComparisonTray [data-compare-start]',node=>{const style=getComputedStyle(node);return{disabled:node.disabled,text:node.textContent.trim(),color:style.color,background:style.backgroundColor};});
+  assert.equal(state.disabled,false);assert.equal(state.text,'开始比较');assert.notEqual(state.color,state.background);assert.notEqual(state.background,'rgb(255, 255, 255)');
   await page.click('[data-sample-page="1"]');
   await page.waitForFunction(()=>document.querySelector('.samples-pager b')?.textContent.includes('1 / 2'));
   assert.equal(await page.$$eval('#sampleComparisonTray [data-compare-remove]',nodes=>nodes.length),2);
