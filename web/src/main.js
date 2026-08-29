@@ -227,6 +227,8 @@ function syncDrawerVote(d) {
 const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'collector', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
 
 function go(next) {
+  // 全局搜索只服务当前操作，不把上一页关键词带进下一个业务页面。
+  search.reset();
   if (next === view) return;
   if (view === 'collector') collector.leave();
   view = next;
