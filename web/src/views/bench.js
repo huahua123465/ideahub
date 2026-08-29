@@ -18,6 +18,7 @@ import { openLightbox } from '../lightbox.js';
 
 let box = null, mask = null;
 let curId = null;
+let captionObserver = null;
 /** 已经拉过的分析，按 work id 缓存。同一条来回点开不用重复拉 30KB */
 const cache = new Map();
 
@@ -145,6 +146,38 @@ function paint(a) {
     im.addEventListener('click', () =>
       openLightbox(shots.map(x => ({ url: x.dataset.full, name: x.alt })), i));
   });
+  bindCaptionToggles(box);
+}
+
+/** 只有 OCR 文本确实超过六行时才给展开入口，短文本不增加界面噪音。 */
+function bindCaptionToggles(root) {
+  captionObserver?.disconnect();
+  const captions = [...root.querySelectorAll('.bench-img figcaption')];
+
+  const sync = caption => {
+    const text = caption.querySelector('.bench-caption-text');
+    const button = caption.querySelector('.bench-caption-toggle');
+    if (!text || !button) return;
+    const expanded = caption.closest('.bench-img')?.classList.contains('caption-expanded');
+    button.hidden = !expanded && text.scrollHeight <= text.clientHeight + 1;
+  };
+
+  captions.forEach(caption => {
+    const button = caption.querySelector('.bench-caption-toggle');
+    button?.addEventListener('click', () => {
+      const card = caption.closest('.bench-img');
+      const expanded = card.classList.toggle('caption-expanded');
+      button.setAttribute('aria-expanded', String(expanded));
+      button.textContent = expanded ? '收起' : '展开全文';
+      sync(caption);
+    });
+  });
+
+  requestAnimationFrame(() => captions.forEach(sync));
+  if ('ResizeObserver' in window) {
+    captionObserver = new ResizeObserver(() => captions.forEach(sync));
+    captionObserver.observe(root.querySelector('.bench-imgs') || root);
+  }
 }
 
 /* ---------------- 各区 ---------------- */
@@ -337,7 +370,9 @@ function imagesBlock(a) {
             : `<div class="bench-img-gone">第 ${im.index} 张<span>图片已过期</span></div>`}
           <figcaption>
             <b>${im.index}</b>
-            ${im.text ? `<span>${esc(im.text)}</span>` : '<span class="dim">这张图上没识别出文字</span>'}
+            ${im.text ? `<span class="bench-caption-text">${esc(im.text)}</span>
+              <button class="bench-caption-toggle" type="button" aria-expanded="false" hidden>展开全文</button>`
+              : '<span class="dim">这张图上没识别出文字</span>'}
           </figcaption>
         </figure>`).join('')}
     </div>`;

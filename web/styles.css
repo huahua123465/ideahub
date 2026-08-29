@@ -2649,8 +2649,14 @@ body.learning-fullscreen-open{overflow:hidden}
 .bench-img figcaption b{display:inline-block;min-width:20px;height:20px;line-height:20px;
   text-align:center;border-radius:6px;background:var(--surface-2);color:var(--muted);
   font-size:11px;margin-right:6px}
-.bench-img figcaption span{display:block;margin-top:5px;
+.bench-img figcaption .bench-caption-text{display:block;margin-top:5px;
   display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.bench-img.caption-expanded figcaption .bench-caption-text{display:block;-webkit-line-clamp:unset;overflow:visible}
+.bench-caption-toggle{margin-top:7px;padding:2px 0;border:0;background:transparent;color:var(--blue-dk);
+  font:inherit;font-size:11.5px;font-weight:650;cursor:pointer}
+.bench-caption-toggle:hover{text-decoration:underline;text-underline-offset:3px}
+.bench-caption-toggle:focus-visible{outline:2px solid var(--blue-dk);outline-offset:3px;border-radius:3px}
+.bench-caption-toggle[hidden]{display:none}
 /* 没存下来的那张：给一块占位说明，不摆碎图标 */
 .bench-img.gone{border-style:dashed}
 .bench-img-gone{aspect-ratio:3/4;display:flex;flex-direction:column;align-items:center;
