@@ -112,6 +112,11 @@ const upstream = http.createServer(async (req, res) => {
       },
     });
   }
+  const archiveMatch = /^\/api\/ideahub\/archive-sample\/([^/]+)$/.exec(url.pathname);
+  if (archiveMatch && req.method === 'POST') {
+    lastUpstreamBody = await readBody(req);
+    return json(200, { ok: true, status: 'done', sample_id: 91, capture_id: 92 });
+  }
   const deleteMatch = /^\/api\/task\/([^/]+)$/.exec(url.pathname);
   if (deleteMatch && req.method === 'DELETE') return json(200, { deleted: true, task_id: deleteMatch[1] });
   return json(404, { error: 'upstream route missing', local_path: '/app/private' });
@@ -191,6 +196,18 @@ try {
   check(lastUpstreamHeaders['x-collector-token'] === TOKEN, '内部请求由 Node 注入 Collector 令牌');
   check(lastUpstreamHeaders['x-ideahub-user-role'] === 'member', '内部请求由 Node 注入角色');
   check(!JSON.stringify(response.data).includes(TOKEN), '浏览器响应不含内部令牌');
+
+  response = await call('POST', '/api/collector/tasks', { body: {
+    url: 'https://www.xiaohongshu.com/explore/archive-test', session_mode: 'public', auto_archive: true,
+  } });
+  check(response.status === 200 && lastUpstreamBody.auto_archive === true,
+    'auto_archive 会传给 Collector', { response:response.data, upstream:lastUpstreamBody });
+
+  response = await call('POST', '/api/collector/tasks/own-task/archive', { body: {} });
+  check(response.status === 200 && response.data.sample_id === 91,
+    '任务所有者可通过固定代理路由重试样本归档', response);
+  response = await call('POST', '/api/collector/tasks/other-task/archive', { body: {} });
+  check(response.status === 403, '普通成员不能归档别人的采集任务', response);
 
   response = await call('GET', '/api/collector/tasks');
   check(response.status === 200 && response.data.length === 1 && response.data[0].id === 'own-task', '普通成员历史列表只保留自己的任务', response.data);

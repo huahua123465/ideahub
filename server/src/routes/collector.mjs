@@ -326,6 +326,13 @@ export function createCollectorHandlers({
         ...ctx, method: 'POST', body: await readJson(req, 2 * 1024), timeoutMs: 15_000,
       });
     }),
+    archiveTask: json(async (_req, { id }, _url, ctx) => {
+      const taskId = safeTaskId(id);
+      await requireTaskOwner(taskId, ctx);
+      return jsonCall(`/api/ideahub/archive-sample/${encodeURIComponent(taskId)}`, {
+        ...ctx, method: 'POST', body: {}, timeoutMs: 120_000,
+      });
+    }),
     taskResult: json(async (_req, { id }, _url, ctx) => {
       const taskId = safeTaskId(id);
       await requireTaskOwner(taskId, ctx);
@@ -421,6 +428,7 @@ export function mount(router, options) {
   router.post('/api/collector/tasks/batch-delete', h.deleteBatch);
   router.get('/api/collector/tasks/:id/status', h.taskStatus);
   router.post('/api/collector/tasks/:id/refresh', h.refreshTask);
+  router.post('/api/collector/tasks/:id/archive', h.archiveTask);
   router.get('/api/collector/tasks/:id/result', h.taskResult);
   router.patch('/api/collector/tasks/:id/analysis', h.updateAnalysis);
   router.get('/api/collector/tasks/:id/images/:filename', h.image);

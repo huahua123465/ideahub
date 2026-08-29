@@ -34,6 +34,7 @@ import * as ingest from './routes/ingest.mjs';
 import * as smartImport from './routes/smart-import.mjs';
 import * as learning from './routes/learning.mjs';
 import * as collector from './routes/collector.mjs';
+import * as samples from './routes/samples.mjs';
 import { archiveStaleIdeas } from './routes/status.mjs';
 import { publish, closeAll, clientCount } from './lib/bus.mjs';
 
@@ -99,6 +100,7 @@ ingest.mount(router);
 smartImport.mount(router);
 learning.mount(router);
 collector.mount(router);
+samples.mount(router);
 
 
 /* ---------- 登录闸门 ---------- */
@@ -121,6 +123,7 @@ const PUBLIC_API = new Set([
   '/api/ingest/ping',
   '/api/ingest/save',
   '/api/ingest/analysis',
+  '/api/ingest/sample',
   '/api/ingest/client',
   '/api/ingest/client/delivery',
   '/api/ingest/client/file',

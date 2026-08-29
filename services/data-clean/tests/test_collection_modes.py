@@ -155,6 +155,41 @@ class TechnicalAuditDownloadTests(unittest.TestCase):
         self.assertEqual(403, remote_status)
 
 
+class SampleArchiveTests(unittest.TestCase):
+    def test_completed_task_can_be_archived_and_result_keeps_sample_identity(self):
+        with TemporaryDirectory() as root:
+            task_dir = Path(root) / "task-1"
+            task_dir.mkdir()
+            content_path = task_dir / "content.json"
+            content_path.write_text(json.dumps({
+                "schema_version": 17,
+                "task_id": "task-1",
+                "title": "原始作品",
+                "source_url": "https://example.com/post",
+            }, ensure_ascii=False), encoding="utf-8")
+            fake_db = unittest.mock.Mock()
+            fake_db.get_task.return_value = {"id": "task-1", "status": "done"}
+            with (
+                patch.object(app_module, "OUTPUT_DIR", Path(root)),
+                patch.object(app_module, "db", fake_db),
+                patch.object(app_module, "IDEAHUB_API_KEY", "test-key"),
+                patch.object(app_module, "_post_ideahub_sample", return_value={
+                    "ok": True, "sampleId": 41, "captureId": 42,
+                }) as archive,
+            ):
+                response = app_module.app.test_client().post(
+                    "/api/ideahub/archive-sample/task-1"
+                )
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual(41, response.get_json()["sample_id"])
+            self.assertEqual("task-1", archive.call_args.args[0]["task_id"])
+            saved = json.loads(content_path.read_text(encoding="utf-8"))
+            self.assertEqual({
+                "status": "done", "sample_id": 41, "capture_id": 42,
+            }, saved["sample_archive"])
+
+
 class PipelineStorageTests(unittest.TestCase):
     @staticmethod
     async def _page(_url, **_kwargs):
@@ -457,9 +492,12 @@ class PipelineStorageTests(unittest.TestCase):
         self.assertEqual(1, payload["max_concurrent"])
         self.assertIs(app_module._run_pipeline_in_slot, thread.call_args.kwargs["target"])
         self.assertEqual(("task-api", "https://www.xiaohongshu.com/explore/test"), thread.call_args.kwargs["args"])
-        self.assertEqual({"session_mode": "public"}, thread.call_args.kwargs["kwargs"])
+        self.assertEqual(
+            {"session_mode": "public", "auto_archive": False},
+            thread.call_args.kwargs["kwargs"],
+        )
 
-    def test_video_is_temporary_and_result_keeps_source_link(self):
+    def test_video_cover_and_playable_copy_are_permanently_archived(self):
         cover_bytes = []
 
         async def page(_url, **_kwargs):
@@ -531,11 +569,17 @@ class PipelineStorageTests(unittest.TestCase):
                 app_module._run_pipeline("task-1", "https://example.com/video")
                 task_dir = Path(root) / "task-1"
                 content = json.loads((task_dir / "content.json").read_text(encoding="utf-8"))
+                archived_video = (task_dir / content["media_assets"]["video"]["filename"]).read_bytes()
+                archived_cover = (task_dir / content["media_assets"]["video"]["cover_filename"]).read_bytes()
             self.assertFalse((task_dir / "_working_media").exists())
 
-        self.assertTrue(content["storage"]["temporary_media_deleted"])
-        self.assertFalse(content["storage"]["local_media_retained"])
-        self.assertEqual(16, content["schema_version"])
+        self.assertFalse(content["storage"]["temporary_media_deleted"])
+        self.assertTrue(content["storage"]["local_media_retained"])
+        self.assertEqual("bounded_720p", content["storage"]["archive_quality"])
+        self.assertEqual(b"temporary-video", archived_video)
+        self.assertEqual(cover_bytes[0], archived_cover)
+        self.assertEqual(17, content["schema_version"])
+        self.assertEqual("video.mp4", content["media_assets"]["video"]["filename"])
         self.assertEqual("https://www.xiaohongshu.com/discovery/item/n1", content["media_assets"]["video"]["source_url"])
         self.assertEqual(65.2, content["media_assets"]["video"]["duration_seconds"])
         self.assertEqual("页面作者", content["account"]["name"])

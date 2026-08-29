@@ -5,10 +5,23 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from media.downloader import _cookie_args, download_video, extract_video_metadata, url_declares_video
+from media.downloader import (
+    _cookie_args, _metadata_from_payload, download_video,
+    extract_video_metadata, url_declares_video,
+)
 
 
 class VideoMetadataTests(unittest.TestCase):
+    def test_metadata_keeps_platform_id_and_publish_time(self):
+        metadata = _metadata_from_payload({
+            "id": "note-2026",
+            "timestamp": 1787971200,
+            "title": "示例作品",
+        }, "https://www.xiaohongshu.com/explore/note-2026")
+
+        self.assertEqual("note-2026", metadata["id"])
+        self.assertTrue(metadata["published_at"].startswith("2026-"))
+
     def test_public_mode_never_passes_cookie_file_to_downloader(self):
         self.assertEqual([], _cookie_args(
             "https://www.xiaohongshu.com/explore/note-id", use_login=False,

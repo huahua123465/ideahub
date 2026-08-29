@@ -27,6 +27,7 @@ import * as importer from './views/importer.js';
 import * as dashboard from './views/dashboard.js';
 import * as learning from './views/learning.js';
 import * as collector from './views/collector.js';
+import * as samples from './views/samples.js';
 import { initMotion } from './motion.js';
 
 let view = 'home';
@@ -54,6 +55,7 @@ const CHROME = {
   funnel:       { group: '数据', title: '数据漏斗' },
   stats:        { group: '数据', title: '统计看板' },
   collector:    { group: '数据', title: '内容采集' },
+  samples:      { group: '数据', title: '样本库' },
   learning:     { group: '学习中心', title: '站内学习' },
 };
 
@@ -224,13 +226,14 @@ function syncDrawerVote(d) {
 /** 所有一级视图。
     clientDetail 没有对应的导航按钮 —— 它是从客户档案点进去的二级页面，
     所以下面切视图时要单独处理它的 tab 高亮（客户档案那颗仍然亮着）。 */
-const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'collector', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
+const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'samples', 'collector', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
 
 function go(next) {
   // 全局搜索只服务当前操作，不把上一页关键词带进下一个业务页面。
   search.reset();
   if (next === view) return;
   if (view === 'collector') collector.leave();
+  if (view === 'samples') samples.leave();
   view = next;
   for (const k of VIEWS) {
     $('#v-' + k).classList.toggle('on', k === next);
@@ -266,6 +269,7 @@ function go(next) {
   if (next === 'tagadmin') tagadmin.render();
   if (next === 'learning') learning.render();
   if (next === 'collector') collector.render();
+  if (next === 'samples') samples.render();
 }
 
 /**

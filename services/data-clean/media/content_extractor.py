@@ -3,6 +3,7 @@ import html as html_lib
 import difflib
 import json
 import re
+from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 from playwright.async_api import async_playwright
 from security import (
@@ -355,6 +356,40 @@ def _json_scalar(page_html: str, key: str) -> str:
     return html_lib.unescape(_decode_json_string(match.group(1) or match.group(2) or "")).strip()
 
 
+def _platform_content_id(page_html: str, url: str) -> str:
+    match = re.search(
+        r"/(?:explore|discovery/item|video)/([A-Za-z0-9_-]{6,80})",
+        str(url or ""), re.I,
+    )
+    if match:
+        return match.group(1)
+    for key in ("noteId", "note_id", "aweme_id", "awemeId"):
+        value = _json_scalar(page_html, key)
+        if value:
+            return value
+    return ""
+
+
+def _published_at(page_html: str) -> str:
+    value = _meta_content(page_html, property_name="article:published_time")
+    if value:
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
+        except ValueError:
+            pass
+    for key in ("publishTime", "publishedAt", "createTime"):
+        raw = _json_scalar(page_html, key)
+        try:
+            number = float(raw)
+            if number > 10_000_000_000:
+                number /= 1000
+            if number > 0:
+                return datetime.fromtimestamp(number, tz=timezone.utc).isoformat()
+        except (TypeError, ValueError, OSError):
+            continue
+    return ""
+
+
 def _extract_engagement(page_html: str) -> dict[str, str]:
     mappings = {
         "likes": ("og:xhs:note_like", "likedCount"),
@@ -501,5 +536,7 @@ def _parse_html(html: str, url: str = "") -> dict | None:
         "topics": topics,
         "images": images,
         "account": account,
+        "platform_content_id": _platform_content_id(original_html, url),
+        "published_at": _published_at(original_html),
         "duration": 0.0,
     }

@@ -15,6 +15,26 @@ from media.content_extractor import (
 
 
 class ContentDeduplicationTests(unittest.TestCase):
+    def test_page_snapshot_keeps_content_id_and_publish_time(self):
+        html = '''<html><head><title>图文作品</title>
+        <meta property="article:published_time" content="2026-08-29T01:02:03+08:00">
+        </head><body><script>window.__INITIAL_STATE__={"noteId":"note-123456"};</script>
+        <article>这是一段足够长的公开正文，用于验证作品身份与发布时间可以进入原始归档结果。</article>
+        </body></html>'''
+        result = _parse_html(html, "https://www.xiaohongshu.com/explore/note-123456")
+
+        self.assertEqual("note-123456", result["platform_content_id"])
+        self.assertEqual("2026-08-29T01:02:03+08:00", result["published_at"])
+
+    def test_current_url_id_wins_over_recommended_note_preload(self):
+        html = '''<html><head><title>当前作品</title></head><body>
+        <script>{"noteId":"recommended-999999","time":1700000000}</script>
+        <article>这是一段足够长的当前作品正文，用来确认推荐列表里的编号不会污染当前样本身份。</article>
+        </body></html>'''
+        result = _parse_html(html, "https://www.xiaohongshu.com/explore/current-123456")
+        self.assertEqual("current-123456", result["platform_content_id"])
+        self.assertEqual("", result["published_at"])
+
     def test_public_mode_never_builds_a_cookie_header(self):
         headers = _page_headers(
             "https://www.xiaohongshu.com/explore/note-id", use_login=False,

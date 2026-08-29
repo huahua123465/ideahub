@@ -22,6 +22,7 @@ const checks = [
   ['Web线程固定 1', /COLLECTOR_WEB_THREADS:\s*"1"/.test(block)],
   ['状态目录默认在仓库外', /\/opt\/ideahub-collector\/state/.test(block)],
   ['输出目录默认在仓库外', /\/opt\/ideahub-collector\/output/.test(block)],
+  ['样本归档使用 Docker 内网地址', /IDEAHUB_SAMPLE_INGEST_URL:\s*http:\/\/api:3000\/api\/ingest\/sample/.test(block)],
 ];
 
 let failed = 0;
@@ -35,4 +36,3 @@ if (failed) {
 } else {
   console.log(`\nCollector Compose：${checks.length} 项通过`);
 }
-

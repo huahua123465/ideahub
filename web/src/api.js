@@ -62,6 +62,7 @@ async function call(method, path, body) {
     const e = new Error(data?.error || `请求失败（${r.status}）`);
     e.status = r.status;
     e.detail = data?.detail;
+    e.data = data;
     throw e;
   }
   return data;
@@ -250,13 +251,43 @@ export const api = {
   collectorAccountLabel:(label)       => call('POST',   '/api/collector/login/xiaohongshu/label', { label }),
   collectorAccountLogout:()           => call('POST',   '/api/collector/login/xiaohongshu/logout', {}),
   collectorTasks:       ()            => call('GET',    '/api/collector/tasks'),
-  collectorCreate:      (url, sessionMode = 'saved') => call('POST', '/api/collector/tasks', { url, session_mode: sessionMode }),
+  collectorCreate:      (url, sessionMode = 'saved', autoArchive = false) => call('POST', '/api/collector/tasks', { url, session_mode: sessionMode, auto_archive: autoArchive }),
   collectorTaskStatus:  (id)          => call('GET',    `/api/collector/tasks/${encodeURIComponent(id)}/status`),
   collectorResult:      (id)          => call('GET',    `/api/collector/tasks/${encodeURIComponent(id)}/result`),
   collectorRefresh:     (id)          => call('POST',   `/api/collector/tasks/${encodeURIComponent(id)}/refresh`, {}),
+  collectorArchive:     (id)          => call('POST',   `/api/collector/tasks/${encodeURIComponent(id)}/archive`, {}),
   collectorAnalysis:    (id, payload) => call('PATCH',  `/api/collector/tasks/${encodeURIComponent(id)}/analysis`, payload),
   collectorPush:        (id, channel) => call('POST',   `/api/collector/tasks/${encodeURIComponent(id)}/push`, { channel }),
   collectorDelete:      (id)          => call('DELETE', `/api/collector/tasks/${encodeURIComponent(id)}`),
+
+  /* ---------- 内容样本库 ---------- */
+  samples:              (opts = {})   => call('GET',    '/api/samples' + qs(opts)),
+  sample:               (id)          => call('GET',    `/api/samples/${encodeURIComponent(id)}`),
+  sampleCreate:         (payload)     => call('POST',   '/api/samples', payload),
+  samplePatch:          (id, payload) => call('PATCH',  `/api/samples/${encodeURIComponent(id)}`, payload),
+  sampleCaptureRaw:     (sampleId, captureId) => call('GET', `/api/samples/${encodeURIComponent(sampleId)}/captures/${encodeURIComponent(captureId)}/raw`),
+  sampleCaptures:       (sampleId, opts = {}) => call('GET', `/api/samples/${encodeURIComponent(sampleId)}/captures` + qs(opts)),
+  sampleAssetUpload:    async (sampleId, file, meta = {}) => {
+    const path = sampleId ? `/api/samples/${encodeURIComponent(sampleId)}/assets` : '/api/samples/assets';
+    const params = new URLSearchParams({ name:file.name, title:meta.title || file.name });
+    for (const [key, value] of Object.entries(meta)) {
+      if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+    }
+    if (state.mode === 'mock') return mock.handle('POST', `${path}?${params}`, file);
+    const r = await fetch(`${BASE}${path}?${params}`, {
+      method:'POST', body:file, credentials:'include',
+      headers:{ 'content-type':file.type || 'application/octet-stream' },
+    });
+    logApi('POST', path, r.status);
+    let data = null;
+    try { data = await r.json(); } catch { /* 空响应体 */ }
+    if (r.status === 401) {
+      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+      throw new Error('请先登录');
+    }
+    if (!r.ok) throw new Error(data?.error || `上传失败（${r.status}）`);
+    return data;
+  },
 };
 
 /** 二进制资源不经过 JSON call()；这里只生成固定、同源、已编码的安全路径。 */

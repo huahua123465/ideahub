@@ -19,6 +19,7 @@ from config import (
     OUTPUT_DIR,
     IDEAHUB_API_KEY,
     IDEAHUB_INGEST_URL,
+    IDEAHUB_SAMPLE_INGEST_URL,
     IDEAHUB_DOC_URL,
     COLLECTOR_INTERNAL_TOKEN,
     COLLECTOR_MAX_CONCURRENT,
@@ -146,7 +147,7 @@ IDEAHUB_MAX_COVER_IMAGE_BYTES = 3 * 1024 * 1024
 COLLECTION_MODE = "analyze"
 COLLECTION_MODE_LABEL = "采集分析"
 STORAGE_POLICY = "source_linked"
-CONTENT_SCHEMA_VERSION = 16
+CONTENT_SCHEMA_VERSION = 17
 AI_ANALYSIS_TEXT_LIMIT = 6000
 AI_VIDEO_EDIT_KEYS = (
     "main_topic", "target_audience", "user_need", "content_structure",
@@ -231,6 +232,30 @@ def _post_ideahub_analysis(payload, channel):
     with httpx.Client(timeout=30.0, follow_redirects=False) as client:
         response = client.post(url, headers=headers, content=payload)
 
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    if response.status_code < 200 or response.status_code >= 300 or not body.get("ok"):
+        message = body.get("error") or body.get("message") or f"IdeaHub 返回 HTTP {response.status_code}"
+        raise RuntimeError(message)
+    return body
+
+
+def _post_ideahub_sample(content: dict) -> dict:
+    payload = json.dumps(content, ensure_ascii=False).encode("utf-8")
+    if len(payload) > IDEAHUB_MAX_PAYLOAD_BYTES:
+        raise RuntimeError("样本归档数据超过 8MB，请减少内嵌内容后重试")
+    headers = {
+        "Authorization": f"Bearer {IDEAHUB_API_KEY}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    with httpx.Client(timeout=90.0, follow_redirects=False) as client:
+        response = client.post(
+            IDEAHUB_SAMPLE_INGEST_URL, headers=headers, content=payload,
+        )
     try:
         body = response.json()
     except ValueError:
@@ -464,6 +489,43 @@ def _preserve_last_good_comments(comment_result, last_good):
     return comment_result
 
 
+def _archive_completeness(content: dict) -> dict:
+    """Describe archive evidence honestly instead of turning missing data into zero."""
+    account = content.get("account") or {}
+    engagement = content.get("engagement") or {}
+    video = (content.get("media_assets") or {}).get("video") or {}
+    images = content.get("images") or []
+    checks = {
+        "title": bool(content.get("post_title") or content.get("title")),
+        "body": bool(
+            content.get("post_description") or content.get("page_text")
+            or content.get("video_text") or content.get("audio_text")
+        ),
+        "source_url": bool(content.get("source_url")),
+        "platform_content_id": bool(content.get("platform_content_id")),
+        "published_at": bool(content.get("published_at")),
+        "account": bool(account.get("name") or account.get("profile_url")),
+        "engagement": any(engagement.get(key) not in (None, "") for key in (
+            "likes", "collects", "comments", "shares", "views"
+        )),
+        "cover": bool(
+            images or video.get("cover_filename") or video.get("cover_image_b64")
+        ),
+        "primary_media": bool(
+            images if content.get("media_type") == "image_post"
+            else video.get("filename")
+        ),
+    }
+    missing = [key for key, available in checks.items() if not available]
+    score = round(100 * (len(checks) - len(missing)) / len(checks))
+    return {
+        "status": "complete" if not missing else "partial",
+        "score": score,
+        "missing_fields": missing,
+        "checks": checks,
+    }
+
+
 def _safe_export_name(value, fallback="content"):
     cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", str(value or "")).strip(" ._")
     return (cleaned[:60] or fallback)
@@ -634,7 +696,7 @@ def disable_page_cache(response):
 
 def _run_pipeline(
     vid: str, url: str, manual_refresh: bool = False, *,
-    session_mode: str = "saved",
+    session_mode: str = "saved", auto_archive: bool = False,
 ):
     collection_mode = COLLECTION_MODE
     session_mode = "public" if session_mode == "public" else "saved"
@@ -643,6 +705,7 @@ def _run_pipeline(
         "status": "running", "progress": 0, "message": "开始采集...",
         "collection_mode": collection_mode,
         "session_mode": session_mode,
+        "auto_archive": bool(auto_archive),
         "manual_refresh": manual_refresh,
     }
 
@@ -707,6 +770,8 @@ def _run_pipeline(
         title = ""
         description = ""
         author = ""
+        platform_content_id = ""
+        published_at = ""
         account = empty_account()
         media_type = "video"
         platform = detect_platform(url)
@@ -725,6 +790,9 @@ def _run_pipeline(
         progress(8, "正在读取账号、标题和媒体元数据...")
         video_url_hint = url_declares_video(url)
         meta = extract_video_metadata(url, use_login=use_login)
+        if meta:
+            platform_content_id = str(meta.get("id") or "")
+            published_at = str(meta.get("published_at") or "")
         media_probe = {
             "status": "ok" if meta else ("hint" if video_url_hint else "not_video"),
             "method": "downloader_metadata" if meta else ("source_url" if video_url_hint else "page"),
@@ -738,6 +806,8 @@ def _run_pipeline(
         if meta or video_url_hint:
             meta = meta or {}
             page = _run_async(extract_page(url, use_login=use_login)) or {}
+            platform_content_id = platform_content_id or page.get("platform_content_id") or ""
+            published_at = published_at or page.get("published_at") or ""
             title = page.get("post_title") or page.get("title") or meta.get("title") or "未命名内容"
             topics = page.get("topics") or meta.get("tags") or []
             raw_description = (
@@ -753,11 +823,13 @@ def _run_pipeline(
                 "likes": "" if meta.get("like_count") is None else str(meta.get("like_count")),
                 "collects": "",
                 "comments": "" if meta.get("comment_count") is None else str(meta.get("comment_count")),
+                "shares": "" if meta.get("repost_count") is None else str(meta.get("repost_count")),
+                "views": "" if meta.get("view_count") is None else str(meta.get("view_count")),
             }
             page_engagement = page.get("engagement") or {}
             engagement = {
                 key: page_engagement.get(key) or metadata_engagement.get(key) or ""
-                for key in ("likes", "collects", "comments")
+                for key in ("likes", "collects", "comments", "shares", "views")
             }
             video_asset.update({
                 "source_url": meta.get("webpage_url") or url,
@@ -778,13 +850,23 @@ def _run_pipeline(
                 working_dir, url, title,
             )
             video_asset.update(cover_asset)
+            for cover_path in sorted(working_dir.glob("video_cover.*"))[:1]:
+                cover_dest = task_dir / ("cover" + cover_path.suffix.lower())
+                shutil.copy2(cover_path, cover_dest)
+                video_asset["cover_filename"] = cover_dest.name
+                add_artifact("cover", cover_dest, {"archive_quality": "platform_available"})
             downloaded = download_video(
                 url, str(working_dir), metadata=meta if meta else None,
                 use_login=use_login,
             )
             if downloaded:
                 video_path = downloaded["video_path"]
+                archived_video = task_dir / "video.mp4"
+                shutil.copy2(video_path, archived_video)
                 video_asset.update({
+                    "filename": archived_video.name,
+                    "archive_quality": "bounded_720p",
+                    "archive_original_bytes": False,
                     "size_bytes": Path(video_path).stat().st_size,
                     "processed_from_temporary_download": True,
                     "duration_seconds": video_asset["duration_seconds"] or downloaded.get("duration") or 0,
@@ -796,6 +878,10 @@ def _run_pipeline(
                 media_probe.update(
                     status="ok", method="video_download", message="视频素材读取成功"
                 )
+                add_artifact("video", archived_video, {
+                    "archive_quality": "bounded_720p",
+                    "source_url": url,
+                })
 
                 progress(38, "正在使用视频模型连续识别画面文字...")
                 model_video_text = transcribe_video_with_model(
@@ -840,6 +926,8 @@ def _run_pipeline(
                 raise RuntimeError("无法提取内容。该链接可能需要登录 Cookie，或已失效。")
 
             page_text = page.get("text", "")
+            platform_content_id = page.get("platform_content_id") or ""
+            published_at = page.get("published_at") or ""
             text_same_as_description = bool(page.get("text_same_as_description"))
             engagement = page.get("engagement") or engagement
             topics = page.get("topics") or []
@@ -890,7 +978,7 @@ def _run_pipeline(
             previous_engagement = previous_content.get("engagement") or {}
             engagement = {
                 key: engagement.get(key) or previous_engagement.get(key) or ""
-                for key in ("likes", "collects", "comments")
+                for key in ("likes", "collects", "comments", "shares", "views")
             }
             title = title or previous_content.get("post_title") or previous_content.get("title") or ""
             description = description or previous_content.get("post_description") or previous_content.get("description") or ""
@@ -923,6 +1011,8 @@ def _run_pipeline(
             "collected_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "manual_refresh": manual_refresh,
             "source_url": url,
+            "platform_content_id": platform_content_id,
+            "published_at": published_at,
             "platform": platform,
             "collection_mode": collection_mode,
             "collection_mode_label": COLLECTION_MODE_LABEL,
@@ -930,8 +1020,14 @@ def _run_pipeline(
             "session_mode_label": "公开无登录" if session_mode == "public" else "使用采集账号",
             "storage": {
                 "policy": STORAGE_POLICY,
-                "local_media_retained": media_type == "image_post" and bool(image_results),
-                "temporary_media_deleted": media_type == "video",
+                "local_media_retained": bool(
+                    image_results if media_type == "image_post" else video_asset.get("filename")
+                ),
+                "temporary_media_deleted": False,
+                "archive_quality": (
+                    "original_images" if media_type == "image_post"
+                    else video_asset.get("archive_quality") or "unavailable"
+                ),
             },
             "media_type": media_type,
             "media_assets": {"video": video_asset if media_type == "video" else {}},
@@ -970,11 +1066,37 @@ def _run_pipeline(
                 for index, item in enumerate(image_results, 1)
             ],
         }
+        content["archive_completeness"] = _archive_completeness(content)
         content["ai_analysis"], technical_audit = analyze_content_with_audit(content)
 
         progress(96, "正在整理并保存分析结果...")
         json_path = task_dir / "content.json"
         _atomic_write_text(json_path, json.dumps(content, ensure_ascii=False, indent=2))
+
+        if auto_archive:
+            if not IDEAHUB_API_KEY:
+                content["sample_archive"] = {
+                    "status": "failed",
+                    "message": "IdeaHub 样本归档密钥尚未配置",
+                }
+            else:
+                try:
+                    archived = _post_ideahub_sample(content)
+                    content["sample_archive"] = {
+                        "status": "done",
+                        "sample_id": archived.get("sampleId") or archived.get("id"),
+                        "capture_id": archived.get("captureId"),
+                    }
+                except Exception as exc:
+                    content["sample_archive"] = {
+                        "status": "failed",
+                        "message": public_error_message(
+                            exc, fallback="样本自动归档失败，可稍后重试"
+                        ),
+                    }
+            _atomic_write_text(
+                json_path, json.dumps(content, ensure_ascii=False, indent=2)
+            )
 
         text_path = task_dir / "content.txt"
         _atomic_write_text(text_path, _build_export_text(content, "txt"))
@@ -1045,12 +1167,13 @@ def _run_pipeline(
 
 def _run_pipeline_in_slot(
     vid: str, url: str, manual_refresh: bool = False, *,
-    session_mode: str = "saved",
+    session_mode: str = "saved", auto_archive: bool = False,
 ):
     """Run one collection pipeline within the configured single-VPS bound."""
     with _pipeline_slots:
         _run_pipeline(
             vid, url, manual_refresh=manual_refresh, session_mode=session_mode,
+            auto_archive=auto_archive,
         )
 
 
@@ -1231,6 +1354,7 @@ def api_convert():
         return jsonify({"error": str(exc)}), 400
     collection_mode = COLLECTION_MODE
     session_mode = "public" if data.get("session_mode") == "public" else "saved"
+    auto_archive = data.get("auto_archive") is True
     owner_id = str(request.headers.get("X-IdeaHub-User-Id") or "").strip()[:128]
     if not owner_id:
         return jsonify({"error": "缺少任务创建者身份"}), 400
@@ -1260,6 +1384,8 @@ def api_convert():
                 and "ai_analysis" in cached_content
                 and cached_mode == collection_mode
                 and cached_session_mode == session_mode
+                and (not auto_archive
+                     or (cached_content.get("sample_archive") or {}).get("status") == "done")
                 and not needs_login_retry):
             return jsonify({
                 "task_id": vid, "status": "done", "cached": True,
@@ -1279,6 +1405,7 @@ def api_convert():
                 "task_id": vid, "status": active.get("status"), "coalesced": True,
                 "collection_mode": active_mode,
                 "session_mode": active.get("session_mode") or session_mode,
+                "auto_archive": active.get("auto_archive") is True,
                 "max_concurrent": MAX_CONCURRENT_TASKS,
                 "owner_id": existing.get("owner_id") if existing else owner_id,
             })
@@ -1292,17 +1419,22 @@ def api_convert():
             "status": "pending", "progress": 0, "message": "等待并发槽位...",
             "collection_mode": collection_mode,
             "session_mode": session_mode,
+            "auto_archive": auto_archive,
         }
         db.create_task(vid, url, detect_platform(url), owner_id=owner_id)
         threading.Thread(
             target=_run_pipeline_in_slot, args=(vid, url),
-            kwargs={"session_mode": session_mode}, daemon=True,
+            kwargs={
+                "session_mode": session_mode,
+                "auto_archive": auto_archive,
+            }, daemon=True,
         ).start()
     return jsonify({
         "task_id": vid,
         "status": "pending",
         "collection_mode": collection_mode,
         "session_mode": session_mode,
+        "auto_archive": auto_archive,
         "max_concurrent": MAX_CONCURRENT_TASKS,
         "owner_id": owner_id,
     })
@@ -1476,10 +1608,12 @@ def _backfill_video_evidence(content, task_dir=None):
         "likes": "" if meta.get("like_count") is None else str(meta.get("like_count")),
         "collects": "",
         "comments": "" if meta.get("comment_count") is None else str(meta.get("comment_count")),
+        "shares": "" if meta.get("repost_count") is None else str(meta.get("repost_count")),
+        "views": "" if meta.get("view_count") is None else str(meta.get("view_count")),
     }
     engagement = {
         key: engagement.get(key) or page_engagement.get(key) or metadata_engagement.get(key) or ""
-        for key in ("likes", "collects", "comments")
+        for key in ("likes", "collects", "comments", "shares", "views")
     }
     video_asset = {
         **video_asset,
@@ -1670,7 +1804,12 @@ def api_media(vid, filename):
     task_dir = _resolve_task_dir(vid)
     if task_dir is None:
         return jsonify({"error": "unsafe task path"}), 400
-    allowed = {"mp4", "webm", "mkv", "mov", "mp3", "m4a", "wav", "aac"}
+    # The cover is retained beside video.mp4 so IdeaHub can copy both into its
+    # independent sample archive. This endpoint is internal-token protected.
+    allowed = {
+        "mp4", "webm", "mkv", "mov", "mp3", "m4a", "wav", "aac",
+        "jpg", "jpeg", "png", "webp", "gif", "avif",
+    }
     suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if suffix not in allowed:
         return jsonify({"error": "unsupported media type"}), 400
@@ -1807,6 +1946,33 @@ def api_ideahub_push(vid):
         return jsonify(_push_task_to_ideahub(vid, channel))
     except IdeaHubPushError as exc:
         return jsonify({"error": str(exc)}), exc.status_code
+
+
+@app.route("/api/ideahub/archive-sample/<vid>", methods=["POST"])
+def api_ideahub_archive_sample(vid):
+    if not IDEAHUB_API_KEY:
+        return jsonify({"error": "IdeaHub 样本归档密钥尚未配置"}), 503
+    task = db.get_task(vid)
+    task_dir = _resolve_task_dir(vid)
+    if not task or task.get("status") != "done" or task_dir is None:
+        return jsonify({"error": "只有已完成任务可以归档样本"}), 409
+    content_path = task_dir / "content.json"
+    try:
+        content = json.loads(content_path.read_text(encoding="utf-8"))
+        archived = _post_ideahub_sample(content)
+        content["sample_archive"] = {
+            "status": "done",
+            "sample_id": archived.get("sampleId") or archived.get("id"),
+            "capture_id": archived.get("captureId"),
+        }
+        _atomic_write_text(
+            content_path, json.dumps(content, ensure_ascii=False, indent=2)
+        )
+        return jsonify({"ok": True, **content["sample_archive"]})
+    except Exception as exc:
+        return jsonify({
+            "error": public_error_message(exc, fallback="归档样本失败")
+        }), 502
 
 
 @app.route("/api/ideahub/push-batch", methods=["POST"])

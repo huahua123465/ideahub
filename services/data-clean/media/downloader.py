@@ -4,6 +4,7 @@ import json
 import math
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -130,6 +131,7 @@ def download_video(
     print("  video saved and verified")
     return {
         "video_path": video_path,
+        "id": meta.get("id", ""),
         "title": meta.get("title", ""),
         "description": meta.get("description", ""),
         "duration": verified_duration,
@@ -143,7 +145,26 @@ def download_video(
         "channel_url": meta.get("channel_url", ""),
         "channel_follower_count": meta.get("channel_follower_count"),
         "webpage_url": meta.get("webpage_url", url),
+        "published_at": meta.get("published_at", ""),
     }
+
+
+def _published_at_from_payload(data: dict) -> str:
+    timestamp = data.get("timestamp") or data.get("release_timestamp")
+    try:
+        if timestamp:
+            return datetime.fromtimestamp(float(timestamp), tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError):
+        pass
+    upload_date = str(data.get("upload_date") or "").strip()
+    try:
+        if len(upload_date) == 8 and upload_date.isdigit():
+            return datetime.strptime(upload_date, "%Y%m%d").replace(
+                tzinfo=timezone.utc
+            ).isoformat()
+    except ValueError:
+        pass
+    return ""
 
 
 def _metadata_from_payload(data: dict, url: str) -> dict:
@@ -160,6 +181,9 @@ def _metadata_from_payload(data: dict, url: str) -> dict:
         "channel_follower_count": data.get("channel_follower_count"),
         "like_count": data.get("like_count"),
         "comment_count": data.get("comment_count"),
+        "repost_count": data.get("repost_count"),
+        "view_count": data.get("view_count"),
+        "published_at": _published_at_from_payload(data),
         "thumbnail": data.get("thumbnail", ""),
         "webpage_url": data.get("webpage_url", url),
         # Platform CDN URLs may expire. Keep them as optional playback hints

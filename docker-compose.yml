@@ -52,11 +52,15 @@ services:
       # Collector 仅走 Docker 内部网络；令牌只在服务端注入，永远不进入前端。
       COLLECTOR_URL: http://collector:5000
       COLLECTOR_INTERNAL_TOKEN: ${COLLECTOR_INTERNAL_TOKEN:-}
+      # 样本媒体独立于 Git 附件备份，容器内只使用这个专用挂载目录。
+      SAMPLE_ASSET_DIR: ${SAMPLE_ASSET_DIR:-/var/lib/ideahub-samples}
+      SAMPLE_ASSET_MAX_BYTES: ${SAMPLE_ASSET_MAX_BYTES:-524288000}
     volumes:
       # 附件必须落在挂载卷上。存容器里的话 docker compose up --build 一重建就没了，
       # 而重建是这个项目改前端的日常操作。
       - ./data/uploads:/data/uploads
       - ai-provider:/var/lib/ideahub-ai
+      - ${SAMPLE_ASSET_PATH:-/opt/ideahub-samples}:${SAMPLE_ASSET_DIR:-/var/lib/ideahub-samples}
     depends_on:
       db: { condition: service_healthy }
     deploy:
@@ -110,6 +114,7 @@ services:
       # Collector 推送结果时走同一个内部 api 容器，不再跨公网绕一圈。
       IDEAHUB_API_KEY: ${IDEAHUB_API_KEY:-}
       IDEAHUB_INGEST_URL: http://api:3000/api/ingest/analysis
+      IDEAHUB_SAMPLE_INGEST_URL: http://api:3000/api/ingest/sample
     volumes:
       # 真实 SQLite、Cookie、二维码状态和媒体必须留在仓库外，避免被 Git 备份提交。
       - ${COLLECTOR_STATE_PATH:-/opt/ideahub-collector/state}:/var/lib/collector/state

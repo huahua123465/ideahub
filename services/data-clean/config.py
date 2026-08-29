@@ -48,6 +48,10 @@ IDEAHUB_INGEST_URL = os.getenv(
     "IDEAHUB_INGEST_URL",
     "https://xm.xingxingqule.com:9443/api/ingest/analysis",
 ).strip()
+IDEAHUB_SAMPLE_INGEST_URL = os.getenv(
+    "IDEAHUB_SAMPLE_INGEST_URL",
+    IDEAHUB_INGEST_URL.rsplit("/", 1)[0] + "/sample",
+).strip()
 IDEAHUB_DOC_URL = os.getenv(
     "IDEAHUB_DOC_URL",
     "https://xm.xingxingqule.com:9443/%E6%8E%A5%E5%85%A5%E8%AF%B4%E6%98%8E.html",
