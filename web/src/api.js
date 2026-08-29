@@ -16,6 +16,12 @@ export const state = { mode: 'live' };   // live | mock
 
 /** 启动时探一次后端。探不到就整场用 mock。 */
 export async function probe() {
+  const requestedMock = new URLSearchParams(location.search).get('mock') === '1';
+  const localMockAllowed = ['127.0.0.1','localhost','::1'].includes(location.hostname) || globalThis.__IDEAHUB_ALLOW_MOCK__ === true;
+  if (requestedMock && localMockAllowed) {
+    state.mode = 'mock';
+    return state.mode;
+  }
   // 生产环境的静态页面和 /api 都由同一个 Node 进程提供：index.html 能打开，
   // 就没必要再串行请求一次 /api/health 后才去拿登录用户。跨洋网络下这会白等
   // 一个完整 RTT。本地 5173 才需要探测 3000 端口并决定是否降级到 mock。
@@ -288,6 +294,33 @@ export const api = {
   sampleEvaluationCreate:(id, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/evaluations`, payload),
   sampleEvaluationAi:   (id, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/evaluations/ai`, payload),
   sampleMetrics:        (id) => call('GET', `/api/samples/${encodeURIComponent(id)}/metrics`),
+
+  /* ---------- Sample library: stage 3 comparison and reusable components ---------- */
+  sampleComparisons:    (opts = {}) => call('GET', '/api/sample-comparisons' + qs(opts)),
+  sampleComparison:     (id) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}`),
+  sampleComparisonCreate:(payload, idempotencyKey) => call('POST', '/api/sample-comparisons', payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleComparisonScope:(id, scopeId) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}/scopes/${encodeURIComponent(scopeId)}`),
+  sampleComparisonScopeCreate:(id, payload, idempotencyKey) => call('POST', `/api/sample-comparisons/${encodeURIComponent(id)}/scopes`, payload, { 'Idempotency-Key':idempotencyKey }),
+  comparisonAssessments:(id, opts = {}) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}/assessments` + qs(opts)),
+  comparisonAssessment: (id, assessmentId) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}/assessments/${encodeURIComponent(assessmentId)}`),
+  comparisonAssessmentManual:(id, scopeId, payload, idempotencyKey) => call('POST', `/api/sample-comparisons/${encodeURIComponent(id)}/scopes/${encodeURIComponent(scopeId)}/assessments/manual`, payload, { 'Idempotency-Key':idempotencyKey }),
+  comparisonAssessmentJobStart:(id, scopeId, payload, idempotencyKey) => call('POST', `/api/sample-comparisons/${encodeURIComponent(id)}/scopes/${encodeURIComponent(scopeId)}/assessment-jobs`, payload, { 'Idempotency-Key':idempotencyKey }),
+  comparisonAssessmentJob:(id, jobId) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}/assessment-jobs/${encodeURIComponent(jobId)}`),
+  comparisonAssessmentSelect:(id, assessmentId, idempotencyKey) => call('POST', `/api/sample-comparisons/${encodeURIComponent(id)}/assessments/${encodeURIComponent(assessmentId)}/select`, {}, { 'Idempotency-Key':idempotencyKey }),
+  sampleRelations:      (sampleId, opts = {}) => call('GET', `/api/samples/${encodeURIComponent(sampleId)}/relations` + qs(opts)),
+  sampleRelationCreate: (payload, idempotencyKey) => call('POST', '/api/sample-relations', payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleRelationEvidence:(id, payload, idempotencyKey) => call('POST', `/api/sample-relations/${encodeURIComponent(id)}/evidence`, payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleRelationEvent:  (id, payload, idempotencyKey) => call('POST', `/api/sample-relations/${encodeURIComponent(id)}/events`, payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleExtractionCreate:(id, scopeId, payload, idempotencyKey) => call('POST', `/api/sample-comparisons/${encodeURIComponent(id)}/scopes/${encodeURIComponent(scopeId)}/extractions`, payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleExtractions:    (opts = {}) => call('GET', '/api/sample-element-extractions' + qs(opts)),
+  contentComponents:    (opts = {}) => call('GET', '/api/content-components' + qs(opts)),
+  contentComponent:     (id) => call('GET', `/api/content-components/${encodeURIComponent(id)}`),
+  contentComponentCreate:(payload, idempotencyKey) => call('POST', '/api/content-components', payload, { 'Idempotency-Key':idempotencyKey }),
+  contentComponentRevisionCreate:(id, payload, idempotencyKey) => call('POST', `/api/content-components/${encodeURIComponent(id)}/revisions`, payload, { 'Idempotency-Key':idempotencyKey }),
+  contentComponentSubmit:(id, revisionId, idempotencyKey) => call('POST', `/api/content-components/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}/submit`, {}, { 'Idempotency-Key':idempotencyKey }),
+  contentComponentReview:(id, revisionId, payload, idempotencyKey) => call('POST', `/api/content-components/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}/review`, payload, { 'Idempotency-Key':idempotencyKey }),
+  contentComponentLifecycle:(id, payload, idempotencyKey) => call('POST', `/api/content-components/${encodeURIComponent(id)}/lifecycle`, payload, { 'Idempotency-Key':idempotencyKey }),
+  reusableComponents:   (opts = {}) => call('GET', '/api/reusable-components' + qs(opts)),
   sampleAssetUpload:    async (sampleId, file, meta = {}) => {
     const path = sampleId ? `/api/samples/${encodeURIComponent(sampleId)}/assets` : '/api/samples/assets';
     const params = new URLSearchParams({ name:file.name, title:meta.title || file.name });

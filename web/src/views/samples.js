@@ -4,6 +4,8 @@ import { $, esc, fromNow } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
 import { openResearch, leaveResearch } from './sample-research.js';
+import { openComparisonLibrary, openComparisonWorkspace, leaveComparison } from './sample-comparison.js';
+import { openComponentLibrary, leaveComponents } from './sample-components.js';
 
 let active = false;
 let initialized = false;
@@ -31,6 +33,10 @@ let listError = '';
 let listLoading = false;
 let listScrollTop = 0;
 let researchPaused = false;
+let libraryMode = 'samples';
+let comparisonBusy = false;
+let comparisonDialogFocus = null;
+let compareSelection = loadCompareSelection();
 
 const root = () => $('#v-samples');
 const MISSING = {
@@ -46,6 +52,8 @@ export function leave() {
   active = false;
   researchPaused=Boolean(selectedId&&detail);
   leaveResearch();
+  leaveComparison();
+  leaveComponents();
   clearTimeout(linkTimer);
   linkTimer = null;
 }
@@ -53,14 +61,17 @@ export function leave() {
 export async function render() {
   active = true;
   if (!initialized) scaffold();
-  loadResearchConfig();
-  await loadSamples();
-  if(researchPaused&&selectedId&&detail){researchPaused=false;await openResearch($('#samplesDetail'),detail,researchOptions());}
-  if (linkJob) { paintLinkProgress(); pollLinkJob(true); }
+  await activateLibraryMode(true);
 }
 
 function scaffold() {
   root().innerHTML = `
+    <nav class="sample-library-modes" role="tablist" aria-label="样本库模式">
+      <button type="button" role="tab" aria-selected="true" tabindex="0" class="on" data-library-mode="samples"><b>样本</b><span>归档与单篇研究</span></button>
+      <button type="button" role="tab" aria-selected="false" tabindex="-1" data-library-mode="comparisons"><b>比较记录</b><span>冻结范围与横向研究</span></button>
+      <button type="button" role="tab" aria-selected="false" tabindex="-1" data-library-mode="components"><b>组件库</b><span>审核与可复用白名单</span></button>
+    </nav>
+    <section id="sampleLibrarySamples" class="sample-library-mode-panel" aria-label="样本">
     <div class="page-head samples-page-head"><div><div class="page-kicker">内容研究数据库</div><h1>样本库</h1>
       <div class="sub">先保存原始作品，再逐步拆解、比较和沉淀可复用元素。</div></div>
       <div class="samples-head-stats" id="samplesHeadStats"></div></div>
@@ -82,14 +93,36 @@ function scaffold() {
     <section class="samples-workspace">
       <div class="samples-list" id="samplesList"><div class="samples-loading">正在读取样本…</div></div>
       <aside class="samples-detail" id="samplesDetail"><div class="samples-empty">${ICON.layers}<b>选择一篇样本</b><span>查看原始正文、媒体、完整度和历次采集版本。</span></div></aside>
-    </section>`;
+    </section></section>
+    <section id="sampleLibraryComparisons" class="sample-library-mode-panel" aria-label="比较记录" hidden></section>
+    <section id="sampleLibraryComponents" class="sample-library-mode-panel" aria-label="组件库" hidden></section>
+    <aside id="sampleComparisonTray" class="sample-comparison-tray" aria-label="比较选择托盘"></aside>
+    <dialog id="sampleComparisonCreateDialog" class="stage3-dialog sample-comparison-create-dialog">
+      <form id="sampleComparisonCreateForm">
+        <header><div><span>固定 2–6 篇样本</span><h3>新建比较记录</h3></div><button type="button" data-comparison-dialog-close aria-label="关闭新建比较">×</button></header>
+        <label class="stage3-field"><span>比较名称</span><input name="name" maxlength="200" required placeholder="例如：关系判断内容的标题与结构比较"></label>
+        <label class="stage3-field"><span>研究主题</span><textarea name="topic" maxlength="160" rows="3" required placeholder="说明这次想观察什么，不预设赢家或因果结论。"></textarea></label>
+        <div class="sample-comparison-create-members"></div>
+        <div class="stage3-form-error" aria-live="polite"></div>
+        <footer><button type="button" data-comparison-dialog-close>取消</button><button type="submit" class="stage3-primary">建立冻结范围</button></footer>
+      </form>
+    </dialog>`;
   bind();
   paintIntake();
+  paintComparisonTray();
   initialized = true;
 }
 
 function bind() {
   root().addEventListener('click', event => {
+    const libraryTab=event.target.closest('[data-library-mode]');
+    if(libraryTab){setLibraryMode(libraryTab.dataset.libraryMode,libraryTab);return;}
+    if(event.target.closest('.sample-compare-checkbox'))return;
+    const removeCompare=event.target.closest('[data-compare-remove]');
+    if(removeCompare){toggleCompareSelection(Number(removeCompare.dataset.compareRemove),false,removeCompare);return;}
+    if(event.target.closest('[data-compare-clear]')){compareSelection=[];saveCompareSelection();paintComparisonTray();paintList();return;}
+    if(event.target.closest('[data-compare-start]')){openComparisonCreateDialog(event.target.closest('[data-compare-start]'));return;}
+    if(event.target.closest('[data-comparison-dialog-close]')){closeComparisonCreateDialog();return;}
     if (event.target.closest('#samplesIntakeToggle')) { setIntakeOpen(!intakeOpen); return; }
     if (event.target.closest('#sampleFiltersToggle')) { filtersOpen=!filtersOpen;paintFilterBuilder();return; }
     if(event.target.closest('[data-filter-config-retry]')){researchConfig=null;researchConfigError='';loadResearchConfig();return;}
@@ -113,6 +146,7 @@ function bind() {
   });
   root().addEventListener('submit', event => {
     event.preventDefault();
+    if (event.target.id === 'sampleComparisonCreateForm') { submitComparison(event.target); return; }
     if (event.target.id === 'sampleLinkForm') submitLink(event.target);
     if (event.target.id === 'sampleManualForm') submitManual(event.target);
     if (event.target.id === 'sampleUploadForm') submitUpload(event.target);
@@ -122,14 +156,54 @@ function bind() {
     if(event.target.matches('[data-element-condition][data-field="facets"]')){const index=Number(event.target.dataset.index);if(elementConditions[index])elementConditions[index].facets=event.target.value;page=1;debounceLoad();}
   });
   root().addEventListener('change', event => {
+    if(event.target.matches('[data-compare-toggle]')){toggleCompareSelection(Number(event.target.value),event.target.checked,event.target);return;}
     if (['samplePlatform','sampleArchiveStatus'].includes(event.target.id)) { page=1; loadSamples(); }
     if(event.target.name==='sampleTagIds'){page=1;loadSamples();}
     if(event.target.matches('[data-element-condition]')){const index=Number(event.target.dataset.index);const key=event.target.dataset.field;if(elementConditions[index]&&key)elementConditions[index][key]=event.target.value;page=1;debounceLoad();}
   });
   root().addEventListener('keydown', event=>{
+    if(event.target.matches('[data-library-mode]')&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+      event.preventDefault();const tabs=[...root().querySelectorAll('[data-library-mode]')],index=tabs.indexOf(event.target);const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:event.key==='ArrowRight'?(index+1)%tabs.length:(index-1+tabs.length)%tabs.length;tabs[next]?.focus();setLibraryMode(tabs[next]?.dataset.libraryMode,tabs[next]);return;
+    }
+    const dialog=event.target.closest('#sampleComparisonCreateDialog[open]');
+    if(dialog){if(event.key==='Escape'){event.preventDefault();closeComparisonCreateDialog();return;}if(event.key==='Tab'){const nodes=[...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled])')].filter(node=>node.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}return;}
     if((event.key==='Enter'||event.key===' ')&&event.target.matches('.sample-card')){event.preventDefault();selectSample(event.target.dataset.sampleId);}
   });
 }
+
+async function activateLibraryMode(resume=false){
+  root()?.querySelectorAll('.sample-library-mode-panel').forEach(panel=>{panel.hidden=panel.id!==(libraryMode==='samples'?'sampleLibrarySamples':libraryMode==='comparisons'?'sampleLibraryComparisons':'sampleLibraryComponents');});
+  root()?.querySelectorAll('[data-library-mode]').forEach(button=>{const on=button.dataset.libraryMode===libraryMode;button.classList.toggle('on',on);button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;});
+  root()?.classList.toggle('sample-library-stage3',libraryMode!=='samples');
+  if(libraryMode==='samples'){
+    loadResearchConfig();await loadSamples();paintComparisonTray();
+    if(resume&&researchPaused&&selectedId&&detail){researchPaused=false;await openResearch($('#samplesDetail'),detail,researchOptions());}
+    if(linkJob){paintLinkProgress();pollLinkJob(true);}
+    return;
+  }
+  leaveResearch();root()?.classList.remove('samples-detail-mode');paintComparisonTray();
+  if(libraryMode==='comparisons')await openComparisonLibrary($('#sampleLibraryComparisons'),{onOpen:id=>openWorkspace(id),onNewFromSamples:()=>setLibraryMode('samples')});
+  else await openComponentLibrary($('#sampleLibraryComponents'),{});
+}
+
+async function setLibraryMode(next,focusTarget=null){
+  if(!['samples','comparisons','components'].includes(next))return;
+  if(next===libraryMode){focusTarget?.focus({preventScroll:true});return;}
+  leaveComparison();leaveComponents();libraryMode=next;await activateLibraryMode();requestAnimationFrame(()=>focusTarget?.focus({preventScroll:true}));
+}
+
+async function openWorkspace(id){
+  libraryMode='comparisons';
+  root()?.querySelectorAll('.sample-library-mode-panel').forEach(panel=>panel.hidden=panel.id!=='sampleLibraryComparisons');
+  paintLibraryTabs();paintComparisonTray();
+  await openComparisonWorkspace($('#sampleLibraryComparisons'),id,{onOpen:id2=>openWorkspace(id2),onNewFromSamples:()=>setLibraryMode('samples'),onOpenComponents:extraction=>openComponentsFromExtraction(extraction)});
+}
+
+async function openComponentsFromExtraction(extraction){
+  leaveComparison();libraryMode='components';root()?.querySelectorAll('.sample-library-mode-panel').forEach(panel=>panel.hidden=panel.id!=='sampleLibraryComponents');paintLibraryTabs();paintComparisonTray();await openComponentLibrary($('#sampleLibraryComponents'),{seed:extraction});
+}
+
+function paintLibraryTabs(){root()?.querySelectorAll('[data-library-mode]').forEach(button=>{const on=button.dataset.libraryMode===libraryMode;button.classList.toggle('on',on);button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;});root()?.classList.toggle('sample-library-stage3',libraryMode!=='samples');}
 
 function setIntakeOpen(value){
   intakeOpen=!!value;const panel=$('#samplesIntakePanel'),toggle=$('#samplesIntakeToggle');if(panel)panel.hidden=!intakeOpen;if(toggle){toggle.setAttribute('aria-expanded',String(intakeOpen));toggle.querySelector(':scope>b').textContent=intakeOpen?'收起':'展开';}root()?.querySelector('#samplesIntake')?.classList.toggle('open',intakeOpen);if(intakeOpen)paintIntake();
@@ -231,6 +305,8 @@ async function loadSamples() {
     const data = await api.sampleSearch(opts);
     if (!active||seq!==listSeq) return;
     items = data.items || []; total = Number(data.total || items.length);
+    compareSelection=compareSelection.map(selected=>{const latest=items.find(item=>Number(item.id)===Number(selected.id));return latest?selectionSummary(latest):selected;});
+    saveCompareSelection();paintComparisonTray();
     summary = data.summary || {total,complete:items.filter(item=>item.archiveStatus==='complete').length,incomplete:items.filter(item=>item.archiveStatus!=='complete').length};
     if (!items.length && total > 0 && page > 1) { page=1; return loadSamples(); }
     listLoading=false;paintStats(); paintList(); paintPager();
@@ -245,6 +321,44 @@ function paintStats() {
 function paintPager(){
   const pages=Math.max(1,Math.ceil(total/PAGE_SIZE));const start=total?((page-1)*PAGE_SIZE+1):0;const end=Math.min(total,page*PAGE_SIZE);
   $('#samplesPager').innerHTML=`<span>显示 ${start}–${end} / ${total} 条</span><div><button type="button" data-sample-page="${page-1}" ${page<=1?'disabled':''}>上一页</button><b>${page} / ${pages}</b><button type="button" data-sample-page="${page+1}" ${page>=pages?'disabled':''}>下一页</button></div>`;
+}
+
+function loadCompareSelection(){
+  try{const value=JSON.parse(localStorage.getItem('ideahub.sampleComparisonSelection')||'[]');return Array.isArray(value)?value.filter(item=>Number.isSafeInteger(Number(item.id))).slice(0,6):[];}
+  catch{return [];}
+}
+function saveCompareSelection(){
+  try{localStorage.setItem('ideahub.sampleComparisonSelection',JSON.stringify(compareSelection.slice(0,6)));}catch{/* private browsing */}
+}
+function selectionSummary(item){return {id:Number(item.id),title:item.title||`样本 #${item.id}`,platform:item.platformLabel||item.platform||'样本',coverUrl:coverUrl(item)};}
+function toggleCompareSelection(id,checked,control){
+  const exists=compareSelection.some(item=>Number(item.id)===Number(id));
+  if(checked&&!exists){
+    if(compareSelection.length>=6){if(control)control.checked=false;toast('info','一次最多比较 6 篇样本');return;}
+    const item=items.find(value=>Number(value.id)===Number(id));if(!item)return;
+    compareSelection.push(selectionSummary(item));
+  }else if(!checked&&exists)compareSelection=compareSelection.filter(item=>Number(item.id)!==Number(id));
+  saveCompareSelection();paintComparisonTray();paintList();
+  requestAnimationFrame(()=>root()?.querySelector(`[data-compare-toggle][value="${CSS.escape(String(id))}"]`)?.focus());
+}
+function paintComparisonTray(){
+  const tray=$('#sampleComparisonTray');if(!tray)return;
+  if(libraryMode!=='samples'){tray.hidden=true;return;}tray.hidden=false;
+  const count=compareSelection.length;
+  tray.innerHTML=`<div class="sample-comparison-tray-copy"><span>横向比较</span><b>${count}/6 篇</b><small>${count<2?'再选择 '+(2-count)+' 篇即可开始':count===6?'已达到本次上限':'可跨筛选和分页继续选择'}</small></div><div class="sample-comparison-tray-items">${compareSelection.map(item=>`<span><i>${esc(item.platform)}</i><b>${esc(item.title)}</b><button type="button" data-compare-remove="${item.id}" aria-label="从比较中移除：${esc(item.title)}">×</button></span>`).join('')||'<p>在卡片左上角勾选“比较”，打开样本仍由卡片本身完成。</p>'}</div><div class="sample-comparison-tray-actions">${count?'<button type="button" data-compare-clear>清空</button>':''}<button type="button" class="stage3-primary" data-compare-start ${count<2||count>6||comparisonBusy?'disabled':''}>开始比较</button></div>`;
+}
+function openComparisonCreateDialog(trigger){
+  if(compareSelection.length<2||compareSelection.length>6){toast('info','请选择 2–6 篇样本');return;}
+  const dialog=$('#sampleComparisonCreateDialog'),form=$('#sampleComparisonCreateForm');if(!dialog||!form)return;
+  form.querySelector('.sample-comparison-create-members').innerHTML=`<span>本次固定成员</span><div>${compareSelection.map((item,index)=>`<p><b>${index+1}</b><span>${esc(item.title)}</span><i>${esc(item.platform)}</i></p>`).join('')}</div>`;
+  form.querySelector('.stage3-form-error').textContent='';comparisonDialogFocus=trigger||document.activeElement;dialog.showModal();requestAnimationFrame(()=>form.elements.name.focus());
+}
+function closeComparisonCreateDialog(){const dialog=$('#sampleComparisonCreateDialog');if(!dialog?.open)return;dialog.close();const target=comparisonDialogFocus;comparisonDialogFocus=null;requestAnimationFrame(()=>target?.isConnected&&target.focus());}
+async function submitComparison(form){
+  if(comparisonBusy)return;const button=form.querySelector('button[type="submit"]'),data=new FormData(form),memberIds=compareSelection.map(item=>Number(item.id));comparisonBusy=true;button.disabled=true;form.querySelector('.stage3-form-error').textContent='';
+  try{const title=String(data.get('name')||'').trim(),topicBasis=String(data.get('topic')||'').trim();const created=await api.sampleComparisonCreate({title,purpose:topicBasis,scope:{memberIds,topicBasis,purpose:topicBasis}},`comparison-${Date.now()}-${Math.random().toString(36).slice(2,9)}`);const id=created?.comparison?.id||created?.id;if(!id)throw new Error('服务端没有返回比较记录 ID');closeComparisonCreateDialog();compareSelection=[];saveCompareSelection();form.reset();toast('ok','比较记录和冻结范围已建立');await openWorkspace(id);}
+  catch(error){form.querySelector('.stage3-form-error').textContent=error.message||'建立比较失败，已填写内容仍保留';}
+  finally{comparisonBusy=false;if(button.isConnected)button.disabled=false;paintComparisonTray();}
 }
 
 function coverUrl(item) { return item.coverUrl || (item.coverAssetId ? `/api/samples/${item.id}/assets/${item.coverAssetId}` : ''); }
@@ -268,7 +382,10 @@ function paintList() {
     const missing = (item.missingFields || []).slice(0, 3).map(key => MISSING[key] || key);
     const matched=[...(item.matchedTags||[]).map(t=>t.name||t.label||t),...(item.matchedElements||[]).map(e=>`${e.dimensionLabel||e.label||dimensionLabel(e.dimensionKey)}：${formatElementValue(e.effectiveValue??e.value??e.matchedValue)}`)].filter(Boolean);
     const confirmed=item.confirmedElementCount??item.confirmedCount??null,analyzed=Number(item.analyzedElementCount??item.elementCount??(item.currentAnalysisVersionId?15:0));
-    return `<article class="sample-card ${String(item.id) === String(selectedId) ? 'on' : ''}" data-sample-id="${item.id}" tabindex="0" role="button" aria-pressed="${String(item.id)===String(selectedId)}" aria-label="打开样本：${esc(item.title||'未命名样本')}">
+    const compareOn=compareSelection.some(selected=>Number(selected.id)===Number(item.id));
+    const compareLocked=compareSelection.length>=6&&!compareOn;
+    return `<article class="sample-card ${String(item.id) === String(selectedId) ? 'on' : ''} ${compareOn?'compare-selected':''}" data-sample-id="${item.id}" tabindex="0" role="button" aria-pressed="${String(item.id)===String(selectedId)}" aria-label="打开样本：${esc(item.title||'未命名样本')}">
+      <label class="sample-compare-checkbox" title="${compareLocked?'已达到 6 篇上限':'加入比较'}"><input type="checkbox" data-compare-toggle value="${item.id}" ${compareOn?'checked':''} ${compareLocked?'disabled':''} aria-label="${compareOn?'从比较中移除':'加入比较'}：${esc(item.title||'未命名样本')}"><span>${compareOn?'已选':'比较'}</span></label>
       <div class="sample-cover">${coverUrl(item) ? `<img loading="lazy" src="${coverUrl(item)}" alt="${esc(item.title || '样本封面')}">` : `<span>${ICON.layers}</span>`}<i>${esc(item.platformLabel || item.platform || '样本')}</i></div>
       <div class="sample-card-main"><header><span class="sample-status ${status[1]}"><i></i>${esc(status[0])}</span><b>${Number(item.completenessScore || 0)}%</b></header>
         <h3>${esc(item.title || '未命名样本')}</h3><p>${esc(item.bodyExcerpt || '原始正文待补充')}</p>
