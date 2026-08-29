@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import net from 'node:net';
 import process from 'node:process';
 import puppeteer from 'puppeteer';
 
 const PORT=5173;
 const BASE=`http://127.0.0.1:${PORT}`;
+const desktopShot=join(tmpdir(),'ideahub-sample-research-focus-1440.png');
+const mobileShot=join(tmpdir(),'ideahub-sample-research-focus-390.png');
 
 function portOpen(){return new Promise(resolve=>{const socket=net.connect({host:'127.0.0.1',port:PORT});socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.setTimeout(800,()=>{socket.destroy();resolve(false);});});}
 async function waitForServer(){for(let i=0;i<50;i++){if(await portOpen())return;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error('local UI server did not start');}
@@ -62,10 +66,17 @@ try{
     panels:document.querySelectorAll('[role="tabpanel"]').length,
   }));
   assert.deepEqual(state,{dimensions:15,focused:'sampleResearchTab-elements',panels:1});
+  state=await page.evaluate(()=>{const visible=node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0,workspace=document.querySelector('.samples-workspace'),rail=document.querySelector('.samples-list-column'),detail=document.querySelector('.samples-detail'),card=document.querySelector('.sample-card'),sticky=document.querySelector('.research-sticky'),tags=document.querySelector('.research-tag-editor');return{overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,focusNav:visible(document.querySelector('.samples-focus-nav')),pageHead:visible(document.querySelector('.samples-page-head')),railWidth:rail.getBoundingClientRect().width,detailWidth:detail.getBoundingClientRect().width,cardHeight:card.getBoundingClientRect().height,workspaceHeight:workspace.getBoundingClientRect().height,sticky:getComputedStyle(sticky).position,groups:document.querySelectorAll('.dimension-groups>section').length,tagsOpen:tags?.open,sequence:document.querySelectorAll('.research-sequence button').length};});
+  const layoutEvidence=JSON.stringify(state);assert.equal(state.overflow,0,layoutEvidence);assert.equal(state.focusNav,true,layoutEvidence);assert.equal(state.pageHead,false,layoutEvidence);assert.ok(state.detailWidth/state.railWidth>=2.4,layoutEvidence);assert.ok(state.cardHeight<=82,layoutEvidence);assert.ok(state.workspaceHeight>=760,layoutEvidence);assert.equal(state.sticky,'sticky',layoutEvidence);assert.equal(state.groups,3,layoutEvidence);assert.equal(state.tagsOpen,false,layoutEvidence);assert.equal(state.sequence,2,layoutEvidence);
+  await page.click('[data-sample-nav-toggle]');await page.waitForSelector('#v-samples.samples-nav-collapsed');
+  assert.ok(await page.$eval('.samples-list-column',node=>node.getBoundingClientRect().width)<=80);
+  await page.click('[data-sample-nav-toggle]');
+  await page.screenshot({path:desktopShot});
 
   // AI jobs are visible immediately and create a new selected version without double submit.
   const versionsBefore=await page.$$eval('#sampleAnalysisVersion option',nodes=>nodes.length);
-  await page.click('[data-research-action="start-ai"]');
+  await page.waitForFunction(()=>document.querySelector('[data-research-action="start-ai"]')&&!document.querySelector('[data-research-action="start-ai"]').disabled);
+  await page.$eval('[data-research-action="start-ai"]',node=>node.click());
   await page.waitForSelector('.analysis-job');
   assert.equal(await page.$eval('[data-research-action="start-ai"]',node=>node.disabled),true);
   await page.waitForFunction(before=>!document.querySelector('.analysis-job')&&document.querySelectorAll('#sampleAnalysisVersion option').length===before+1,{timeout:8000},versionsBefore);
@@ -111,8 +122,9 @@ try{
   assert.equal(state.detailMode,true);
   assert.ok(state.minControl>=44,state);
   assert.ok(state.bodyFont>=14,state);
+  await page.screenshot({path:mobileShot});
 
-  console.log('Stage 2 UI: desktop/mobile/filter/tabs/AI/trend/lifecycle checks passed');
+  console.log(`Stage 2 UI: desktop/mobile/filter/tabs/AI/trend/lifecycle checks passed; screenshots ${desktopShot}, ${mobileShot}`);
 } finally {
   await browser.close();
   if(server)server.kill();

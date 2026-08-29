@@ -63,6 +63,7 @@ export function leaveResearch() {
   clearTimeout(pollTimer);
   pollTimer = null;
 }
+export function updateResearchOptions(options={}){callbacks={...callbacks,...options};if(active)paint();}
 
 export async function openResearch(container, sampleDetail, options = {}) {
   const changed = Number(sample?.id) !== Number(sampleDetail?.id);
@@ -159,6 +160,8 @@ function onClick(event) {
   if(target.dataset.researchTab){ tab=target.dataset.researchTab; actionError=''; paint(); return; }
   const action=target.dataset.researchAction;
   if(action==='back'){ callbacks.onBack?.(); return; }
+  if(action==='previous-sample'){callbacks.onPrevious?.();return;}
+  if(action==='next-sample'){callbacks.onNext?.();return;}
   if(action==='edit-sample'){callbacks.onEdit?.();return;}
   if(action==='attach-media'){callbacks.onAttach?.();return;}
   if(action==='retry'){ loadResearch(); return; }
@@ -283,8 +286,8 @@ function paint(){
   if(loadError){host.innerHTML=stateError(loadError,'retry');return;}
   const current=versions.find(v=>v.isCurrent)||detailFromVersions(research?.currentAnalysisVersionId);
   const count=effectiveElements(selectedVersion).filter(e=>['confirmed','edited','rejected'].includes(decisionOf(e))).length;
-  host.innerHTML=`<div class="research-head"><button class="research-back" data-research-action="back">← 返回样本</button><div><span>${esc(sample.platformLabel||sample.platform||'样本')} · 内容研究</span><h2>${esc(sample.title||'未命名样本')}</h2><p>${esc(sample.accountName||'账号待补')} · ${versions.length?`${versions.length} 个拆解版本`:'尚未拆解'}</p><div class="research-head-actions"><button type="button" data-research-action="edit-sample">补充资料</button><button type="button" data-research-action="attach-media">补媒体</button></div></div><div class="research-progress"><b>${count}/15</b><span>维度已人工处理</span><progress max="15" value="${count}"></progress></div></div>
-    <div class="research-tabs" role="tablist" aria-label="样本研究详情">${[['original','原始作品'],['elements','元素拆解'],['evaluation','评价'],['trend','数据趋势']].map(([key,label])=>`<button id="sampleResearchTab-${key}" role="tab" aria-selected="${tab===key}" aria-controls="sampleResearchPanel-${key}" tabindex="${tab===key?'0':'-1'}" class="${tab===key?'on':''}" data-research-tab="${key}">${label}</button>`).join('')}</div>
+  host.innerHTML=`<div class="research-sticky"><div class="research-head"><button class="research-back" data-research-action="back">← 返回列表</button><div><span>${esc(sample.platformLabel||sample.platform||'样本')} · 内容研究</span><h2>${esc(sample.title||'未命名样本')}</h2><p>${esc(sample.accountName||'账号待补')} · ${versions.length?`${versions.length} 个拆解版本`:'尚未拆解'}</p><div class="research-head-actions"><button type="button" data-research-action="edit-sample">补充资料</button><button type="button" data-research-action="attach-media">补媒体</button></div></div><div class="research-sequence" aria-label="切换样本"><button type="button" data-research-action="previous-sample" ${callbacks.hasPrevious?'':'disabled'}>‹ 上一篇</button><button type="button" data-research-action="next-sample" ${callbacks.hasNext?'':'disabled'}>下一篇 ›</button></div><div class="research-progress"><b>${count}/15</b><span>维度已人工处理</span><progress max="15" value="${count}"></progress></div></div>
+    <div class="research-tabs" role="tablist" aria-label="样本研究详情">${[['original','原始作品'],['elements','元素拆解'],['evaluation','评价'],['trend','数据趋势']].map(([key,label])=>`<button id="sampleResearchTab-${key}" role="tab" aria-selected="${tab===key}" aria-controls="sampleResearchPanel-${key}" tabindex="${tab===key?'0':'-1'}" class="${tab===key?'on':''}" data-research-tab="${key}">${label}</button>`).join('')}</div></div>
     ${actionError?`<div class="research-inline-error"><span>${esc(actionError)}</span><div>${failedVersionId?'<button data-research-action="retry-version">重试版本</button>':''}<button data-research-action="error-clear">知道了</button></div></div>`:''}
     <div class="research-panel" id="sampleResearchPanel-${tab}" role="tabpanel" aria-labelledby="sampleResearchTab-${tab}">${tab==='original'?originalTab():tab==='elements'?elementsTab(current):tab==='evaluation'?evaluationTab():trendTab()}</div>`;
 }
@@ -323,10 +326,10 @@ function tagEditor(){
   const tags=config?.tags||[];const selected=new Set((research?.tags||[]).map(t=>Number(t.id)));
   if(!tags.length)return '<div class="research-tags-empty">标签字典还没有可用标签，管理员可先在“标签与对接”维护。</div>';
   const groups=groupBy(tags,t=>t.kindLabel||t.kind||'其他');
-  return `<form id="sampleTagsForm" class="research-tag-editor"><header><div><b>样本标签</b><span>同一篇可以多选；这里只选择现有字典，不会让 AI 私自造标签。</span></div><button type="submit">保存标签</button></header>${Object.entries(groups).map(([name,list])=>`<fieldset><legend>${esc(name)}</legend>${list.map(t=>`<label><input type="checkbox" name="tagIds" value="${t.id}" ${selected.has(Number(t.id))?'checked':''}><span>${esc(t.name)}</span></label>`).join('')}</fieldset>`).join('')}</form>`;
+  return `<details class="research-tag-editor"><summary><span><b>样本标签</b><small>${selected.size?`已选 ${selected.size} 项`:'尚未选择'} · 展开后编辑</small></span><i>展开</i></summary><form id="sampleTagsForm"><p>同一篇可以多选；这里只选择现有字典，不会让 AI 私自造标签。</p>${Object.entries(groups).map(([name,list])=>`<fieldset><legend>${esc(name)}</legend>${list.map(t=>`<label><input type="checkbox" name="tagIds" value="${t.id}" ${selected.has(Number(t.id))?'checked':''}><span>${esc(t.name)}</span></label>`).join('')}</fieldset>`).join('')}<button type="submit">保存标签</button></form></details>`;
 }
 function dimensionGroups(){
-  const dims=config?.dimensions||FALLBACK_DIMENSIONS;const byKey=new Map(effectiveElements(selectedVersion).map(e=>[e.dimensionKey||e.key,e]));const groups=groupBy(dims,d=>d.group||'其他');
+  const dims=config?.dimensions||FALLBACK_DIMENSIONS;const byKey=new Map(effectiveElements(selectedVersion).map(e=>[e.dimensionKey||e.key,e]));const groupName=key=>['audience','user_need','topic'].includes(key)?'定位与需求':['layout','visual_style','bgm','cta'].includes(key)?'包装与承接':'内容表达',groups=groupBy(dims,d=>groupName(d.key));
   return `<div class="dimension-groups">${Object.entries(groups).map(([name,list])=>`<section><header><h3>${esc(name)}</h3><span>${list.filter(d=>byKey.has(d.key)).length}/${list.length}</span></header><div>${list.map(d=>elementCard(d,byKey.get(d.key))).join('')}</div></section>`).join('')}</div>`;
 }
 function effectiveElements(value){return value?.elements||value?.analysisElements||[];}

@@ -59,6 +59,8 @@ try{
   assert.deepEqual(state,{count:6,startDisabled:false,seventhDisabled:true});
   await page.$eval('.sample-card[data-sample-id="7"]',node=>node.click());
   await page.waitForSelector('.research-tabs');
+  assert.equal(await page.$eval('#sampleComparisonTray',node=>node.hidden),true);
+  await page.click('[data-research-action="back"]');await page.waitForSelector('#sampleComparisonTray:not([hidden])');
   assert.equal(await page.$eval('#sampleComparisonTray [data-compare-start]',node=>node.disabled),false);
 
   // Create a frozen comparison and enter the full-width workspace.
