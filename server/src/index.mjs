@@ -37,6 +37,7 @@ import * as collector from './routes/collector.mjs';
 import * as samples from './routes/samples.mjs';
 import * as sampleResearch from './routes/sample-research.mjs';
 import * as sampleComparison from './routes/sample-comparison.mjs';
+import * as sampleInsights from './routes/sample-insights.mjs';
 import { archiveStaleIdeas } from './routes/status.mjs';
 import { publish, closeAll, clientCount } from './lib/bus.mjs';
 
@@ -105,6 +106,7 @@ collector.mount(router);
 samples.mount(router);
 sampleResearch.mount(router);
 sampleComparison.mount(router);
+sampleInsights.mount(router);
 
 
 /* ---------- 登录闸门 ---------- */

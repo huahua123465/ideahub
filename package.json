@@ -16,9 +16,12 @@
     "db:reset": "node server/src/db/init.mjs --drop && node server/src/seed.mjs",
     "test:api": "node scripts/test-api.mjs",
     "test:ui": "node scripts/ui-check.mjs",
-    "test:samples": "node scripts/build-web.mjs && node --test scripts/test-samples-stage1.mjs scripts/test-sample-research-stage2.mjs scripts/test-sample-library-stage3.mjs && node scripts/test-sample-research-ui.mjs && node scripts/test-sample-library-stage3-ui.mjs",
+    "test:samples": "node scripts/build-web.mjs && node --test scripts/test-samples-stage1.mjs scripts/test-sample-research-stage2.mjs scripts/test-sample-library-stage3.mjs scripts/test-sample-library-stage4.mjs && node scripts/test-sample-research-ui.mjs && node scripts/test-sample-library-stage3-ui.mjs && node scripts/test-sample-library-stage4-ui.mjs",
     "test:samples:stage3": "node scripts/build-web.mjs && node --test scripts/test-sample-library-stage3.mjs && node scripts/test-sample-library-stage3-ui.mjs",
     "test:samples:db": "node scripts/test-sample-library-stage3-db.mjs",
+    "test:samples:stage4": "node scripts/build-web.mjs && node --test scripts/test-sample-library-stage4.mjs && node scripts/test-sample-library-stage4-ui.mjs",
+    "test:samples:stage4:db": "node scripts/test-sample-library-stage4-db.mjs",
+    "benchmark:samples:stage4": "node scripts/benchmark-sample-library-stage4.mjs",
     "test": "npm run db:seed && npm run test:api && npm run test:ui",
     "demo": "node scripts/record-demo.mjs",
     "setup": "node scripts/setup.mjs"

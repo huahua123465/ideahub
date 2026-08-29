@@ -17,7 +17,7 @@ export const state = { mode: 'live' };   // live | mock
 /** 启动时探一次后端。探不到就整场用 mock。 */
 export async function probe() {
   const requestedMock = new URLSearchParams(location.search).get('mock') === '1';
-  const localMockAllowed = ['127.0.0.1','localhost','::1'].includes(location.hostname) || globalThis.__IDEAHUB_ALLOW_MOCK__ === true;
+  const localMockAllowed = ['127.0.0.1','localhost','::1'].includes(location.hostname);
   if (requestedMock && localMockAllowed) {
     state.mode = 'mock';
     return state.mode;
@@ -321,6 +321,25 @@ export const api = {
   contentComponentReview:(id, revisionId, payload, idempotencyKey) => call('POST', `/api/content-components/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}/review`, payload, { 'Idempotency-Key':idempotencyKey }),
   contentComponentLifecycle:(id, payload, idempotencyKey) => call('POST', `/api/content-components/${encodeURIComponent(id)}/lifecycle`, payload, { 'Idempotency-Key':idempotencyKey }),
   reusableComponents:   (opts = {}) => call('GET', '/api/reusable-components' + qs(opts)),
+  /* ---------- Sample library: stage 4 retrieval and descriptive insights ---------- */
+  sampleInsightsConfig: () => call('GET', '/api/sample-insights/config'),
+  sampleRetrieve:       (payload = {}) => call('POST', '/api/samples/retrieve', payload),
+  sampleSimilar:        (id, opts = {}) => call('GET', `/api/samples/${encodeURIComponent(id)}/similar` + qs(opts)),
+  sampleRetrievalStatus:() => call('GET', '/api/sample-retrieval/status'),
+  sampleRetrievalReindex:(payload = {}, idempotencyKey = `reindex-${Date.now()}`) => call('POST', '/api/sample-retrieval/reindex', payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleRetrievalBuild: (id) => call('GET', `/api/sample-retrieval/builds/${encodeURIComponent(id)}`),
+  sampleRetrievalBuildCancel:(id, idempotencyKey = `reindex-cancel-${id}-${Date.now()}`) => call('POST', `/api/sample-retrieval/builds/${encodeURIComponent(id)}/cancel`, {}, { 'Idempotency-Key':idempotencyKey }),
+  sampleClusters:       (opts = {}) => call('GET', '/api/sample-clusters' + qs(opts)),
+  sampleCluster:        (id) => call('GET', `/api/sample-clusters/${encodeURIComponent(id)}`),
+  sampleClusterJobCreate:(payload = {}, idempotencyKey = `cluster-${Date.now()}`) => call('POST', '/api/sample-cluster-jobs', payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleClusterJob:     (id) => call('GET', `/api/sample-cluster-jobs/${encodeURIComponent(id)}`),
+  sampleClusterJobCancel:(id, idempotencyKey = `cluster-cancel-${id}-${Date.now()}`) => call('POST', `/api/sample-cluster-jobs/${encodeURIComponent(id)}/cancel`, {}, { 'Idempotency-Key':idempotencyKey }),
+  sampleElementTagObservation:(sampleId, versionId, dimensionKey, payload, idempotencyKey = `observation-${Date.now()}`) => call('POST', `/api/samples/${encodeURIComponent(sampleId)}/analyses/${encodeURIComponent(versionId)}/elements/${encodeURIComponent(dimensionKey)}/tag-observations`, payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleInsightRuns:    (opts = {}) => call('GET', '/api/sample-insight-runs' + qs(opts)),
+  sampleInsightRunCreate:(payload, idempotencyKey = `insight-${Date.now()}`) => call('POST', '/api/sample-insight-runs', payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleInsightRun:     (id) => call('GET', `/api/sample-insight-runs/${encodeURIComponent(id)}`),
+  sampleInsightStatistics:(id, opts = {}) => call('GET', `/api/sample-insight-runs/${encodeURIComponent(id)}/statistics` + qs(opts)),
+  sampleInsightRunCancel:(id, idempotencyKey = `insight-cancel-${id}-${Date.now()}`) => call('POST', `/api/sample-insight-runs/${encodeURIComponent(id)}/cancel`, {}, { 'Idempotency-Key':idempotencyKey }),
   sampleAssetUpload:    async (sampleId, file, meta = {}) => {
     const path = sampleId ? `/api/samples/${encodeURIComponent(sampleId)}/assets` : '/api/samples/assets';
     const params = new URLSearchParams({ name:file.name, title:meta.title || file.name });

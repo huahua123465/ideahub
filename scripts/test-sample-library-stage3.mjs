@@ -168,7 +168,7 @@ const index=await readFile(new URL('../server/src/index.mjs',import.meta.url),'u
 
 test('schema.sql embeds the exact Stage3 migration block',()=>{
   const start=schema.lastIndexOf('-- IdeaHub sample library, stage 3.');
-  assert.ok(start>0);assert.equal(schema.slice(start).trim(),migration.trim());
+  assert.ok(start>0);assert.equal(schema.slice(start,start+migration.length),migration);
 });
 
 test('migration is additive, idempotent DDL and contains the required ownership guards',()=>{
