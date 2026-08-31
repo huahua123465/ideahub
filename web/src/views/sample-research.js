@@ -41,7 +41,6 @@ let versions = [];
 let selectedVersionId = null;
 let selectedVersion = null;
 let evaluations = [];
-let metrics = [];
 let loading = false;
 let loadError = '';
 let actionError = '';
@@ -71,7 +70,7 @@ export async function openResearch(container, sampleDetail, options = {}) {
   if (changed) {
     clearTimeout(pollTimer); pollTimer=null; requestSeq+=1;versionSeq+=1;captureSeq+=1;actionSeq+=1;
     tab='original';research=null;versions=[];selectedVersionId=null;selectedVersion=null;
-    evaluations=[];metrics=[];job=null;pollFailures=0;busyAction='';loadError='';actionError='';failedVersionId=null;sectionErrors={};
+    evaluations=[];job=null;pollFailures=0;busyAction='';loadError='';actionError='';failedVersionId=null;sectionErrors={};
   }
   active = true;
   host = container;
@@ -104,13 +103,13 @@ async function loadResearch() {
   try {
     const results = await Promise.allSettled([
       api.sampleResearchConfig(), api.sampleResearch(sample.id), api.sampleAnalyses(sample.id),
-      api.sampleTags(sample.id), api.sampleEvaluations(sample.id), api.sampleMetrics(sample.id), api.sampleTagDictionary(),
+      api.sampleTags(sample.id), api.sampleEvaluations(sample.id), api.sampleTagDictionary(),
     ]);
     if (!active || seq !== requestSeq) return;
     const value=index=>results[index].status==='fulfilled'?results[index].value:null;
     const error=index=>results[index].status==='rejected'?(results[index].reason?.message||'读取失败'):'';
-    const cfg=value(0),res=value(1)||{},analyses=value(2),tags=value(3),evals=value(4),trend=value(5),dictionary=value(6);
-    sectionErrors={elements:error(0)||error(1)||error(2),tags:error(3)||error(6),evaluation:error(4),trend:error(5)};
+    const cfg=value(0),res=value(1)||{},analyses=value(2),tags=value(3),evals=value(4),dictionary=value(5);
+    sectionErrors={elements:error(0)||error(1)||error(2),tags:error(3)||error(5),evaluation:error(4)};
     config = normalizeConfig({...cfg,tags:dictionary?.items||[]});
     research = {...res,tags:tags?.items || tags?.tags || res?.tags || []};
     versions = analyses?.items || analyses?.versions || res?.versions || [];
@@ -119,7 +118,6 @@ async function loadResearch() {
     selectedVersionId = currentVersionId || selectedVersionId || versions.find(v=>v.isCurrent)?.id || versions[0]?.id || null;
     selectedVersion = detailFromVersions(selectedVersionId);
     evaluations = evals?.items || evals?.evaluations || res.evaluations || [];
-    metrics = trend?.items || trend?.metrics || trend?.snapshots || res.metrics || [];
     job=res.activeJob||null;pollFailures=0;
     loading = false; paint();
     if(job&&['queued','running'].includes(job.status))pollJob(job.id||job.jobId);
@@ -290,9 +288,9 @@ function paint(){
   const current=versions.find(v=>v.isCurrent)||detailFromVersions(research?.currentAnalysisVersionId);
   const count=effectiveElements(selectedVersion).filter(e=>['confirmed','edited','rejected'].includes(decisionOf(e))).length;
   host.innerHTML=`<div class="research-sticky"><div class="research-head"><button class="research-back" data-research-action="back">← 返回列表</button><div><span>${esc(sample.platformLabel||sample.platform||'样本')} · 内容研究</span><h2>${esc(sample.title||'未命名样本')}</h2><p>${esc(sample.accountName||'账号待补')} · ${versions.length?`${versions.length} 个拆解版本`:'尚未拆解'}</p><div class="research-head-actions"><button type="button" data-research-action="edit-sample">补充资料</button><button type="button" data-research-action="attach-media">补媒体</button></div></div><div class="research-sequence" aria-label="切换样本"><button type="button" data-research-action="previous-sample" ${callbacks.hasPrevious?'':'disabled'}>‹ 上一篇</button><button type="button" data-research-action="next-sample" ${callbacks.hasNext?'':'disabled'}>下一篇 ›</button></div><div class="research-progress"><b>${count}/15</b><span>维度已人工处理</span><progress max="15" value="${count}"></progress></div></div>
-    <div class="research-tabs" role="tablist" aria-label="样本研究详情">${[['original','原始作品'],['elements','元素拆解'],['evaluation','评价'],['trend','数据趋势']].map(([key,label])=>`<button id="sampleResearchTab-${key}" role="tab" aria-selected="${tab===key}" aria-controls="sampleResearchPanel-${key}" tabindex="${tab===key?'0':'-1'}" class="${tab===key?'on':''}" data-research-tab="${key}">${label}</button>`).join('')}</div></div>
+    <div class="research-tabs" role="tablist" aria-label="样本研究详情">${[['original','原始作品'],['elements','元素拆解'],['evaluation','评价']].map(([key,label])=>`<button id="sampleResearchTab-${key}" role="tab" aria-selected="${tab===key}" aria-controls="sampleResearchPanel-${key}" tabindex="${tab===key?'0':'-1'}" class="${tab===key?'on':''}" data-research-tab="${key}">${label}</button>`).join('')}</div></div>
     ${actionError?`<div class="research-inline-error"><span>${esc(actionError)}</span><div>${failedVersionId?'<button data-research-action="retry-version">重试版本</button>':''}<button data-research-action="error-clear">知道了</button></div></div>`:''}
-    <div class="research-panel" id="sampleResearchPanel-${tab}" role="tabpanel" aria-labelledby="sampleResearchTab-${tab}">${tab==='original'?originalTab():tab==='elements'?elementsTab(current):tab==='evaluation'?evaluationTab():trendTab()}</div>`;
+    <div class="research-panel" id="sampleResearchPanel-${tab}" role="tabpanel" aria-labelledby="sampleResearchTab-${tab}">${tab==='original'?originalTab():tab==='elements'?elementsTab(current):evaluationTab()}</div>`;
 }
 
 function stateError(message,action){return `<div class="research-state error"><b>这一块暂时没读出来</b><span>${esc(message)}</span><button data-research-action="${action}">重试</button></div>`;}
@@ -358,18 +356,6 @@ function evaluationTab(){
 }
 function evaluationCard(e){const meta=[`v${e.revision||1}`,e.analysisVersionId?`拆解版 #${e.analysisVersionId}`:null,e.confidence==null?null:`置信度 ${Math.round(Number(e.confidence)*100)}%`,fmtDate(e.createdAt)].filter(Boolean).join(' · ');return `<article><header><b>${esc(e.source==='ai'?'AI 评价':'人工评价')}</b><span>${esc(meta)}</span></header>${[['优点',e.strengths],['缺点',e.weaknesses],['值得学习',e.worthLearning??e.learnable],['不应模仿',e.avoidCopying??e.avoid],['有效原因假设',e.effectHypotheses??e.hypothesis]].filter(([,v])=>Array.isArray(v)?v.length:v).map(([k,v])=>`<div><small>${k}</small><p>${esc(Array.isArray(v)?v.join('；'):v)}</p></div>`).join('')}</article>`;}
 
-function trendTab(){
-  if(sectionErrors.trend)return stateError(sectionErrors.trend,'retry-trend');
-  const rows=[...metrics].sort((a,b)=>new Date(a.observedAt||a.capturedAt||a.recordedAt)-new Date(b.observedAt||b.capturedAt||b.recordedAt));
-  if(!rows.length)return `<div class="research-empty"><b>还没有数据时间点</b><span>下次重复采集或补录互动数据后，这里会按时间形成曲线；缺失值保持为空，不会偷偷补 0。</span></div>`;
-  const keys=[['likes','点赞'],['saves','收藏'],['comments','评论'],['shares','转发'],['views','播放']];
-  return `<div class="trend-layout"><section class="trend-chart"><header><div><small>互动变化</small><h3>随发布时间持续观察</h3></div><span>${rows.length} 个时间点</span></header>${trendSvg(rows,'likes')}<p>当前图展示点赞变化。表格保留所有指标，空值代表当时没有采集到。</p></section><div class="trend-table-wrap"><table><thead><tr><th>时间</th>${keys.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr><th>${fmtDate(row.observedAt||row.capturedAt||row.recordedAt)}</th>${keys.map(([k])=>`<td>${metricValue(row,k)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
-}
-function trendSvg(rows,key){
-  const values=rows.map(r=>numericMetric(r,key));const valid=values.filter(Number.isFinite);if(!valid.length)return '<div class="trend-no-line">点赞数据尚未采集</div>';const max=Math.max(...valid,1),w=720,h=230,pad=30;const pts=values.map((v,i)=>Number.isFinite(v)?[pad+(rows.length===1?0:(w-pad*2)*i/(rows.length-1)),h-pad-(h-pad*2)*v/max]:null);let penDown=false;const path=pts.map(point=>{if(!point){penDown=false;return '';}const command=penDown?'L':'M';penDown=true;return `${command}${point[0].toFixed(1)},${point[1].toFixed(1)}`;}).filter(Boolean).join(' ');return `<svg class="trend-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="点赞随时间变化折线图；缺失数据处断开"><line x1="${pad}" x2="${w-pad}" y1="${h-pad}" y2="${h-pad}"/><path d="${path}"/>${pts.filter(Boolean).map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="5"/>`).join('')}</svg>`;}
-
-function metricValue(row,key){const value=row[key]??row.metrics?.[key]??row.normalized?.[key];return value==null||value===''?'—':esc(value);}
-function numericMetric(row,key){const value=row[key]??row.metrics?.[key]??row.normalized?.[key];if(value==null||value==='')return NaN;if(typeof value==='number')return value;const s=String(value).replace(/,/g,'').trim().toLowerCase();const n=parseFloat(s);if(!Number.isFinite(n))return NaN;if(/万|w/.test(s))return n*10000;if(/千|k/.test(s))return n*1000;return n;}
 function valueText(value){if(value==null)return '';if(typeof value==='string')return value;if(Array.isArray(value))return value.map(valueText).filter(Boolean).join('、');if(typeof value==='object')return Object.entries(value).map(([k,v])=>`${k}：${valueText(v)}`).join('；');return String(value);}
 function fmtDate(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.valueOf())?String(value):date.toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function shortHash(value){return value?String(value).slice(0,10):'—';}

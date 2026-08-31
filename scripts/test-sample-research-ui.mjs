@@ -64,8 +64,10 @@ try{
     dimensions:document.querySelectorAll('.dimension-card').length,
     focused:document.activeElement?.id,
     panels:document.querySelectorAll('[role="tabpanel"]').length,
+    tabs:document.querySelectorAll('.research-tabs [role="tab"]').length,
+    trendTab:document.querySelector('[data-research-tab="trend"]')!==null,
   }));
-  assert.deepEqual(state,{dimensions:15,focused:'sampleResearchTab-elements',panels:1});
+  assert.deepEqual(state,{dimensions:15,focused:'sampleResearchTab-elements',panels:1,tabs:3,trendTab:false});
   state=await page.evaluate(()=>{const visible=node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0,workspace=document.querySelector('.samples-workspace'),rail=document.querySelector('.samples-list-column'),detail=document.querySelector('.samples-detail'),card=document.querySelector('.sample-card'),sticky=document.querySelector('.research-sticky'),tags=document.querySelector('.research-tag-editor');return{overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,focusNav:visible(document.querySelector('.samples-focus-nav')),pageHead:visible(document.querySelector('.samples-page-head')),railWidth:rail.getBoundingClientRect().width,detailWidth:detail.getBoundingClientRect().width,cardHeight:card.getBoundingClientRect().height,workspaceHeight:workspace.getBoundingClientRect().height,sticky:getComputedStyle(sticky).position,groups:document.querySelectorAll('.dimension-groups>section').length,tagsOpen:tags?.open,sequence:document.querySelectorAll('.research-sequence button').length};});
   const layoutEvidence=JSON.stringify(state);assert.equal(state.overflow,0,layoutEvidence);assert.equal(state.focusNav,true,layoutEvidence);assert.equal(state.pageHead,false,layoutEvidence);assert.ok(state.detailWidth/state.railWidth>=2.4,layoutEvidence);assert.ok(state.cardHeight<=82,layoutEvidence);assert.ok(state.workspaceHeight>=760,layoutEvidence);assert.equal(state.sticky,'sticky',layoutEvidence);assert.equal(state.groups,3,layoutEvidence);assert.equal(state.tagsOpen,false,layoutEvidence);assert.equal(state.sequence,2,layoutEvidence);
   await page.click('[data-sample-nav-toggle]');await page.waitForSelector('#v-samples.samples-nav-collapsed');
@@ -82,16 +84,6 @@ try{
   assert.equal(await page.$eval('[data-research-action="start-ai"]',node=>node.disabled),true);
   await page.waitForFunction(()=>document.querySelector('.research-inline-error')?.textContent.includes('自动重连'),{timeout:5000});
   await page.waitForFunction(before=>!document.querySelector('.analysis-job')&&document.querySelectorAll('#sampleAnalysisVersion option').length===before+1,{timeout:8000},versionsBefore);
-
-  // Trend gaps remain gaps and table uses dash instead of fabricated zero.
-  await page.click('[data-research-tab="trend"]');
-  await page.waitForSelector('.trend-table-wrap');
-  state=await page.evaluate(()=>({
-    dash:[...document.querySelectorAll('.trend-table-wrap td')].some(node=>node.textContent.trim()==='—'),
-    moveCommands:(document.querySelector('.trend-svg path')?.getAttribute('d')?.match(/M/g)||[]).length,
-  }));
-  assert.equal(state.dash,true);
-  assert.ok(state.moveCommands>=2,'NULL metric must split the SVG path');
 
   // Leaving and returning resumes the same research controller.
   await page.click('#tab-home');
@@ -126,7 +118,7 @@ try{
   assert.ok(state.bodyFont>=14,state);
   await page.screenshot({path:mobileShot});
 
-  console.log(`Stage 2 UI: desktop/mobile/filter/tabs/AI/trend/lifecycle checks passed; screenshots ${desktopShot}, ${mobileShot}`);
+  console.log(`Stage 2 UI: desktop/mobile/filter/tabs/AI/lifecycle checks passed; screenshots ${desktopShot}, ${mobileShot}`);
 } finally {
   await browser.close();
   if(server)server.kill();
