@@ -9,6 +9,7 @@ import puppeteer from 'puppeteer';
 const PORT=5173;
 const BASE=`http://127.0.0.1:${PORT}`;
 const desktopShot=join(tmpdir(),'ideahub-sample-research-focus-1440.png');
+const inlineShot=join(tmpdir(),'ideahub-sample-research-inline-1440.png');
 const mobileShot=join(tmpdir(),'ideahub-sample-research-focus-390.png');
 
 function portOpen(){return new Promise(resolve=>{const socket=net.connect({host:'127.0.0.1',port:PORT});socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.setTimeout(800,()=>{socket.destroy();resolve(false);});});}
@@ -72,6 +73,12 @@ try{
   }));
   assert.deepEqual(state,{dimensions:10,focused:'sampleResearchTab-elements',panels:1,tabs:3,trendTab:false,pending:10,confirmed:5});
   await page.click('[data-element-status-filter="all"]');await page.waitForFunction(()=>document.querySelectorAll('.dimension-card').length===15);
+  // The inline preview fallback stays readable if detail focus mode is absent or temporarily restored late.
+  state=await page.evaluate(()=>{const root=document.querySelector('#v-samples');root.classList.remove('samples-detail-mode');const grid=document.querySelector('.dimension-groups>section>div'),tags=document.querySelector('.dimension-tags'),pills=[...document.querySelectorAll('.dimension-tags label i')];return{columns:getComputedStyle(grid).gridTemplateColumns,tagColumns:getComputedStyle(tags).gridTemplateColumns,verticalPill:pills.some(node=>node.getBoundingClientRect().height>node.getBoundingClientRect().width*1.6)};});
+  assert.equal(state.columns.split(' ').length,1,JSON.stringify(state));assert.equal(state.tagColumns.split(' ').length,2,JSON.stringify(state));assert.equal(state.verticalPill,false,JSON.stringify(state));
+  await page.$eval('.dimension-groups',node=>node.scrollIntoView({block:'start'}));
+  await page.screenshot({path:inlineShot});
+  await page.evaluate(()=>document.querySelector('#v-samples').classList.add('samples-detail-mode'));
   state=await page.evaluate(()=>{const visible=node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0,workspace=document.querySelector('.samples-workspace'),rail=document.querySelector('.samples-list-column'),detail=document.querySelector('.samples-detail'),card=document.querySelector('.sample-card'),sticky=document.querySelector('.research-sticky'),tags=document.querySelector('.research-tag-editor');return{overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,focusNav:visible(document.querySelector('.samples-focus-nav')),pageHead:visible(document.querySelector('.samples-page-head')),railWidth:rail.getBoundingClientRect().width,detailWidth:detail.getBoundingClientRect().width,cardHeight:card.getBoundingClientRect().height,workspaceHeight:workspace.getBoundingClientRect().height,sticky:getComputedStyle(sticky).position,groups:document.querySelectorAll('.dimension-groups>section').length,tagsOpen:tags?.open,sequence:document.querySelectorAll('.research-sequence button').length};});
   const layoutEvidence=JSON.stringify(state);assert.equal(state.overflow,0,layoutEvidence);assert.equal(state.focusNav,true,layoutEvidence);assert.equal(state.pageHead,false,layoutEvidence);assert.ok(state.detailWidth/state.railWidth>=2.4,layoutEvidence);assert.ok(state.cardHeight<=82,layoutEvidence);assert.ok(state.workspaceHeight>=760,layoutEvidence);assert.equal(state.sticky,'sticky',layoutEvidence);assert.equal(state.groups,3,layoutEvidence);assert.equal(state.tagsOpen,false,layoutEvidence);assert.equal(state.sequence,2,layoutEvidence);
   await page.click('[data-sample-nav-toggle]');await page.waitForSelector('#v-samples.samples-nav-collapsed');
@@ -148,7 +155,7 @@ try{
   assert.ok(state.bodyFont>=14,state);
   await page.screenshot({path:mobileShot});
 
-  console.log(`Stage 2 UI: desktop/mobile/filter/tabs/AI/lifecycle checks passed; screenshots ${desktopShot}, ${mobileShot}`);
+  console.log(`Stage 2 UI: desktop/inline/mobile/filter/tabs/AI/lifecycle checks passed; screenshots ${desktopShot}, ${inlineShot}, ${mobileShot}`);
 } finally {
   await browser.close();
   if(server)server.kill();
