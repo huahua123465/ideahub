@@ -176,6 +176,7 @@ function onClick(event) {
   if(action==='select-version'){ selectVersion(); return; }
   if(action==='load-raw'){loadRawCapture(target);return;}
   if(action==='load-more-captures'){loadMoreResearchCaptures();return;}
+  if(action==='element-ai-rerun'){rerunElement(target.dataset.key);return;}
   if(action==='decision-confirm') saveDecision(target.dataset.key,'confirmed');
   if(action==='decision-reject') saveDecision(target.dataset.key,'rejected');
   if(action==='decision-edit') toggleEdit(target.dataset.key);
@@ -233,6 +234,23 @@ async function selectVersion(){
   try{await api.sampleAnalysisSelect(sampleId,versionId);if(!sameAction(seq,sampleId,versionId))return;toast('success','当前分析版本已切换');await loadResearch();}
   catch(error){if(sameAction(seq,sampleId,versionId)){actionError=error.message||'版本切换失败';paint();}}
   finally{if(sameAction(seq,sampleId,versionId)){busyAction='';paint();}}
+}
+async function rerunElement(key){
+  if(!selectedVersionId||busyAction||job)return;
+  const seq=actionSeq,sampleId=Number(sample.id),versionId=selectedVersionId;
+  const label=(config?.dimensions||FALLBACK_DIMENSIONS).find(item=>item.key===key)?.label||key;
+  busyAction=`rerun:${key}`;actionError='';paint();
+  try{
+    const result=await api.sampleElementAiRerun(sampleId,versionId,key,{
+      sourceCaptureId:research?.sourceCaptureId||sample.captures?.[0]?.id||null,
+    });
+    if(!sameAction(seq,sampleId,versionId))return;
+    const created=result?.version||result;
+    toast('success',`${label}已单独重新拆解，其他十四项保持原样`);
+    busyAction='';selectedVersionId=created?.id||selectedVersionId;elementStatusFilter='pending';
+    await loadResearch();tab='elements';paint();await callbacks.onUpdated?.();
+  }catch(error){if(sameAction(seq,sampleId,versionId)){actionError=error.message||`${label}单独拆解失败，原版本没有变化`;paint();}}
+  finally{if(active&&seq===actionSeq&&Number(sample?.id)===sampleId){busyAction='';paint();}}
 }
 async function loadRawCapture(button){
   const captureId=Number(button.dataset.captureId),box=button.closest('.research-capture');if(!captureId||!box)return;button.disabled=true;button.textContent='读取中…';
@@ -318,11 +336,11 @@ function assetPreview(asset){const url=asset.contentUrl||`/api/samples/${sample.
 
 function elementsTab(current){
   if(sectionErrors.elements)return stateError(sectionErrors.elements,'retry-elements');
-  const source=selectedVersion?.source||selectedVersion?.sourceType;
   const blocked=Boolean(busyAction);
-  return `<div class="research-tools"><label><span>拆解版本</span><select id="sampleAnalysisVersion" ${blocked?'disabled':''}>${versions.length?versions.map(v=>`<option value="${v.id}" ${String(v.id)===String(selectedVersionId)?'selected':''}>v${v.revision||v.id} · ${esc(SOURCE_LABEL[v.source||v.sourceType]||v.source||'拆解')} · ${fmtDate(v.createdAt)}</option>`).join(''):'<option>暂无版本</option>'}</select></label><div><button data-research-action="start-ai" ${job||blocked?'disabled':''}>AI 重新拆解</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'新建人工拆解'}</button>${selectedVersionId&&!selectedVersion?.isCurrent?`<button class="primary" data-research-action="select-version" ${blocked?'disabled':''}>${busyAction==='select'?'切换中…':'设为当前版本'}</button>`:''}</div></div>
+  const partial=singleRerunMeta(selectedVersion);
+  return `<div class="research-tools"><label><span>拆解版本</span><select id="sampleAnalysisVersion" ${blocked?'disabled':''}>${versions.length?versions.map(v=>`<option value="${v.id}" ${String(v.id)===String(selectedVersionId)?'selected':''}>v${v.revision||v.id} · ${esc(versionSourceLabel(v))} · ${fmtDate(v.createdAt)}</option>`).join(''):'<option>暂无版本</option>'}</select></label><div><button data-research-action="start-ai" ${job||blocked?'disabled':''}>AI 重新拆解</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'新建人工拆解'}</button>${selectedVersionId&&!selectedVersion?.isCurrent?`<button class="primary" data-research-action="select-version" ${blocked?'disabled':''}>${busyAction==='select'?'切换中…':'设为当前版本'}</button>`:''}</div></div>
     ${job?jobHtml():''}
-    ${selectedVersionId?`<div class="analysis-provenance"><span>${esc(SOURCE_LABEL[source]||source||'拆解')}</span><b>${esc(selectedVersion?.model||selectedVersion?.modelName||'人工建立')}</b><small>输入快照 ${esc(shortHash(selectedVersion?.inputSha256))} · ${selectedVersion?.staleSource?'原始采集已更新，此版结论仍保留':'与原始采集一致'}</small></div>${elementReviewFilters()}${tagEditor()}${dimensionGroups()}`:`<div class="research-empty"><b>还没有结构化拆解</b><span>可以让 AI 基于已归档证据生成，也可以先建立一份人工空白表。</span><div><button data-research-action="start-ai" ${blocked?'disabled':''}>AI 生成十五维</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'人工开始'}</button></div></div>`}`;
+    ${selectedVersionId?`<div class="analysis-provenance"><span>${esc(versionSourceLabel(selectedVersion))}</span><b>${esc(selectedVersion?.model||selectedVersion?.modelName||'人工建立')}</b><small>${partial?`仅更新“${esc((config?.dimensions||FALLBACK_DIMENSIONS).find(item=>item.key===partial.key)?.label||partial.key)}”，其余继承 v${partial.baseVersionId} · `:''}输入快照 ${esc(shortHash(selectedVersion?.inputSha256))} · ${selectedVersion?.staleSource?'原始采集已更新，此版结论仍保留':'与原始采集一致'}</small></div>${elementReviewFilters()}${tagEditor()}${dimensionGroups()}`:`<div class="research-empty"><b>还没有结构化拆解</b><span>可以让 AI 基于已归档证据生成，也可以先建立一份人工空白表。</span><div><button data-research-action="start-ai" ${blocked?'disabled':''}>AI 生成十五维</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'人工开始'}</button></div></div>`}`;
 }
 function jobHtml(){const attempt=Number(job.attempts||0),limit=Number(job.maxAttempts||0),retrying=job.status==='queued'&&attempt>0&&job.errorMessage;const message=retrying?`准备自动重试：${job.errorMessage}`:job.message||'正在拆解十五个维度…',status=[job.status||'running',limit?`${attempt}/${limit}`:''].filter(Boolean).join(' · ');return `<div class="analysis-job"><div><i></i><b>${esc(message)}</b><span>${esc(status)}</span></div><progress max="100" value="${Number(job.progress||job.progressPercent||8)}"></progress></div>`;}
 function tagEditor(){
@@ -345,6 +363,7 @@ function elementCard(dim,element={}){
   const confirmLabel=decision==='confirmed'?'✓ 已确认':decision==='pending'?'确认':'恢复 AI 原值',rejectLabel=decision==='rejected'?'✓ 已驳回':'驳回';
   return `<article class="dimension-card ${decision} ${status}"><header><div><span>${String(dim.sortOrder).padStart(2,'0')}</span><h4>${esc(dim.label)}</h4></div><div><i>${esc(DECISION_LABEL[decision]||decision)}</i><b>${confidence}</b></div></header><div class="dimension-values"><div><small>${originalLabel}</small><p>${esc(ai||(status==='not_applicable'?'不适用':status==='insufficient'?'证据不足':'尚未填写'))}</p></div><div><small>当前有效值</small><p>${esc(effective||effectiveFallback)}</p></div></div>${functionText?`<p class="dimension-function"><b>承担功能</b>${esc(functionText)}</p>`:''}${element.applicability||element.limitations?`<p class="dimension-boundary">${element.applicability?`适用：${esc(element.applicability)}`:''}${element.limitations?`<br>限制：${esc(element.limitations)}`:''}</p>`:''}${elementTagEditor(dim,element)}
     <details class="dimension-evidence"><summary>证据 ${evidence.length} 条 · 强度 ${esc(EVIDENCE_LABEL[element.evidenceStrength]||element.evidenceStrength||'—')}</summary>${evidence.length?evidence.map(ev=>`<blockquote><p>${esc(ev.quoteText||ev.quote||ev.text||'证据原文不可用')}</p><footer>${esc(ev.sourceType||ev.kind||'原始作品')} · ${esc(ev.locator||ev.location||ev.jsonPath||ev.commentRef||ev.sourceId||'位置待补')}</footer></blockquote>`).join(''):'<p>没有可核验的证据，因此该维度不应被当作已确认结论。</p>'}</details>
+    <button class="dimension-ai-rerun" data-research-action="element-ai-rerun" data-key="${esc(dim.key)}" title="只重新分析“${esc(dim.label)}”，其余十四项及其人工确认状态保持不变" ${busyAction||job?'disabled':''}>${busyAction===`rerun:${dim.key}`?'正在单独拆解…':'✦ 单独 AI 重新拆解'}</button>
     <div class="dimension-actions"><button class="${decision==='confirmed'?'current confirmed':''}" data-research-action="decision-confirm" data-key="${esc(dim.key)}" ${busyAction||decision==='confirmed'?'disabled':''}>${confirmLabel}</button><button class="${decision==='edited'?'current edited':''}" data-research-action="decision-edit" data-key="${esc(dim.key)}" ${busyAction?'disabled':''}>${decision==='edited'?'再次编辑':'编辑后确认'}</button><button class="danger ${decision==='rejected'?'current rejected':''}" data-research-action="decision-reject" data-key="${esc(dim.key)}" ${busyAction||decision==='rejected'?'disabled':''}>${rejectLabel}</button></div>
     <form hidden data-element-edit-form data-element-editor="${esc(dim.key)}" data-key="${esc(dim.key)}"><label><span>修订后的有效值</span><textarea name="value" rows="3">${esc(effective||ai)}</textarea></label><label><span>元素承担的功能</span><textarea name="functionText" rows="2">${esc(functionText||'')}</textarea></label><label><span>适用范围</span><textarea name="applicability" rows="2">${esc(element.effective?.applicability||element.applicability||'')}</textarea></label><label><span>限制与边界</span><textarea name="limitations" rows="2">${esc(element.effective?.limitations||element.limitations||'')}</textarea></label><label><span>人工备注</span><textarea name="note" rows="2"></textarea></label><button type="submit" ${busyAction?'disabled':''}>保存修订</button></form></article>`;
 }
@@ -365,4 +384,6 @@ function evaluationCard(e){const meta=[`v${e.revision||1}`,e.analysisVersionId?`
 function valueText(value){if(value==null)return '';if(typeof value==='string')return value;if(Array.isArray(value))return value.map(valueText).filter(Boolean).join('、');if(typeof value==='object')return Object.entries(value).map(([k,v])=>`${k}：${valueText(v)}`).join('；');return String(value);}
 function fmtDate(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.valueOf())?String(value):date.toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function shortHash(value){return value?String(value).slice(0,10):'—';}
+function singleRerunMeta(version){const match=String(version?.promptVersion||'').match(/:single:([^:]+):base:(\d+)$/);return match?{key:match[1],baseVersionId:Number(match[2])}:null;}
+function versionSourceLabel(version){return singleRerunMeta(version)?'AI 单项重拆':SOURCE_LABEL[version?.source||version?.sourceType]||version?.source||'拆解';}
 function groupBy(items,keyer){return (items||[]).reduce((out,item)=>{const key=keyer(item);(out[key]||=[]).push(item);return out;},{});}

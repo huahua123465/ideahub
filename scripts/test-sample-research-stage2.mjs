@@ -173,6 +173,19 @@ test('AI分析复用provider、store:false、严格Schema且由服务端水合�
   assert.equal(out.modelVersion,'mock-model-2026-08-29');
 });
 
+test('单项AI拆解只允许指定维度进入Schema和结果',async()=>{
+  const manifest=buildEvidenceManifest(fixture()),dimension=ANALYSIS_DIMENSIONS.find(item=>item.key==='audience');
+  const element=modelElements(manifest).find(item=>item.dimensionKey==='audience');let request;
+  const out=await requestAiAnalysis({manifest,activeTags:[{id:101,kind:'audience',name:'女性用户'}],
+    dimensions:[dimension],provider:{baseUrl:'https://provider.test/v1',model:'mock-model',apiKey:'secret',source:'mock'},
+    fetchImpl:async(_url,options)=>{request=JSON.parse(options.body);return jsonResponse({model:'mock-single',
+      output:[{content:[{type:'output_text',text:JSON.stringify({elements:[element]})}]}]});}});
+  assert.equal(request.text.format.schema.properties.elements.minItems,1);
+  assert.deepEqual(request.text.format.schema.properties.elements.items.properties.dimensionKey.enum,['audience']);
+  assert.equal(request.max_output_tokens,1500);assert.equal(out.elements.length,1);
+  assert.equal(out.elements[0].dimensionKey,'audience');
+});
+
 test('无Key不调用网络，供应商错误只返回安全错误码',async()=>{
   let called=false;
   await assert.rejects(requestAiAnalysis({manifest:buildEvidenceManifest(fixture()),activeTags:[],
@@ -266,7 +279,7 @@ test('服务端路由和迁移包含Stage2关键安全/幂等入口',async()=>{
     readFile(new URL('./migrate-sample-research-stage2.mjs',import.meta.url),'utf8'),
     readFile(new URL('../docker-compose.yml',import.meta.url),'utf8'),
   ]);
-  for(const token of ['/analysis-jobs','/analyses/manual','/decisions','/api/samples/search',
+  for(const token of ['/analysis-jobs','/analyses/manual','/ai-rerun','/decisions','/api/samples/search',
     '/evaluations/ai','/metrics','/research']) assert.ok(route.includes(token),token);
   assert.match(schema,/sample_analysis_jobs_one_active_uidx/);
   assert.match(schema,/model_name IS NOT NULL AND model_version IS NOT NULL/);
@@ -276,6 +289,7 @@ test('服务端路由和迁移包含Stage2关键安全/幂等入口',async()=>{
   assert.match(migration,/source='legacy' AND input_sha256=\$2/);
   assert.match(lib,/SAMPLE_ANALYSIS_AI_TIMEOUT_MS/);assert.match(lib,/SAMPLE_EVALUATION_AI_TIMEOUT_MS/);
   assert.match(route,/analysisFailureTransition/);assert.match(route,/scheduleAnalysisRetry/);assert.match(route,/scheduleAnalysisWorkerRecovery/);assert.match(route,/analysisClaimedAttempt/);assert.match(route,/status=\$4/);assert.match(route,/attempts=\$5/);assert.match(route,/enqueuedAnalysisJobs/);
+  assert.match(route,/PARTIAL_RESTARTED/);assert.match(route,/其他维度原样继承/);
   assert.match(index,/await sampleResearch\.recoverAnalysisJobs\(\)/);
   assert.match(compose,/SAMPLE_ANALYSIS_AI_TIMEOUT_MS:-180000/);assert.match(compose,/SAMPLE_EVALUATION_AI_TIMEOUT_MS:-45000/);
   assert.equal(sha256(stableJson({b:2,a:1})),sha256(stableJson({a:1,b:2})));

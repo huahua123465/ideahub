@@ -286,6 +286,7 @@ export const api = {
   sampleAnalysisManual: (id, payload = {}) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/manual`, payload),
   sampleAnalysis:       (id, versionId) => call('GET', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}`),
   sampleAnalysisSelect: (id, versionId) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}/select`, {}),
+  sampleElementAiRerun:(id, versionId, key, payload = {}) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}/elements/${encodeURIComponent(key)}/ai-rerun`, payload),
   sampleElementDecision:(id, versionId, key, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}/elements/${encodeURIComponent(key)}/decisions`, payload),
   sampleElementTags:    (id, versionId, key, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/analyses/${encodeURIComponent(versionId)}/elements/${encodeURIComponent(key)}/tags`, payload),
   sampleTags:           (id) => call('GET', `/api/samples/${encodeURIComponent(id)}/tags`),

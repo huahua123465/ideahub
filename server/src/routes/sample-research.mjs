@@ -217,14 +217,24 @@ export async function persistAnalysisVersion(client, {
         hasTimes ? (item.timeEndMs ?? source?.timeEndMs) : null,
         item.jsonPath ?? source?.jsonPath,item.commentRef ?? source?.commentRef]);
     }
-    for (const tagId of [...new Set(element.tagIds || [])]) {
-      if (source === 'manual') deferredManualTags.push({ elementId:elementRow.id,
-        dimensionKey:element.dimensionKey,tagId });
+    const tagRecords = Array.isArray(element.tagRecords) && element.tagRecords.length
+      ? element.tagRecords : [...new Set(element.tagIds || [])].map(tagId => ({
+        tagId,origin:source,confidence:source === 'manual' ? null : element.confidence,
+      }));
+    const seenTags = new Set();
+    for (const tag of tagRecords) {
+      const tagId=Number(tag.tagId),origin=ANALYSIS_SOURCES.has(tag.origin)?tag.origin:source;
+      const identity=`${tagId}:${origin}`;
+      if(!Number.isSafeInteger(tagId)||seenTags.has(identity))continue;
+      seenTags.add(identity);
+      if (origin === 'manual') deferredManualTags.push({ elementId:elementRow.id,
+        dimensionKey:element.dimensionKey,tagId,createdBy:tag.createdBy ?? createdBy });
       else await client.query(`
           INSERT INTO sample_element_tags(
             version_id,element_id,dimension_key,tag_id,origin,confidence,created_by
           ) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, [
-        version.id,elementRow.id,element.dimensionKey,tagId,source,element.confidence,createdBy]);
+        version.id,elementRow.id,element.dimensionKey,tagId,origin,
+        tag.confidence ?? element.confidence,tag.createdBy ?? createdBy]);
     }
   }
   const { rows:completed } = await client.query(
@@ -233,7 +243,7 @@ export async function persistAnalysisVersion(client, {
     await client.query(`INSERT INTO sample_element_tags(
       version_id,element_id,dimension_key,tag_id,origin,confidence,created_by
     ) VALUES($1,$2,$3,$4,'manual',NULL,$5) ON CONFLICT DO NOTHING`, [
-    version.id,tag.elementId,tag.dimensionKey,tag.tagId,createdBy]);
+    version.id,tag.elementId,tag.dimensionKey,tag.tagId,tag.createdBy]);
   }
   if (select) {
     await client.query(`INSERT INTO sample_analysis_selections(sample_id,version_id,reason,selected_by)
@@ -332,6 +342,9 @@ function scheduleAnalysisWorkerRecovery(id,claimedAttempt=null,delayMs=3000){
 }
 
 export async function recoverAnalysisJobs() {
+  await query(`UPDATE sample_analysis_jobs SET status='failed',error_code='PARTIAL_RESTARTED',
+    error_message='单项拆解在服务重启时中断，请手动重试',finished_at=now(),updated_at=now()
+    WHERE status IN('queued','running') AND idempotency_key LIKE 'partial:%'`);
   await query(`UPDATE sample_analysis_jobs SET status=CASE WHEN attempts<max_attempts THEN 'queued' ELSE 'failed' END,
     error_code=CASE WHEN attempts<max_attempts THEN NULL ELSE 'RESTART_EXHAUSTED' END,
     error_message=CASE WHEN attempts<max_attempts THEN NULL ELSE '服务重启后重试次数已用完' END,
@@ -710,6 +723,105 @@ export function mount(router) {
     await query(`INSERT INTO sample_analysis_selections(sample_id,version_id,reason,selected_by)
       VALUES($1,$2,'explicit',$3)`, [sampleId,versionId,me.id]);
     sendJson(res, 200, { ok:true, sampleId, currentVersionId:versionId });
+  });
+
+  router.post('/api/samples/:id/analyses/:versionId/elements/:dimensionKey/ai-rerun', async (req, res, params) => {
+    const me = await currentUser(req); const sampleId = strictId(params.id, '样本 id');
+    const versionId = strictId(params.versionId, '分析版本 id');
+    const dimensionKey = cleanText(params.dimensionKey, 80);
+    const dimension = ANALYSIS_DIMENSIONS.find(item => item.key === dimensionKey);
+    if (!dimension) throw badRequest('拆解维度不存在');
+    const body = await readJson(req);
+    const base = await loadVersionDetail(sampleId,versionId);
+    if (base.elements.length !== ANALYSIS_DIMENSIONS.length || base.elements.some(element => element.confidence == null)) {
+      throw conflict('当前版本不是可安全继承的完整 AI 拆解，请先执行整篇 AI 重新拆解');
+    }
+    const source = await loadResearchSource(sampleId,
+      body.sourceCaptureId == null ? null : strictId(body.sourceCaptureId, '采集版本 id'));
+    const manifest = buildEvidenceManifest(source);
+    const manifestIds = new Set(manifest.sources.map(item => item.sourceId));
+    const incompatible = base.elements.filter(element => element.dimensionKey !== dimensionKey
+      && element.state === 'value' && !(element.evidence || []).some(item => manifestIds.has(item.sourceId)));
+    if (incompatible.length) {
+      throw conflict('原版部分证据不在当前采集快照中，无法保证其他维度原样继承；请改用整篇 AI 重新拆解');
+    }
+    const { activeProvider } = await import('../lib/ai-provider.mjs');
+    const provider = await activeProvider();
+    if (!provider?.apiKey) throw new HttpError(503, '尚未配置 AI，可继续使用人工拆解',
+      { code:'AI_NOT_CONFIGURED', manualEntryAllowed:true });
+    const activeTags = await activeDimensionTags();
+    const activeTagIds = new Set(activeTags.map(tag => Number(tag.id)));
+    const idempotencyKey = `partial:${versionId}:${dimensionKey}:${randomUUID()}`;
+    let job;
+    try {
+      const { rows } = await query(`INSERT INTO sample_analysis_jobs(
+        sample_id,source_capture_id,idempotency_key,input_sha256,status,attempts,select_on_success,
+        provider,model_name,requested_by,started_at
+      ) VALUES($1,$2,$3,$4,'running',1,true,$5,$6,$7,now()) RETURNING *`, [
+        sampleId,source.capture.id,idempotencyKey,manifest.inputSha256,provider.source,provider.model,me.id]);
+      job=rows[0];
+    } catch (error) {
+      if (error?.code === '23505') throw conflict('该样本已有 AI 拆解任务进行中，请完成后再重试单项拆解');
+      throw error;
+    }
+    let generated;
+    try {
+      generated = await requestAiAnalysis({ manifest,activeTags,dimensions:[dimension],provider });
+    } catch (error) {
+      const safe=safeAnalysisError(error);
+      await query(`UPDATE sample_analysis_jobs SET status='failed',error_code=$2,error_message=$3,
+        finished_at=now(),updated_at=now() WHERE id=$1 AND status='running'`,[job.id,safe.code,safe.message]);
+      const status=safe.code==='AI_TIMEOUT'?504:safe.code==='AI_HTTP_429'?429:502;
+      throw new HttpError(status,safe.message,{code:safe.code,manualEntryAllowed:true});
+    }
+    let saved;
+    try {
+      saved=await tx(async client=>{
+        const target=generated.elements[0];
+        const elements=base.elements.map(element=>element.dimensionKey===dimensionKey?target:{
+          dimensionKey:element.dimensionKey,state:element.state,valueJson:element.value,
+          functionText:element.functionText,confidence:element.confidence,
+          evidenceStrength:element.evidenceStrength,applicability:element.applicability,
+          limitations:element.limitations,evidence:(element.evidence||[]).filter(item=>manifestIds.has(item.sourceId)),
+          tagRecords:(element.tags||[]).filter(tag=>tag.origin!=='ai'||activeTagIds.has(Number(tag.id)))
+            .map(tag=>({tagId:Number(tag.id),origin:tag.origin,confidence:tag.confidence,createdBy:me.id})),
+        });
+        const created=await persistAnalysisVersion(client,{
+          sampleId,sourceCaptureId:Number(source.capture.id),source:'ai',elements,manifest,
+          inputSha256:manifest.inputSha256,createdBy:me.id,jobId:Number(job.id),provider:generated.provider,
+          modelName:generated.model,modelVersion:generated.modelVersion,select:false,
+          promptVersion:`${RESEARCH_PROMPT_VERSION}:single:${dimensionKey}:base:${versionId}`,
+        });
+        const {rows:newElements}=await client.query(
+          'SELECT id,dimension_key FROM sample_analysis_elements WHERE version_id=$1',[created.id]);
+        const newByKey=new Map(newElements.map(element=>[element.dimension_key,Number(element.id)]));
+        for(const element of base.elements){
+          if(element.dimensionKey===dimensionKey||!element.decision)continue;
+          const decision=element.decision;
+          await client.query(`INSERT INTO sample_element_decisions(
+            element_id,decision,value_json,function_text,applicability,limitations,note,decided_by
+          ) VALUES($1,$2,$3::jsonb,$4,$5,$6,$7,$8)`,[
+            newByKey.get(element.dimensionKey),decision.decision,
+            decision.value_json==null?null:JSON.stringify(decision.value_json),decision.function_text,
+            decision.applicability,decision.limitations,decision.note,decision.decidedBy]);
+        }
+        const {rowCount}=await client.query(`UPDATE sample_analysis_jobs SET status='succeeded',provider=$2,
+          model_name=$3,finished_at=now(),updated_at=now() WHERE id=$1 AND status='running'`,[
+          job.id,generated.provider,generated.model]);
+        if(rowCount!==1)throw conflict('单项拆解任务状态已经变化，未切换当前版本');
+        await client.query(`INSERT INTO sample_analysis_selections(sample_id,version_id,reason,selected_by)
+          VALUES($1,$2,'run_success',$3)`,[sampleId,created.id,me.id]);
+        return created;
+      });
+    } catch(error) {
+      await query(`UPDATE sample_analysis_jobs SET status='failed',error_code='PARTIAL_PERSIST_FAILED',
+        error_message='单项拆解保存失败，原版本未受影响',finished_at=now(),updated_at=now()
+        WHERE id=$1 AND status='running'`,[job.id]);
+      if(error instanceof HttpError)throw error;
+      throw new HttpError(500,'单项拆解保存失败，原版本未受影响',{code:'PARTIAL_PERSIST_FAILED'});
+    }
+    sendJson(res,201,{version:await loadVersionDetail(sampleId,Number(saved.id)),
+      baseVersionId:versionId,rerunDimensionKey:dimensionKey});
   });
 
   router.post('/api/samples/:id/analyses/:versionId/elements/:dimensionKey/decisions', async (req, res, params) => {

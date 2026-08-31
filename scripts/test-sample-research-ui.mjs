@@ -79,6 +79,24 @@ try{
   await page.click('[data-sample-nav-toggle]');
   await page.screenshot({path:desktopShot});
 
+  // A single dimension can be regenerated without clearing the other review decisions.
+  const partialVersionsBefore=await page.$$eval('#sampleAnalysisVersion option',nodes=>nodes.length);
+  await page.$eval('.dimension-card .dimension-ai-rerun',node=>node.click());
+  await page.waitForFunction(before=>document.querySelectorAll('#sampleAnalysisVersion option').length===before+1,
+    {timeout:5000},partialVersionsBefore);
+  await page.waitForFunction(()=>Number(document.querySelector('[data-element-status-filter="pending"] b')?.textContent)===11
+    &&Number(document.querySelector('[data-element-status-filter="confirmed"] b')?.textContent)===4,{timeout:5000});
+  state=await page.evaluate(()=>(
+    {pending:Number(document.querySelector('[data-element-status-filter="pending"] b')?.textContent),
+      confirmed:Number(document.querySelector('[data-element-status-filter="confirmed"] b')?.textContent),
+      cards:document.querySelectorAll('.dimension-card').length,
+      version:document.querySelector('#sampleAnalysisVersion option:checked')?.textContent,
+      provenance:document.querySelector('.analysis-provenance')?.textContent}));
+  assert.equal(state.pending,11);assert.equal(state.confirmed,4);assert.equal(state.cards,11);
+  assert.match(state.version,/AI 单项重拆/);assert.match(state.provenance,/其余继承 v1/);
+  await page.click('[data-element-status-filter="all"]');
+  await page.waitForFunction(()=>document.querySelectorAll('.dimension-card').length===15);
+
   // AI jobs are visible immediately and create a new selected version without double submit.
   const versionsBefore=await page.$$eval('#sampleAnalysisVersion option',nodes=>nodes.length);
   await page.evaluate(()=>{globalThis.__IDEAHUB_MOCK_FAILURES__={'GET */analysis-jobs/*':{remaining:1,status:503,message:'任务状态临时不可用'}};});
