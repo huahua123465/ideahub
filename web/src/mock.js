@@ -448,7 +448,7 @@ export async function handle(method, path, body) {
   logApi(method, path, 200);
 
   const faultMap=globalThis.__IDEAHUB_MOCK_FAILURES__;
-  const wildcardFault=faultMap&&Object.entries(faultMap).find(([pattern])=>pattern.startsWith(`${method} *`)&&p.endsWith(pattern.slice(method.length+2)));
+  const wildcardFault=faultMap&&Object.entries(faultMap).find(([pattern])=>{const split=pattern.indexOf(' ');if(split<0||pattern.slice(0,split)!==method)return false;const route=pattern.slice(split+1),expression=`^${route.split('*').map(part=>part.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('.*')}$`;return new RegExp(expression).test(p);});
   const fault=faultMap?.[`${method} ${p}`]||faultMap?.[p]||wildcardFault?.[1];
   if(fault&&(fault.remaining==null||fault.remaining>0)){
     if(Number.isFinite(fault.remaining))fault.remaining-=1;

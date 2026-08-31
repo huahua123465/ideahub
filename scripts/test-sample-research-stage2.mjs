@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   ANALYSIS_DIMENSIONS, DIMENSION_KEYS, RESEARCH_SCHEMA_VERSION, buildEvidenceManifest,
+  SAMPLE_ANALYSIS_AI_TIMEOUT_MS, SAMPLE_EVALUATION_AI_TIMEOUT_MS, analysisFailureTransition,
   effectiveElement, normalizeAnalysisElements, normalizeDecision, normalizeManualElements,
   normalizeMetrics, parseMetricValue, requestAiAnalysis, requestAiEvaluation, safeAnalysisError,
   recordMetricSnapshot,sha256, stableJson,
@@ -54,6 +55,20 @@ test('固定维度恰好15个、键和顺序稳定', () => {
     'layout','visual_style','bgm','cta',
   ]);
   assert.equal(RESEARCH_SCHEMA_VERSION,'sample-research/2.0');
+  assert.ok(SAMPLE_ANALYSIS_AI_TIMEOUT_MS>=30_000&&SAMPLE_ANALYSIS_AI_TIMEOUT_MS<=600_000);
+  assert.ok(SAMPLE_EVALUATION_AI_TIMEOUT_MS>=30_000&&SAMPLE_EVALUATION_AI_TIMEOUT_MS<=600_000);
+});
+
+test('长拆解默认允许三分钟，瞬时故障按maxAttempts自动退避重试',()=>{
+  if(!process.env.SAMPLE_ANALYSIS_AI_TIMEOUT_MS)assert.equal(SAMPLE_ANALYSIS_AI_TIMEOUT_MS,180_000);
+  if(!process.env.SAMPLE_EVALUATION_AI_TIMEOUT_MS)assert.equal(SAMPLE_EVALUATION_AI_TIMEOUT_MS,45_000);
+  assert.deepEqual(analysisFailureTransition({code:'AI_TIMEOUT',attempts:1,maxAttempts:3}),{retry:true,status:'queued',delayMs:3000});
+  assert.deepEqual(analysisFailureTransition({code:'AI_NETWORK',attempts:2,maxAttempts:3}),{retry:true,status:'queued',delayMs:6000});
+  assert.deepEqual(analysisFailureTransition({code:'AI_HTTP_429',attempts:1,maxAttempts:3}),{retry:true,status:'queued',delayMs:3000});
+  assert.deepEqual(analysisFailureTransition({code:'AI_HTTP_502',attempts:1,maxAttempts:3}),{retry:true,status:'queued',delayMs:3000});
+  assert.deepEqual(analysisFailureTransition({code:'AI_HTTP_429',attempts:1,maxAttempts:3,retryAfterMs:12000}),{retry:true,status:'queued',delayMs:12000});
+  assert.deepEqual(analysisFailureTransition({code:'AI_TIMEOUT',attempts:3,maxAttempts:3}),{retry:false,status:'failed',delayMs:0});
+  assert.deepEqual(analysisFailureTransition({code:'AI_HTTP_401',attempts:1,maxAttempts:3}),{retry:false,status:'failed',delayMs:0});
 });
 
 test('组合筛选把ILIKE通配符当作普通字符', () => {
@@ -243,10 +258,13 @@ test('指标快照重复snapshotKey幂等返回既有行而不是null/500',async
 });
 
 test('服务端路由和迁移包含Stage2关键安全/幂等入口',async()=>{
-  const [route,schema,migration]=await Promise.all([
+  const [route,lib,index,schema,migration,compose]=await Promise.all([
     readFile(new URL('../server/src/routes/sample-research.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../server/src/lib/sample-research.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../server/src/index.mjs',import.meta.url),'utf8'),
     readFile(new URL('../server/src/schema.sql',import.meta.url),'utf8'),
     readFile(new URL('./migrate-sample-research-stage2.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../docker-compose.yml',import.meta.url),'utf8'),
   ]);
   for(const token of ['/analysis-jobs','/analyses/manual','/decisions','/api/samples/search',
     '/evaluations/ai','/metrics','/research']) assert.ok(route.includes(token),token);
@@ -256,6 +274,10 @@ test('服务端路由和迁移包含Stage2关键安全/幂等入口',async()=>{
   assert.match(schema,/must contain exactly 15 dimensions/);
   assert.match(schema,/run_success selection requires a succeeded/);
   assert.match(migration,/source='legacy' AND input_sha256=\$2/);
+  assert.match(lib,/SAMPLE_ANALYSIS_AI_TIMEOUT_MS/);assert.match(lib,/SAMPLE_EVALUATION_AI_TIMEOUT_MS/);
+  assert.match(route,/analysisFailureTransition/);assert.match(route,/scheduleAnalysisRetry/);assert.match(route,/scheduleAnalysisWorkerRecovery/);assert.match(route,/analysisClaimedAttempt/);assert.match(route,/status=\$4/);assert.match(route,/attempts=\$5/);assert.match(route,/enqueuedAnalysisJobs/);
+  assert.match(index,/await sampleResearch\.recoverAnalysisJobs\(\)/);
+  assert.match(compose,/SAMPLE_ANALYSIS_AI_TIMEOUT_MS:-180000/);assert.match(compose,/SAMPLE_EVALUATION_AI_TIMEOUT_MS:-45000/);
   assert.equal(sha256(stableJson({b:2,a:1})),sha256(stableJson({a:1,b:2})));
 });
 

@@ -49,6 +49,7 @@ let failedVersionId = null;
 let sectionErrors = {};
 let job = null;
 let pollTimer = null;
+let pollFailures = 0;
 let requestSeq = 0;
 let versionSeq = 0;
 let captureSeq = 0;
@@ -59,7 +60,7 @@ let callbacks = {};
 
 export function leaveResearch() {
   active = false;
-  requestSeq+=1;versionSeq+=1;captureSeq+=1;actionSeq+=1;busyAction='';job=null;
+  requestSeq+=1;versionSeq+=1;captureSeq+=1;actionSeq+=1;busyAction='';job=null;pollFailures=0;
   clearTimeout(pollTimer);
   pollTimer = null;
 }
@@ -70,7 +71,7 @@ export async function openResearch(container, sampleDetail, options = {}) {
   if (changed) {
     clearTimeout(pollTimer); pollTimer=null; requestSeq+=1;versionSeq+=1;captureSeq+=1;actionSeq+=1;
     tab='original';research=null;versions=[];selectedVersionId=null;selectedVersion=null;
-    evaluations=[];metrics=[];job=null;busyAction='';loadError='';actionError='';failedVersionId=null;sectionErrors={};
+    evaluations=[];metrics=[];job=null;pollFailures=0;busyAction='';loadError='';actionError='';failedVersionId=null;sectionErrors={};
   }
   active = true;
   host = container;
@@ -119,7 +120,9 @@ async function loadResearch() {
     selectedVersion = detailFromVersions(selectedVersionId);
     evaluations = evals?.items || evals?.evaluations || res.evaluations || [];
     metrics = trend?.items || trend?.metrics || trend?.snapshots || res.metrics || [];
+    job=res.activeJob||null;pollFailures=0;
     loading = false; paint();
+    if(job&&['queued','running'].includes(job.status))pollJob(job.id||job.jobId);
     if (selectedVersionId && !hasElements(selectedVersion)) loadVersion(selectedVersionId, true);
   } catch (error) {
     if (seq !== requestSeq) return;
@@ -192,7 +195,7 @@ function onSubmit(event) {
 
 async function startAnalysis(source) {
   if(busyAction||job)return;const seq=actionSeq,sampleId=Number(sample.id);busyAction='analysis';
-  actionError=''; job={status:'queued',progress:4,message:'正在准备证据…'};paint();
+  actionError='';pollFailures=0; job={status:'queued',progress:4,message:'正在准备证据…'};paint();
   try{
     const started=await api.sampleAnalysisStart(sampleId,{sourceCaptureId:research?.sourceCaptureId||sample.captures?.[0]?.id||null,selectOnSuccess:true,source},`sample-${sampleId}-${Date.now()}`);
     if(!sameAction(seq,sampleId))return;
@@ -201,18 +204,18 @@ async function startAnalysis(source) {
   }catch(error){if(sameAction(seq,sampleId)){job=null;actionError=error.message||'AI 拆解启动失败';paint();}}
   finally{if(sameAction(seq,sampleId)){busyAction='';if(!job)paint();}}
 }
-function pollJob(jobId){
+function pollJob(jobId,delay=1200){
   clearTimeout(pollTimer);
   const sampleId=Number(sample?.id);
   pollTimer=setTimeout(async()=>{
     if(!active||Number(sample?.id)!==sampleId)return;
     try{
-      const response=await api.sampleAnalysisJob(sampleId,jobId);if(!active||Number(sample?.id)!==sampleId)return;job=response.job||response;paint();
+      const response=await api.sampleAnalysisJob(sampleId,jobId);if(!active||Number(sample?.id)!==sampleId)return;pollFailures=0;actionError='';job=response.job||response;paint();
       if(['queued','running'].includes(job.status))pollJob(jobId);
       else if(['completed','done','succeeded'].includes(job.status)){toast('success','十五维拆解已生成');job=null;await loadResearch();tab='elements';paint();}
       else {const message=job.errorMessage||job.error_message||'AI拆解未完成，原有版本没有变化';job=null;actionError=message;paint();}
-    }catch(error){job=null;actionError=error.message||'任务状态读取失败，可重新发起';paint();}
-  },1200);
+    }catch(error){if(!active||Number(sample?.id)!==sampleId)return;pollFailures+=1;actionError='任务状态暂时无法读取，正在自动重连；后台任务不会因此取消。';paint();pollJob(jobId,Math.min(30_000,1200*(2**Math.min(5,pollFailures))));}
+  },delay);
 }
 
 async function createManualVersion(){
@@ -320,7 +323,7 @@ function elementsTab(current){
     ${job?jobHtml():''}
     ${selectedVersionId?`<div class="analysis-provenance"><span>${esc(SOURCE_LABEL[source]||source||'拆解')}</span><b>${esc(selectedVersion?.model||selectedVersion?.modelName||'人工建立')}</b><small>输入快照 ${esc(shortHash(selectedVersion?.inputSha256))} · ${selectedVersion?.staleSource?'原始采集已更新，此版结论仍保留':'与原始采集一致'}</small></div>${tagEditor()}${dimensionGroups()}`:`<div class="research-empty"><b>还没有结构化拆解</b><span>可以让 AI 基于已归档证据生成，也可以先建立一份人工空白表。</span><div><button data-research-action="start-ai" ${blocked?'disabled':''}>AI 生成十五维</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'人工开始'}</button></div></div>`}`;
 }
-function jobHtml(){return `<div class="analysis-job"><div><i></i><b>${esc(job.message||'正在拆解十五个维度…')}</b><span>${esc(job.status||'running')}</span></div><progress max="100" value="${Number(job.progress||job.progressPercent||8)}"></progress></div>`;}
+function jobHtml(){const attempt=Number(job.attempts||0),limit=Number(job.maxAttempts||0),retrying=job.status==='queued'&&attempt>0&&job.errorMessage;const message=retrying?`准备自动重试：${job.errorMessage}`:job.message||'正在拆解十五个维度…',status=[job.status||'running',limit?`${attempt}/${limit}`:''].filter(Boolean).join(' · ');return `<div class="analysis-job"><div><i></i><b>${esc(message)}</b><span>${esc(status)}</span></div><progress max="100" value="${Number(job.progress||job.progressPercent||8)}"></progress></div>`;}
 function tagEditor(){
   if(sectionErrors.tags)return `<div class="research-tags-empty">标签暂时没有读出来：${esc(sectionErrors.tags)} <button type="button" data-research-action="retry-tags">重试</button></div>`;
   const tags=config?.tags||[];const selected=new Set((research?.tags||[]).map(t=>Number(t.id)));

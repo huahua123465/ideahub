@@ -16,6 +16,7 @@ import {
   recordMetricSnapshot,
   requestAiAnalysis,
   requestAiEvaluation,
+  analysisFailureTransition,
   safeAnalysisError,
   sha256,
   stableJson,
@@ -32,6 +33,8 @@ const EVIDENCE_KIND_DB = Object.freeze({
 });
 
 let analysisQueue = Promise.resolve();
+const analysisRetryTimers=new Map();
+const enqueuedAnalysisJobs=new Set();
 
 export function literalLikePattern(value) {
   return `%${String(value || '').replace(/[\\%_]/g, character => `\\${character}`)}%`;
@@ -256,6 +259,9 @@ async function processAnalysisJob(jobId) {
     const tags = await activeDimensionTags();
     const result = await requestAiAnalysis({ manifest, activeTags:tags });
     const version = await tx(async client => {
+      const {rows:owned}=await client.query(`SELECT id FROM sample_analysis_jobs
+        WHERE id=$1 AND status='running' AND attempts=$2 FOR UPDATE`,[job.id,job.attempts]);
+      if(!owned[0]){const error=new Error('analysis attempt is no longer current');error.code='JOB_ATTEMPT_STALE';throw error;}
       const saved = await persistAnalysisVersion(client, {
         sampleId:Number(job.sample_id), sourceCaptureId:Number(job.source_capture_id), source:'ai',
         elements:result.elements, manifest, inputSha256:manifest.inputSha256,
@@ -263,8 +269,9 @@ async function processAnalysisJob(jobId) {
         provider:result.provider, modelName:result.model, modelVersion:result.modelVersion, select:false,
         selectionReason:'run_success',
       });
-      await client.query(`UPDATE sample_analysis_jobs SET status='succeeded',provider=$2,model_name=$3,
-        finished_at=now(),updated_at=now() WHERE id=$1`, [job.id,result.provider,result.model]);
+      const {rowCount}=await client.query(`UPDATE sample_analysis_jobs SET status='succeeded',provider=$2,model_name=$3,
+        finished_at=now(),updated_at=now() WHERE id=$1 AND status='running' AND attempts=$4`,[job.id,result.provider,result.model,job.attempts]);
+      if(rowCount!==1){const error=new Error('analysis attempt lost ownership');error.code='JOB_ATTEMPT_STALE';throw error;}
       if (job.select_on_success) await client.query(`
         INSERT INTO sample_analysis_selections(sample_id,version_id,reason,selected_by)
         VALUES($1,$2,'run_success',$3)`, [job.sample_id,saved.id,job.requested_by]);
@@ -273,16 +280,55 @@ async function processAnalysisJob(jobId) {
     return version;
   } catch (error) {
     const safe = safeAnalysisError(error);
-    await query(`UPDATE sample_analysis_jobs SET status='failed',error_code=$2,error_message=$3,
-      finished_at=now(),updated_at=now() WHERE id=$1 AND status='running'`, [job.id,safe.code,safe.message]);
+    const transition=analysisFailureTransition({code:safe.code,attempts:job.attempts,maxAttempts:job.max_attempts,retryAfterMs:error?.retryAfterMs});
+    let rowCount;try{({rowCount}=await query(`UPDATE sample_analysis_jobs SET status=$4,error_code=$2,error_message=$3,
+      started_at=CASE WHEN $4='queued' THEN NULL ELSE started_at END,
+      finished_at=CASE WHEN $4='failed' THEN now() ELSE NULL END,updated_at=now()
+      WHERE id=$1 AND status='running' AND attempts=$5`,[job.id,safe.code,safe.message,transition.status,job.attempts]));}
+    catch(writeError){writeError.analysisClaimedAttempt=Number(job.attempts);throw writeError;}
+    if(rowCount&&transition.retry)scheduleAnalysisRetry(Number(job.id),transition.delayMs);
     return null;
   }
 }
 
 function enqueueAnalysisJob(id) {
-  analysisQueue = analysisQueue.then(() => processAnalysisJob(id)).catch(error => {
-    console.error('[sample-research] analysis queue failure:', error?.name || 'Error');
-  });
+  const key=Number(id);
+  if(enqueuedAnalysisJobs.has(key)||analysisRetryTimers.has(key))return false;
+  enqueuedAnalysisJobs.add(key);
+  analysisQueue=analysisQueue.then(()=>processAnalysisJob(key)).catch(error=>{
+    console.error('[sample-research] analysis queue failure:',error?.name||'Error');
+    scheduleAnalysisWorkerRecovery(key,error?.analysisClaimedAttempt??null);
+  }).finally(()=>enqueuedAnalysisJobs.delete(key));
+  return true;
+}
+function scheduleAnalysisRetry(id,delayMs){
+  const key=Number(id),existing=analysisRetryTimers.get(key);
+  if(existing)clearTimeout(existing);
+  const timer=setTimeout(()=>{analysisRetryTimers.delete(key);enqueueAnalysisJob(key);},delayMs);
+  timer.unref?.();analysisRetryTimers.set(key,timer);
+}
+async function reconcileAnalysisWorkerFailure(id,claimedAttempt){
+  if(claimedAttempt!=null)await query(`UPDATE sample_analysis_jobs SET
+    status=CASE WHEN attempts<max_attempts THEN'queued'ELSE'failed'END,
+    started_at=NULL,finished_at=CASE WHEN attempts<max_attempts THEN NULL ELSE now()END,
+    error_code=CASE WHEN attempts<max_attempts THEN COALESCE(error_code,'WORKER_RECOVERY')ELSE'RETRY_EXHAUSTED'END,
+    error_message=CASE WHEN attempts<max_attempts THEN COALESCE(error_message,'任务状态写回失败，已自动恢复')ELSE'分析重试次数已用完'END,
+    updated_at=now() WHERE id=$1 AND status='running'AND attempts=$2`,[id,claimedAttempt]);
+  const {rows}=await query('SELECT status,attempts,max_attempts FROM sample_analysis_jobs WHERE id=$1',[id]),row=rows[0];
+  if(!row)return;
+  if(row.status==='queued'&&Number(row.attempts)<Number(row.max_attempts))enqueueAnalysisJob(id);
+  else if(row.status==='queued')await query(`UPDATE sample_analysis_jobs SET status='failed',
+    error_code='RETRY_EXHAUSTED',error_message='分析重试次数已用完',finished_at=now(),updated_at=now()
+    WHERE id=$1 AND status='queued'AND attempts>=max_attempts`,[id]);
+}
+function scheduleAnalysisWorkerRecovery(id,claimedAttempt=null,delayMs=3000){
+  const key=Number(id);if(analysisRetryTimers.has(key))return;
+  const timer=setTimeout(async()=>{
+    analysisRetryTimers.delete(key);
+    try{await reconcileAnalysisWorkerFailure(key,claimedAttempt);}
+    catch{scheduleAnalysisWorkerRecovery(key,claimedAttempt,Math.min(30_000,delayMs*2));}
+  },delayMs);
+  timer.unref?.();analysisRetryTimers.set(key,timer);
 }
 
 export async function recoverAnalysisJobs() {
@@ -587,7 +633,7 @@ export function mount(router) {
     const bucket = Math.floor(Date.now() / 30_000);
     const idempotencyKey = cleanIdempotency(headerKey || body.idempotencyKey,
       `auto:${source.capture.id}:${manifest.inputSha256.slice(0,24)}:${bucket}`);
-    let job;
+    let job,created=false;
     try {
       job = await tx(async client => {
         const { rows } = await client.query(`INSERT INTO sample_analysis_jobs(
@@ -595,7 +641,7 @@ export function mount(router) {
         ) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,$8)
         ON CONFLICT(sample_id,idempotency_key) DO NOTHING RETURNING *`, [sampleId,source.capture.id,
         idempotencyKey,manifest.inputSha256,body.selectOnSuccess !== false,provider.source,provider.model,me.id]);
-        if (rows[0]) return rows[0];
+        if (rows[0]){created=true;return rows[0];}
         const existing = await client.query(
           'SELECT * FROM sample_analysis_jobs WHERE sample_id=$1 AND idempotency_key=$2', [sampleId,idempotencyKey]);
         return existing.rows[0];
@@ -607,7 +653,7 @@ export function mount(router) {
       if (!rows[0]) throw conflict('该样本的分析任务刚刚发生状态变化，请重试');
       job = rows[0];
     }
-    if (job.status === 'queued') enqueueAnalysisJob(Number(job.id));
+    if (created&&job.status === 'queued') enqueueAnalysisJob(Number(job.id));
     sendJson(res, 202, { job:rowJob(job), manualEntryAllowed:true });
   });
 
@@ -803,13 +849,14 @@ export function mount(router) {
   router.get('/api/samples/:id/research', async (req, res, params) => {
     await currentUser(req); const sampleId = strictId(params.id, '样本 id');
     const sample = await ensureSample(sampleId);
-    const [{ rows:versions }, { rows:evaluations }, { rows:metrics }, { rows:sampleTags }, { rows:captures }] = await Promise.all([
+    const [{ rows:versions }, { rows:evaluations }, { rows:metrics }, { rows:sampleTags }, { rows:captures }, {rows:activeJobs}] = await Promise.all([
       query("SELECT * FROM sample_analysis_versions WHERE sample_id=$1 AND status='complete' ORDER BY revision DESC", [sampleId]),
       query('SELECT * FROM sample_evaluations WHERE sample_id=$1 ORDER BY target,revision DESC', [sampleId]),
       query('SELECT * FROM sample_metric_snapshots WHERE sample_id=$1 ORDER BY observed_at,id', [sampleId]),
       query(`SELECT t.id,t.kind,t.name FROM entity_tags et JOIN tags t ON t.id=et.tag_id
         WHERE et.entity='sample' AND et.entity_id=$1 ORDER BY t.kind,t.sort,t.id`, [sampleId]),
       query('SELECT id FROM sample_captures WHERE sample_id=$1 ORDER BY captured_at DESC,id DESC LIMIT 1',[sampleId]),
+      query("SELECT * FROM sample_analysis_jobs WHERE sample_id=$1 AND status IN('queued','running') ORDER BY created_at,id LIMIT 1",[sampleId]),
     ]);
     const currentId = sample.current_analysis_version_id == null ? null : Number(sample.current_analysis_version_id);
     const currentAnalysis = currentId ? await loadVersionDetail(sampleId,currentId) : null;
@@ -819,9 +866,8 @@ export function mount(router) {
       versions:versions.map(rowVersion), currentAnalysis,
       evaluations:evaluations.map(rowEvaluation), metrics:metrics.map(rowMetric),
       sampleTags:sampleTags.map(row => ({ id:Number(row.id),kind:row.kind,name:row.name })),
+      activeJob:rowJob(activeJobs[0]),
     });
   });
 
-  // Recovery is deliberately tied to mounting the route, not module import, so tests can import pure helpers safely.
-  recoverAnalysisJobs().catch(error => console.error('[sample-research] job recovery failed:', error?.name || 'Error'));
 }

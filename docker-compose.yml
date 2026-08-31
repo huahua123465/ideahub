@@ -41,6 +41,8 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      SAMPLE_ANALYSIS_AI_TIMEOUT_MS: ${SAMPLE_ANALYSIS_AI_TIMEOUT_MS:-180000}
+      SAMPLE_EVALUATION_AI_TIMEOUT_MS: ${SAMPLE_EVALUATION_AI_TIMEOUT_MS:-45000}
       # 页面里保存的兼容接口配置会加密后落到 IdeaHub 自己的独立持久卷。
       AI_CONFIG_SECRET: ${AI_CONFIG_SECRET:-}
       AI_PROVIDER_CONFIG_FILE: /var/lib/ideahub-ai/provider.json

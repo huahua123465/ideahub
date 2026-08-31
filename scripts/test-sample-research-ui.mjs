@@ -75,10 +75,12 @@ try{
 
   // AI jobs are visible immediately and create a new selected version without double submit.
   const versionsBefore=await page.$$eval('#sampleAnalysisVersion option',nodes=>nodes.length);
+  await page.evaluate(()=>{globalThis.__IDEAHUB_MOCK_FAILURES__={'GET */analysis-jobs/*':{remaining:1,status:503,message:'任务状态临时不可用'}};});
   await page.waitForFunction(()=>document.querySelector('[data-research-action="start-ai"]')&&!document.querySelector('[data-research-action="start-ai"]').disabled);
   await page.$eval('[data-research-action="start-ai"]',node=>node.click());
   await page.waitForSelector('.analysis-job');
   assert.equal(await page.$eval('[data-research-action="start-ai"]',node=>node.disabled),true);
+  await page.waitForFunction(()=>document.querySelector('.research-inline-error')?.textContent.includes('自动重连'),{timeout:5000});
   await page.waitForFunction(before=>!document.querySelector('.analysis-job')&&document.querySelectorAll('#sampleAnalysisVersion option').length===before+1,{timeout:8000},versionsBefore);
 
   // Trend gaps remain gaps and table uses dash instead of fabricated zero.

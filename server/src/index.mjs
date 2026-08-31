@@ -108,6 +108,9 @@ sampleResearch.mount(router);
 sampleComparison.mount(router);
 sampleInsights.mount(router);
 
+// 必须在开始监听前完成旧任务恢复，避免新请求与启动恢复同时改写同一个 attempt。
+await sampleResearch.recoverAnalysisJobs();
+
 
 /* ---------- 登录闸门 ---------- */
 /**
