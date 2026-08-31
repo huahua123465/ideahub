@@ -38,6 +38,8 @@ let libraryMode = 'samples';
 let comparisonBusy = false;
 let comparisonDialogFocus = null;
 let compareSelection = loadCompareSelection();
+let requestedSampleId = null;
+let requestedResearchTab = '';
 
 const root = () => $('#v-samples');
 const MISSING = {
@@ -64,6 +66,27 @@ export async function render() {
   active = true;
   if (!initialized) scaffold();
   await activateLibraryMode(true);
+  if (requestedSampleId) {
+    const sampleId = requestedSampleId;
+    requestedSampleId = null;
+    selectSample(sampleId, 'elements');
+  }
+}
+
+/** 记住从采集页刚归档的样本，切页后直接打开研究档案。 */
+export function openSample(id) {
+  const sampleId = Number(id);
+  if (!Number.isSafeInteger(sampleId) || sampleId <= 0) return;
+  requestedSampleId = sampleId;
+  requestedResearchTab = 'elements';
+  libraryMode = 'samples';
+  if (active) {
+    activateLibraryMode(true).then(() => {
+      if (requestedSampleId !== sampleId) return;
+      requestedSampleId = null;
+      selectSample(sampleId, 'elements');
+    });
+  }
 }
 
 function scaffold() {
@@ -417,14 +440,18 @@ function paintFocusNav(){const count=$('#samplesFocusCount'),focus=$('#sampleFoc
 function dimensionLabel(key){return (researchConfig?.dimensions||[]).find(d=>(d.key||d.dimensionKey)===key)?.label||key||'元素';}
 function formatElementValue(value){if(value==null)return '';if(typeof value==='string')return value;if(Array.isArray(value))return value.join('、');if(typeof value==='object')return Object.values(value).join('、');return String(value);}
 
-function selectSample(id) { captureSeq+=1;captureLoading=false;listScrollTop=window.scrollY;selectedId = Number(id); detail = null;root()?.classList.add('samples-detail-mode');paintList();paintComparisonTray();loadDetail(selectedId); }
+function selectSample(id, initialTab = '') { captureSeq+=1;captureLoading=false;listScrollTop=window.scrollY;selectedId = Number(id); detail = null;requestedResearchTab=initialTab;root()?.classList.add('samples-detail-mode');paintList();paintComparisonTray();loadDetail(selectedId); }
 async function loadDetail(id, silent = false) {
   const seq = ++loadSeq;
   if (!silent) { loadingDetail = true; const el=$('#samplesDetail');if(el)el.innerHTML='<div class="samples-detail-loading"><i></i><span>正在打开研究档案…</span></div>'; }
   try {
     const data = await api.sample(id);
     if (!active || seq !== loadSeq || Number(selectedId) !== Number(id)) return;
-    detail = data; loadingDetail = false; await openResearch($('#samplesDetail'),detail,researchOptions());
+    detail = data; loadingDetail = false;
+    const options = researchOptions();
+    if (requestedResearchTab) options.initialTab = requestedResearchTab;
+    requestedResearchTab = '';
+    await openResearch($('#samplesDetail'),detail,options);
     if (!silent && matchMedia('(max-width:1100px)').matches) $('#samplesDetail')?.scrollIntoView({behavior:'instant',block:'start'});
   } catch (error) { if (seq === loadSeq) { loadingDetail = false; const el=$('#samplesDetail');if(el)el.innerHTML=`<div class="samples-detail-error"><b>样本详情没有打开</b><span>${esc(error.message||'读取失败')}</span><button type="button" data-sample-id="${id}">重试</button><button type="button" data-sample-back>返回列表</button></div>`; } }
 }

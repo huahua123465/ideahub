@@ -331,6 +331,10 @@ function bind() {
     }
   });
   learning.events.addEventListener('back', () => go('home'));
+  collector.events.addEventListener('open-sample', event => {
+    samples.openSample(event.detail.sampleId);
+    go('samples');
+  });
 
   // 客户档案的行点击进详情页，不是直接弹编辑框 —— 
   // 任务 9 要的是「查看一个客户不用在多个模块来回找」，那得先有个能看的页面

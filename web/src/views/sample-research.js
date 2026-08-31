@@ -71,7 +71,7 @@ export async function openResearch(container, sampleDetail, options = {}) {
   const changed = Number(sample?.id) !== Number(sampleDetail?.id);
   if (changed) {
     clearTimeout(pollTimer); pollTimer=null; requestSeq+=1;versionSeq+=1;captureSeq+=1;actionSeq+=1;
-    tab='original';elementStatusFilter='pending';research=null;versions=[];selectedVersionId=null;selectedVersion=null;
+    tab=['original','elements','evaluation'].includes(options.initialTab) ? options.initialTab : 'original';elementStatusFilter='pending';research=null;versions=[];selectedVersionId=null;selectedVersion=null;
     evaluations=[];job=null;pollFailures=0;busyAction='';loadError='';actionError='';failedVersionId=null;sectionErrors={};
   }
   active = true;

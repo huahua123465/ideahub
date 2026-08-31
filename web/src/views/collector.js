@@ -9,6 +9,9 @@ import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
 import { confirmAction } from '../confirm.js';
 
+const events = new EventTarget();
+export { events };
+
 let me = null;
 let active = false;
 let initialized = false;
@@ -285,6 +288,11 @@ function resultHTML(task, data) {
   const video = data.media_assets?.video || {};
   const mediaStatus = data.collection_status?.media || {};
   const refreshing = !!task.refresh_status;
+  const archive = data.sample_archive || {};
+  const sampleId = archive.sample_id || archive.sampleId;
+  const archiveLabel = sampleId
+    ? '进入样本库继续拆解'
+    : (archive.status === 'failed' ? '重试归档并拆解' : '归档并开始拆解');
   return `<div class="collector-result">
     <header class="collector-result-head">
       <div><span>${data.platform === 'douyin' ? '抖音' : '小红书'} · ${data.session_mode === 'public' ? '公开无登录' : '使用采集账号'} · 采集结果</span><h2>${esc(data.display_title || data.title || task.title || '未命名内容')}</h2>
@@ -296,6 +304,7 @@ function resultHTML(task, data) {
       <span class="collector-action-divider"></span>
       <button class="btn btn-ghost" type="button" data-result-push="persona">推送到真人作品</button>
       <button class="btn btn-primary" type="button" data-result-push="matrix">推送到矩阵作品</button>
+      <button class="btn btn-ghost collector-archive-action" type="button" data-result-archive${sampleId ? ` data-sample-id="${esc(sampleId)}"` : ''} title="${esc(archive.message || '')}">${ICON.layers}<span>${archiveLabel}</span></button>
     </div>
     <div class="collector-stat-grid">
       <div><span>点赞</span><b>${esc(engagement.likes || '—')}</b></div><div><span>收藏</span><b>${esc(engagement.collects || '—')}</b></div>
@@ -368,6 +377,7 @@ function bind() {
     if (target.closest('[data-task-retry]') || target.closest('[data-detail-retry]')) return retryTask(taskEl?.dataset.collectorTask || selectedId, target.closest('button'));
     if (taskEl) { selectTask(taskEl.dataset.collectorTask); return; }
     if (target.closest('[data-result-refresh]')) return refreshTask(target.closest('button'));
+    if (target.closest('[data-result-archive]')) return archiveAndOpenSample(target.closest('button'));
     const push = target.closest('[data-result-push]');
     if (push) return pushTask(push.dataset.resultPush, push);
     if (target.closest('[data-analysis-edit]')) { analysisEditing = true; paintDetail(); requestAnimationFrame(() => root().querySelector('.collector-ai textarea')?.focus()); return; }
@@ -462,6 +472,33 @@ async function pushTask(channel, button) {
     toast('ok', `已推送到${response.destination || label}${record ? `（记录 ${record}）` : ''}`);
   } catch (error) { toast('info', error.message || `推送到${label}失败，可以稍后重试`); }
   finally { busy(button, false); }
+}
+
+async function archiveAndOpenSample(button) {
+  const task = currentTask();
+  if (!task || task.status !== 'done' || !result) return;
+  let sampleId = result.sample_archive?.sample_id || result.sample_archive?.sampleId || button?.dataset.sampleId;
+  if (!sampleId) {
+    busy(button, true, '正在归档…');
+    try {
+      const archived = await api.collectorArchive(task.id);
+      sampleId = archived.sample_id || archived.sampleId;
+      if (!sampleId) throw new Error('样本已归档，但未返回样本编号');
+      result.sample_archive = {
+        status: archived.status || 'done',
+        sample_id: sampleId,
+        capture_id: archived.capture_id || archived.captureId,
+      };
+      paintDetail();
+      toast('ok', '已归档到样本库，正在打开拆解页');
+    } catch (error) {
+      result.sample_archive = { status:'failed', message:error.message || '样本归档失败' };
+      paintDetail();
+      toast('info', error.message || '归档到样本库失败，可以稍后重试');
+      return;
+    }
+  }
+  events.dispatchEvent(new CustomEvent('open-sample', { detail:{ sampleId:Number(sampleId) } }));
 }
 
 async function removeTask(id, button) {
