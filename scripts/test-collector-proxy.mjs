@@ -53,6 +53,9 @@ const upstream = http.createServer(async (req, res) => {
   if (url.pathname === '/api/login/xiaohongshu/status') {
     return json(200, { status: 'waiting_scan', qr_available: true, cookie: 'must-not-leak' });
   }
+  if (url.pathname === '/api/login/xiaohongshu/account' && req.method === 'POST') {
+    return json(200, { status: 'syncing', saved: true, account: {} });
+  }
   if (url.pathname === '/api/login/xiaohongshu/label' && req.method === 'POST') {
     lastUpstreamBody = await readBody(req);
     return json(200, { saved: true, account_label: lastUpstreamBody.label, identity_verified: false });
@@ -176,6 +179,11 @@ try {
   response = await call('GET', '/api/collector/login/xiaohongshu/status', { role: 'admin' });
   check(response.status === 200 && response.data.status === 'waiting_scan', '管理员可以访问平台登录状态', response);
   check(!('cookie' in response.data), '平台登录响应会清除 Cookie 字段', response.data);
+
+  response = await call('POST', '/api/collector/login/xiaohongshu/account');
+  check(response.status === 403, '普通成员不能同步平台账号（403）', response);
+  response = await call('POST', '/api/collector/login/xiaohongshu/account', { role: 'admin', body: {} });
+  check(response.status === 200 && response.data.status === 'syncing', '管理员可以在后台同步当前平台账号', response);
 
   response = await call('GET', '/api/collector/login/xiaohongshu/qr', { role: 'admin' });
   check(response.status === 200 && response.headers.get('content-type') === 'image/png', '二维码按 image/png 安全转发', response.status);

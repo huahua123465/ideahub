@@ -14,6 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urljoin, urlparse
 
 from playwright.async_api import async_playwright
 from security import install_playwright_request_guard
@@ -275,14 +276,26 @@ async def _profile_from_page(page) -> dict[str, str]:
     for selector in (
         'a.link-wrapper[href*="/user/profile/"]',
         'a.bottom-channel[href*="/user/profile/"]',
+        'header a[href*="/user/profile/"]',
+        'nav a[href*="/user/profile/"]',
     ):
         try:
             target = page.locator(selector).first
             if await target.count():
-                profile_url = str(await target.get_attribute("href") or "").split("?", 1)[0]
-                if re.fullmatch(r"https://www\.xiaohongshu\.com/user/profile/[A-Za-z0-9_-]+", profile_url):
+                raw_profile_url = str(await target.get_attribute("href") or "")
+                candidate = urljoin(XHS_LOGIN_URL, raw_profile_url)
+                parsed = urlparse(candidate)
+                if (
+                    parsed.scheme == "https"
+                    and (parsed.hostname or "").lower() in {
+                        "xiaohongshu.com", "www.xiaohongshu.com"
+                    }
+                    and re.fullmatch(r"/user/profile/[A-Za-z0-9_-]+", parsed.path)
+                ):
+                    profile_url = (
+                        f"https://www.xiaohongshu.com{parsed.path}"
+                    )
                     break
-                profile_url = ""
         except Exception:
             continue
     if not profile_url:

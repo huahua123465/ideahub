@@ -9,6 +9,7 @@ import { HttpError, badRequest, forbidden, notFound, readJson, sendJson } from '
 
 const DEFAULT_BASE_URL = 'http://collector:5000';
 const DEFAULT_TIMEOUT_MS = 12_000;
+const CREATE_TASK_TIMEOUT_MS = 25_000;
 const RESULT_TIMEOUT_MS = 30_000;
 const MEDIA_TIMEOUT_MS = 20_000;
 const MAX_JSON_RESPONSE = 12 * 1024 * 1024;
@@ -302,7 +303,9 @@ export function createCollectorHandlers({
 
     createTask: json(async (req, _params, _url, ctx) =>
       jsonCall('/api/convert', {
-        ...ctx, method: 'POST', body: await readJson(req, 8 * 1024), timeoutMs: timeouts.createTask || 15_000,
+        ...ctx, method: 'POST', body: await readJson(req, 8 * 1024),
+        // 短链安全展开本身最多需要 15 秒，代理必须留出排队和响应序列化余量。
+        timeoutMs: timeouts.createTask || CREATE_TASK_TIMEOUT_MS,
       })),
     listTasks: json(async (_req, _params, _url, ctx) => {
       const payload = await jsonCall('/api/history', ctx);

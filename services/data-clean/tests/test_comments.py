@@ -21,6 +21,7 @@ from media.comment_extractor import (
 from media.platform_login import (
     _extract_xhs_public_profile,
     _is_xhs_authenticated,
+    _profile_from_page,
     _save_netscape_cookies,
     friendly_xhs_login_error,
 )
@@ -289,18 +290,43 @@ class LoginCookieTests(unittest.TestCase):
         clear.assert_called_once_with(clear_label=True)
         self.assertFalse(response.get_json()["saved"])
 
-    def test_account_sync_endpoint_returns_current_public_account(self):
-        account = {"nickname": "当前账号", "red_id": "red-2026"}
+    def test_account_sync_endpoint_starts_background_refresh(self):
         with (
             patch.object(app_module, "_login_state", {"status": "saved", "message": ""}),
             patch.object(app_module, "has_saved_xhs_login", return_value=True),
-            patch.object(app_module, "sync_saved_xhs_account", return_value=account),
-            patch.object(app_module, "read_xhs_login_profile", return_value=account),
+            patch.object(app_module, "read_xhs_login_profile", return_value={}),
+            patch.object(app_module.threading, "Thread") as thread,
         ):
             response = app_module.app.test_client().post("/api/login/xiaohongshu/account")
 
         self.assertEqual(200, response.status_code)
-        self.assertEqual(account, response.get_json()["account"])
+        self.assertEqual("syncing", response.get_json()["status"])
+        self.assertIs(app_module._run_xhs_account_sync, thread.call_args.kwargs["target"])
+        thread.return_value.start.assert_called_once_with()
+
+    def test_account_sync_worker_publishes_completion(self):
+        state = {"status": "syncing", "message": "正在读取当前登录账号…"}
+        account = {"nickname": "当前账号", "red_id": "red-2026"}
+        with (
+            patch.object(app_module, "_login_state", state),
+            patch.object(app_module, "sync_saved_xhs_account", return_value=account),
+        ):
+            app_module._run_xhs_account_sync()
+
+        self.assertEqual("saved", state["status"])
+        self.assertEqual("当前登录账号已同步", state["message"])
+
+    def test_logout_waits_for_account_sync_to_finish(self):
+        with patch.object(
+            app_module, "_login_state",
+            {"status": "syncing", "message": "正在读取当前登录账号…"},
+        ):
+            response = app_module.app.test_client().post(
+                "/api/login/xiaohongshu/logout"
+            )
+
+        self.assertEqual(409, response.status_code)
+        self.assertIn("正在确认", response.get_json()["error"])
 
     def test_switch_account_api_starts_a_fresh_login_context(self):
         state = {"status": "saved", "message": ""}
@@ -365,6 +391,35 @@ class LoginCookieTests(unittest.TestCase):
             def get_by_text(self, _pattern): return HiddenLocator()
 
         self.assertTrue(asyncio.run(_is_xhs_authenticated(AuthenticatedPage())))
+
+    def test_current_account_profile_accepts_relative_navigation_link(self):
+        class ProfileLocator:
+            first = None
+            def __init__(self): self.first = self
+            async def count(self): return 1
+            async def get_attribute(self, _name):
+                return "/user/profile/current-user?xsec_token=private"
+
+        class ProfilePage:
+            def __init__(self):
+                self.evaluate_count = 0
+                self.visited = ""
+            async def evaluate(self, _script):
+                self.evaluate_count += 1
+                if self.evaluate_count < 3:
+                    return {}
+                return {"user": {"nickname": "当前账号", "user_id": "current-user"}}
+            def locator(self, _selector): return ProfileLocator()
+            async def goto(self, url, **_kwargs): self.visited = url
+            async def wait_for_timeout(self, _milliseconds): return None
+
+        page = ProfilePage()
+        profile = asyncio.run(_profile_from_page(page))
+
+        self.assertEqual("当前账号", profile["nickname"])
+        self.assertEqual(
+            "https://www.xiaohongshu.com/user/profile/current-user", page.visited,
+        )
 
     def test_saved_login_cookie_round_trip(self):
         with TemporaryDirectory() as temp_dir:

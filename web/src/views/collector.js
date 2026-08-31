@@ -24,6 +24,8 @@ let resultLoading = false;
 let analysisEditing = false;
 let qrDismissed = false;
 let labelEditing = false;
+let accountAutoSyncAttempted = false;
+let accountSyncRequested = false;
 
 const ACTIVE = new Set(['pending', 'running', 'downloading', 'processing']);
 const LOGIN_ACTIVE = new Set(['opening', 'waiting_scan', 'syncing']);
@@ -127,6 +129,11 @@ export async function render() {
   paintDetail();
   scheduleTaskPoll();
   scheduleLoginPoll();
+  if (isAdmin() && login?.saved && !login?.identity_verified
+      && !LOGIN_ACTIVE.has(login?.status) && !accountAutoSyncAttempted) {
+    accountAutoSyncAttempted = true;
+    syncAccount(null, true);
+  }
 }
 
 const listFrom = payload => Array.isArray(payload) ? payload : (payload?.items || []);
@@ -142,7 +149,7 @@ function paintService() {
   $('#collectorStart').disabled = !ok;
 }
 
-function accountName(account = {}) { return account.nickname || account.name || account.red_id || '小红书账号'; }
+function accountName(account = {}) { return account.nickname || account.name || account.red_id || account.user_id || '小红书账号'; }
 
 function paintAccount() {
   const el = $('#collectorAccount');
@@ -164,7 +171,7 @@ function paintAccount() {
     const label = String(login.account_label || '').trim();
     const displayName = verified ? accountName(account) : (label || '账号身份未确认');
     const accountMessage = verified
-      ? (account.red_id ? `小红书号 ${account.red_id}` : '已确认平台返回的账号资料')
+      ? (account.red_id ? `小红书号 ${account.red_id}` : (account.user_id ? `账号 ID ${account.user_id}` : '已确认平台返回的账号资料'))
       : (label ? `内部备注：${label} · 未经平台验证` : '登录有效，但平台未返回昵称或小红书号');
     el.innerHTML = `<div class="collector-account-avatar ${verified ? '' : 'unverified'}">${esc([...displayName][0] || '小')}</div>
       <div class="collector-account-copy"><small>${syncing ? '正在同步账号' : (verified ? '小红书已登录' : '登录有效 · 身份未确认')}</small><b>${esc(displayName)}</b><span>${esc(syncing ? '正在读取当前账号资料…' : accountMessage)}</span>
@@ -500,16 +507,20 @@ async function saveAnalysis(button) {
 
 async function startLogin(switchAccount, button) {
   if (!isAdmin()) return;
-  qrDismissed = false; busy(button, true, '正在打开…');
+  qrDismissed = false; accountAutoSyncAttempted = false; busy(button, true, '正在打开…');
   try { login = await api.collectorLoginStart(switchAccount); paintAccount(); openQr(); scheduleLoginPoll(true); }
   catch (error) { toast('info', error.message || '无法发起登录'); }
   finally { busy(button, false); }
 }
 
-async function syncAccount(button) {
+async function syncAccount(button, automatic = false) {
   if (!isAdmin()) return;
   busy(button, true, '同步中…');
-  try { login = { ...login, status:'syncing', message:'正在读取当前账号…' }; paintAccount(); login = await api.collectorAccountSync(); paintAccount(); toast('ok', '小红书账号信息已同步'); }
+  try {
+    login = { ...login, status:'syncing', message:'正在读取当前账号…' }; paintAccount();
+    login = await api.collectorAccountSync(); accountSyncRequested = true; paintAccount(); paintQr(); scheduleLoginPoll(true);
+    if (!automatic) toast('info', '正在确认当前登录的小红书账号');
+  }
   catch (error) { toast('info', error.message || '账号同步失败'); try { login = await api.collectorLoginStatus(); paintAccount(); } catch { /* 保留原状态 */ } }
   finally { busy(button, false); }
 }
@@ -537,7 +548,7 @@ async function logoutAccount(button) {
   busy(button, true, '退出中…');
   try {
     login = await api.collectorAccountLogout();
-    labelEditing = false; qrDismissed = true; closeQr(); paintAccount();
+    labelEditing = false; accountAutoSyncAttempted = false; accountSyncRequested = false; qrDismissed = true; closeQr(); paintAccount();
     toast('ok', '采集账号已退出；公开无登录模式仍可继续使用');
   } catch (error) { toast('info', error.message || '退出采集账号失败'); }
   finally { busy(button, false); }
@@ -551,8 +562,21 @@ function scheduleLoginPoll(immediate = false) {
 
 async function pollLogin() {
   if (!active || !isAdmin()) return;
-  try { login = await api.collectorLoginStatus(); paintAccount(); paintQr(); }
-  catch (error) { login = { ...login, status:'failed', message:error.message || '登录状态读取失败' }; paintAccount(); paintQr(); }
+  try {
+    const previousStatus = login?.status;
+    login = await api.collectorLoginStatus(); paintAccount(); paintQr();
+    if (accountSyncRequested && previousStatus === 'syncing' && login?.status !== 'syncing') {
+      accountSyncRequested = false;
+      if (login?.identity_verified) toast('ok', `当前登录账号：${accountName(login.account)}`);
+      else toast('info', login?.message || '登录有效，但平台暂未返回账号资料');
+    }
+    if (login?.saved && !login?.identity_verified
+        && !LOGIN_ACTIVE.has(login?.status) && !accountAutoSyncAttempted) {
+      accountAutoSyncAttempted = true;
+      syncAccount(null, true);
+    }
+  }
+  catch (error) { accountSyncRequested = false; login = { ...login, status:'failed', message:error.message || '登录状态读取失败' }; paintAccount(); paintQr(); }
   scheduleLoginPoll();
 }
 
@@ -575,8 +599,10 @@ function paintQr() {
     body.innerHTML = `<div class="collector-qr-image"><img src="${collectorQrUrl()}" alt="小红书登录二维码"></div><b>使用小红书扫码</b><p>${esc(login.message || '扫码后请在手机上确认登录')}</p><span>二维码约 ${Math.ceil(expires / 60)} 分钟内有效</span>`;
   } else if (status === 'opening' || status === 'syncing') {
     body.innerHTML = `<div class="collector-qr-loading"><i></i></div><b>${status === 'syncing' ? '正在保存登录账号' : '正在生成二维码'}</b><p>${esc(login?.message || '服务器正在打开安全登录页面…')}</p>`;
-  } else if ((login?.saved || status === 'saved' || status === 'done') && login?.account) {
+  } else if ((login?.saved || status === 'saved' || status === 'done') && login?.identity_verified) {
     body.innerHTML = `<div class="collector-qr-success">${ICON.check}</div><b>登录成功</b><p>${esc(accountName(login.account))}</p><button class="btn btn-primary" type="button" data-qr-close>完成</button>`;
+  } else if (login?.saved || status === 'saved' || status === 'done') {
+    body.innerHTML = `<div class="collector-qr-success">${ICON.check}</div><b>登录已保存</b><p>${esc(login?.message || '正在确认当前登录账号资料…')}</p><button class="btn btn-primary" type="button" data-qr-close>完成</button>`;
   } else {
     body.innerHTML = `<div class="collector-qr-error">${ICON.warn}</div><b>${status === 'expired' ? '二维码已过期' : '登录没有完成'}</b><p>${esc(login?.message || '请重新发起扫码登录')}</p><button class="btn btn-primary" type="button" data-login-start>重新登录</button>`;
   }

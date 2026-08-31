@@ -1205,6 +1205,26 @@ def _run_xhs_login(generation: int, force_fresh=False):
         update("saved" if saved else "failed", friendly_xhs_login_error(exc, saved=saved))
 
 
+def _run_xhs_account_sync():
+    """Refresh the public identity without occupying the only HTTP worker."""
+    try:
+        with _pipeline_slots:
+            asyncio.run(sync_saved_xhs_account())
+    except Exception as exc:
+        saved = has_saved_xhs_login()
+        with _login_state_lock:
+            if _login_state.get("status") != "syncing":
+                return
+            _login_state.update(
+                status="saved" if saved else "failed",
+                message=friendly_xhs_login_error(exc, saved=saved),
+            )
+        return
+    with _login_state_lock:
+        if _login_state.get("status") == "syncing":
+            _login_state.update(status="saved", message="当前登录账号已同步")
+
+
 def _xhs_login_payload():
     with _login_state_lock:
         state = {
@@ -1290,20 +1310,8 @@ def api_login_xiaohongshu_account():
             _login_state.update(status="idle", message="请先登录小红书账号")
             return jsonify(_xhs_login_payload()), 409
         _login_state.update(status="syncing", message="正在读取当前登录账号…")
-    try:
-        account = asyncio.run(sync_saved_xhs_account())
-    except Exception as exc:
-        saved = has_saved_xhs_login()
-        with _login_state_lock:
-            _login_state.update(
-                status="saved" if saved else "failed",
-                message=friendly_xhs_login_error(exc, saved=saved),
-            )
-        return jsonify(_xhs_login_payload()), 422
-    with _login_state_lock:
-        _login_state.update(status="saved", message="当前登录账号已同步")
     payload = _xhs_login_payload()
-    payload["account"] = account
+    threading.Thread(target=_run_xhs_account_sync, daemon=True).start()
     return jsonify(payload)
 
 
@@ -1327,6 +1335,8 @@ def api_login_xiaohongshu_label():
 @app.route("/api/login/xiaohongshu/logout", methods=["POST"])
 def api_logout_xiaohongshu():
     with _login_state_lock:
+        if _login_state.get("status") == "syncing":
+            return jsonify({"error": "正在确认当前登录账号，请稍后再退出"}), 409
         if any(
             state.get("status") in {"pending", "running"}
             for state in _running.values()
