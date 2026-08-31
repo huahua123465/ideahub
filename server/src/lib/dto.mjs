@@ -18,6 +18,7 @@ export function ideaRow(r) {
     voteCount: Number(r.vote_count) || 0,
     commentCount: Number(r.comment_count) || 0,
     viewCount: Number(r.view_count) || 0,
+    fileCount:Number(r.file_count)||0,
     // 卡片上的热度条要用。列是 schema.sql 里就有的，触发器自动维护，这里只是没往外吐过
     hotScore: Number(r.hot_score) || 0,
     voted: !!r.voted,
@@ -114,6 +115,7 @@ export const ideaSelect = (userParam = 1) => `
   SELECT i.*,
          au.name AS author_name,
          ow.name AS owner_name,
+         (SELECT count(*) FROM attachments f WHERE f.scope='idea' AND f.ref_id=i.id)::int AS file_count,
          EXISTS(SELECT 1 FROM idea_votes v WHERE v.idea_id = i.id AND v.user_id = $${userParam}) AS voted
   FROM ideas i
   JOIN users au ON au.id = i.author_id

@@ -23,7 +23,7 @@ import { randomBytes } from 'node:crypto';
 import { join, extname, basename } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import { query } from '../db/index.mjs';
+import { query,tx } from '../db/index.mjs';
 import { sendJson, q, badRequest, notFound, forbidden } from '../lib/http.mjs';
 import { currentUser } from '../lib/auth.mjs';
 import { requireKey } from '../lib/apikey.mjs';
@@ -31,6 +31,8 @@ import { publish } from '../lib/bus.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/data/uploads';
 const MAX_SIZE = 20 * 1024 * 1024;   // 20MB
+const MAX_IDEA_FILES = 8;
+const IDEA_FILE_EXT = new Set(['.pdf','.doc','.docx','.xls','.xlsx']);
 
 /** 允许的类型。键是扩展名，值是回给浏览器的 Content-Type 和打开方式 */
 const KINDS = {
@@ -119,7 +121,8 @@ async function saveBody(req, dest) {
 
 /** 上传/下载/删除这三件事，客户档案和工作提交是一模一样的，
     所以把它们导出去给 routes/work.mjs 复用，而不是复制一份。 */
-export { kindOf, saveBody, fileRow, UPLOAD_DIR, MAX_SIZE, KINDS };
+export { kindOf, ideaUploadParams, saveBody, fileRow, UPLOAD_DIR, MAX_SIZE, MAX_IDEA_FILES,
+  IDEA_FILE_EXT, KINDS };
 
 function uploadParams(url) {
   const origName = String(q(url, 'name', '') || '').trim();
@@ -143,27 +146,78 @@ function uploadParams(url) {
   return { origName, note: note || null, sourceUrl: sourceUrl || null, kind: kindOf(origName) };
 }
 
-async function storeClientFile(req, clientId, params, uploadedBy = null) {
-  const storedName = randomBytes(16).toString('hex') + params.kind.ext;
-  const diskPath = join(UPLOAD_DIR, storedName);
-  const size = await saveBody(req, diskPath);
-
-  try {
-    const { rows } = await query(
-      `INSERT INTO attachments(scope, ref_id, side, orig_name, stored_name, mime, size,
-                               note, source_url, uploaded_by)
-       VALUES('client',$1,'submit',$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [clientId, basename(params.origName), storedName, params.kind.mime, size,
-       params.note, params.sourceUrl, uploadedBy]);
-    return rows[0];
-  } catch (e) {
-    // 数据库写入失败时同步清理文件，避免磁盘留下永远查不到的孤儿附件。
-    await unlink(diskPath).catch(() => {});
-    throw e;
+function ideaUploadParams(url) {
+  const params=uploadParams(url);
+  if(!IDEA_FILE_EXT.has(params.kind.ext)){
+    throw badRequest('灵感附件只支持 PDF、Word（DOC/DOCX）和 Excel（XLS/XLSX）');
   }
+  return params;
+}
+
+async function ensureIdeaAccess(ideaId,me,{write=false}={}){
+  const {rows}=await query(`SELECT id,author_id,is_anonymous,status FROM ideas
+    WHERE id=$1 AND deleted_at IS NULL`,[ideaId]);
+  const idea=rows[0];
+  if(!idea)throw notFound('这条灵感不存在或已被删除');
+  if(idea.status==='draft'&&Number(idea.author_id)!==me.id&&me.role!=='admin'){
+    throw forbidden('草稿只有作者本人能看');
+  }
+  if(write&&Number(idea.author_id)!==me.id&&me.role!=='admin'){
+    throw forbidden('只有灵感作者本人和管理员能上传附件');
+  }
+  return idea;
+}
+
+async function storeScopedFile(req,scope,refId,params,uploadedBy=null,{maxFiles=null}={}){
+  const storedName=randomBytes(16).toString('hex')+params.kind.ext;
+  const diskPath=join(UPLOAD_DIR,storedName);
+  const size=await saveBody(req,diskPath);
+  try{
+    const persist=async db=>{
+      if(maxFiles!=null){
+        await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`attachments:${scope}:${refId}`]);
+        const {rows:counts}=await db.query(`SELECT count(*)::int n FROM attachments
+          WHERE scope=$1 AND ref_id=$2`,[scope,refId]);
+        if(Number(counts[0]?.n||0)>=maxFiles)throw badRequest(`每条灵感最多上传 ${maxFiles} 个附件`);
+      }
+      const {rows}=await db.query(`INSERT INTO attachments(
+        scope,ref_id,side,orig_name,stored_name,mime,size,note,source_url,uploaded_by
+      )VALUES($1,$2,'submit',$3,$4,$5,$6,$7,$8,$9)RETURNING *`,[
+        scope,refId,basename(params.origName),storedName,params.kind.mime,size,
+        params.note,params.sourceUrl,uploadedBy]);
+      return rows[0];
+    };
+    return maxFiles==null?persist({query}):tx(persist);
+  }catch(error){await unlink(diskPath).catch(()=>{});throw error;}
+}
+
+async function storeClientFile(req, clientId, params, uploadedBy = null) {
+  return storeScopedFile(req,'client',clientId,params,uploadedBy);
 }
 
 export function mount(router) {
+
+  router.get('/api/ideas/:id/files',async(req,res,params)=>{
+    const me=await currentUser(req),ideaId=Number(params.id);
+    const idea=await ensureIdeaAccess(ideaId,me);
+    const {rows}=await query(`SELECT f.*,u.name uploader_name FROM attachments f
+      LEFT JOIN users u ON u.id=f.uploaded_by
+      WHERE f.scope='idea'AND f.ref_id=$1 ORDER BY f.created_at DESC,f.id DESC`,[ideaId]);
+    sendJson(res,200,{items:rows.map(row=>fileRow({
+      ...row,uploader_name:idea.is_anonymous?null:row.uploader_name,
+    })),canManage:me.role==='admin'||Number(idea.author_id)===me.id,maxFiles:MAX_IDEA_FILES});
+  });
+
+  router.post('/api/ideas/:id/files',async(req,res,params,url)=>{
+    const me=await currentUser(req),ideaId=Number(params.id);
+    const idea=await ensureIdeaAccess(ideaId,me,{write:true});
+    const {rows:counts}=await query(`SELECT count(*)::int n FROM attachments
+      WHERE scope='idea'AND ref_id=$1`,[ideaId]);
+    if(Number(counts[0]?.n||0)>=MAX_IDEA_FILES)throw badRequest(`每条灵感最多上传 ${MAX_IDEA_FILES} 个附件`);
+    const row=await storeScopedFile(req,'idea',ideaId,ideaUploadParams(url),me.id,{maxFiles:MAX_IDEA_FILES});
+    sendJson(res,201,fileRow({...row,uploader_name:idea.is_anonymous?null:me.name}));
+    publish('idea:updated',{id:ideaId,files:true});
+  });
 
   /* ---------- 列出某个客户的附件 ---------- */
   router.get('/api/clients/:id/files', async (req, res, params) => {
@@ -240,6 +294,7 @@ export function mount(router) {
       const ok = r[0] && (Number(r[0].author_id) === me.id || Number(r[0].reviewer_id) === me.id);
       if (!ok) throw forbidden('这是别人的工作提交，你看不到');
     }
+    if(f.scope==='idea')await ensureIdeaAccess(Number(f.ref_id),me);
 
     const path = join(UPLOAD_DIR, basename(f.stored_name));
     let st;
@@ -282,6 +337,7 @@ export function mount(router) {
     await query('DELETE FROM attachments WHERE id = $1', [f.id]);
     await unlink(join(UPLOAD_DIR, basename(f.stored_name))).catch(() => {});
     sendJson(res, 200, { ok: true });
-    publish('board:updated', { board: 'clients' });
+    if(f.scope==='idea')publish('idea:updated',{id:Number(f.ref_id),files:true});
+    else publish('board:updated', { board:f.scope==='report'?'reports':'clients' });
   });
 }

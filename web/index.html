@@ -366,7 +366,7 @@
   </footer>
 </div>
 
-<div class="modal" id="modal">
+<div class="modal idea-submit-modal" id="modal">
   <header>
     <h2>提交一个灵感</h2>
     <div class="hint">不用打磨得多完整 —— 一句话的想法也值得被记下来。</div>
@@ -410,6 +410,15 @@
     <div class="field">
       <label>详细说明 <span>*</span></label>
       <textarea class="inp" id="fBody" placeholder="想解决什么问题？大概怎么做？"></textarea>
+    </div>
+    <div class="field idea-submit-files">
+      <label>附件 <span class="opt">（可选，最多 8 个）</span></label>
+      <label class="idea-file-picker" for="fFiles">
+        <input id="fFiles" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx">
+        <b>＋ 选择文件</b><span>PDF、Word、Excel · 单个最大 20MB</span>
+      </label>
+      <div class="idea-pending-files" id="fFileList"></div>
+      <p class="idea-file-privacy">匿名提交时，请同时检查文件名和文档作者信息，避免暴露身份。</p>
     </div>
   </div>
   <footer>
@@ -589,6 +598,7 @@
     <div class="content" id="dContent"></div>
     <!-- 来源（任务 4）：一条正式内容要能追回原视频 / 评论 / 客户资料 -->
     <div class="dsource" id="dSource" hidden></div>
+    <section class="idea-drawer-files" id="dFiles" hidden></section>
     <!-- 关联资料（任务 8） -->
     <div class="bdlinks" id="dLinks" hidden></div>
 

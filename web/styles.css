@@ -452,6 +452,7 @@ tr:hover .bd-del{color:var(--crit)}
   font-size:12.5px;color:var(--ink2);background:var(--surface-2)}
 .fileup:hover{border-color:var(--blue-200);color:var(--blue-dk);background:var(--blue-100)}
 .fileup input{display:none}
+.idea-drawer-files{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft)}.idea-drawer-file-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}.idea-drawer-file{display:grid;grid-template-columns:42px minmax(0,1fr) auto auto 30px;align-items:center;gap:7px;min-height:46px;padding:6px;border:1px solid var(--line-soft);border-radius:10px;background:var(--surface-2)}.idea-drawer-file>a:not(.idea-file-download){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2);font-size:12.5px;font-weight:600}.idea-drawer-file>small{color:var(--muted);font-size:10.5px}.idea-file-download{color:var(--blue-dk);font-size:11px}.idea-drawer-upload{display:flex;min-height:44px;align-items:center;justify-content:center;margin-top:8px;border:1.5px dashed var(--line);border-radius:10px;color:var(--blue-dk);font-size:12px;cursor:pointer}.idea-drawer-upload input{display:none}
 
 /* ---------- 顶栏的消息铃铛 ---------- */
 .notif{position:relative;flex:none}
@@ -776,6 +777,8 @@ textarea.inp{resize:none;height:96px;line-height:1.65}
 .dupe a{color:#7a5600;text-decoration:underline;display:block;margin-top:3px}
 .modal footer{padding:14px 22px;border-top:1px solid var(--line-soft);display:flex;
   align-items:center;gap:10px;background:var(--surface-2);margin-top:14px}
+.idea-submit-modal .form{max-height:calc(100dvh - 190px);overflow-y:auto;overscroll-behavior:contain}
+.idea-file-picker{display:flex;min-height:54px;align-items:center;justify-content:center;flex-direction:column;gap:3px;padding:9px 12px;border:1.5px dashed var(--line);border-radius:11px;background:var(--surface-2);color:var(--ink2);cursor:pointer;transition:border-color .15s,background .15s,color .15s}.idea-file-picker:hover{border-color:var(--blue-200);background:var(--blue-100);color:var(--blue-dk)}.idea-file-picker input{display:none}.idea-file-picker b{font-size:12.5px}.idea-file-picker span{color:var(--muted);font-size:11px;font-weight:400}.idea-pending-files{display:flex;flex-direction:column;gap:5px;margin-top:7px}.idea-pending-file{display:grid;grid-template-columns:42px minmax(0,1fr) auto 30px;align-items:center;gap:7px;min-height:42px;padding:5px 6px;border:1px solid var(--line-soft);border-radius:9px;background:#fff}.idea-pending-file>i,.idea-drawer-file>i{display:grid;min-width:38px;height:26px;place-items:center;border-radius:7px;background:var(--blue-100);color:var(--blue-dk);font-size:9px;font-style:normal;font-weight:750}.idea-pending-file>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.idea-pending-file>small{color:var(--muted);font-size:10.5px}.idea-pending-file>button,.idea-drawer-file>button{display:grid;width:28px;height:28px;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:18px}.idea-pending-file>button:hover,.idea-drawer-file>button:hover{background:var(--crit-bg);color:var(--crit)}.idea-file-privacy{margin-top:7px;color:var(--muted);font-size:10.5px;line-height:1.5}
 
 /* ---------- 居中确认弹窗 ---------- */
 .confirm-layer{position:fixed;inset:0;z-index:160;display:grid;place-items:center;padding:20px;
@@ -1955,6 +1958,7 @@ th{height:46px;font-size:12.5px;color:#858d9b;background:#f8f9fb}td{padding-top:
 .idea-engagement{gap:9px}.idea-engagement .heat{gap:5px;padding-right:2px}.idea-engagement .heat-label{font-size:10.5px;color:#9aa1ad}
 .idea-engagement .heat .track{width:48px;height:4px;background:#e9ebef}.idea-engagement .heat i{background:linear-gradient(90deg,#e4a155,#d37554)}
 .idea-engagement .cmt{gap:4px;color:#8b93a1;font-variant-numeric:tabular-nums}.idea-engagement .cmt .ic{width:15px;height:15px}
+.idea-file-count{display:inline-flex;min-height:32px;align-items:center;gap:4px;color:#8b93a1;font-size:11.5px;font-variant-numeric:tabular-nums}.idea-file-count .ic{width:14px;height:14px}
 .idea-engagement .vote{min-height:32px;padding:5px 10px;border-color:#e0e3ea;border-radius:10px;background:#fff;
   color:#626b79;gap:4px;font-size:11.5px;box-shadow:0 1px 2px rgba(30,36,50,.025)}
 .idea-engagement .vote:hover{border-color:#cbd0fb;background:#f1f2ff;color:#4d58c5;transform:translateY(-1px)}

@@ -102,6 +102,17 @@ export const api = {
   comments:  (id)          => call('GET',   `/api/ideas/${id}/comments`),
   setStatus: (id, status, extra = {}) => call('PATCH', `/api/ideas/${id}/status`, { status, ...extra }),
   similar:   (q)           => call('GET',   '/api/ideas/similar' + qs({ q })),
+  ideaFiles: (id)          => call('GET',   `/api/ideas/${id}/files`),
+  ideaFileUpload:async(id,file)=>{
+    const path=`/api/ideas/${id}/files?name=${encodeURIComponent(file.name)}`;
+    if(state.mode==='mock')return mock.handle('POST',path,file);
+    const r=await fetch(`${BASE}${path}`,{method:'POST',body:file,credentials:'include'});
+    logApi('POST',`/api/ideas/${id}/files`,r.status);
+    let data=null;try{data=await r.json();}catch{/* 空响应体 */}
+    if(r.status===401){location.replace('/login.html?next='+encodeURIComponent(location.pathname+location.search));throw new Error('请先登录');}
+    if(!r.ok)throw new Error(data?.error||`上传失败（${r.status}）`);
+    return data;
+  },
   stats:     ()            => call('GET',   '/api/stats/overview'),
   ideaDelete:(id, purge)   => call('DELETE', `/api/ideas/${id}${purge ? '?purge=1' : ''}`),
 

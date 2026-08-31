@@ -16,6 +16,7 @@ const ME = { id: 1, name: '陈屿', dept: '产品部', role: ['member','reviewer
 
 let seq = 100;
 let codeSeq = 38;
+const IDEA_FILES=new Map();
 
 /** 和 server/src/schema.sql 的 hot_of 保持一致：支持 2 分、评论 1 分、按天衰减。
     演示模式是一份独立的假后端，热度条要能动起来就得在这儿也算一遍。 */
@@ -31,6 +32,7 @@ const mk = (o) => ({
   voteCount: o.votes || 0, commentCount: (COMMENTS[o.id] || []).length,
   hotScore: hotOf(o.votes || 0, (COMMENTS[o.id] || []).length, o.createdAt),
   viewCount: o.views || 40 + (o.votes || 0) * 3, voted: false,
+  fileCount:(IDEA_FILES.get(o.id)||[]).length,
   owner: o.owner ? { id: 2, name: o.owner } : null,
   adoptedAt: o.adoptedAt || null, progress: o.progress || 0,
   docUrl: o.code ? `https://docs.internal/${o.code.toLowerCase()}` : null,
@@ -1034,11 +1036,27 @@ export async function handle(method, path, body) {
     };
   }
 
+  const ideaFiles=p.match(/^\/api\/ideas\/(\d+)\/files$/);
+  if(ideaFiles&&method==='GET'){
+    const idea=IDEAS.find(item=>item.id===Number(ideaFiles[1]));if(!idea)throw Object.assign(new Error('找不到这条灵感'),{status:404});
+    return{items:[...(IDEA_FILES.get(idea.id)||[])],canManage:true,maxFiles:8};
+  }
+  if(ideaFiles&&method==='POST'){
+    const idea=IDEAS.find(item=>item.id===Number(ideaFiles[1]));if(!idea)throw Object.assign(new Error('找不到这条灵感'),{status:404});
+    const list=IDEA_FILES.get(idea.id)||[];if(list.length>=8)throw Object.assign(new Error('每条灵感最多上传 8 个附件'),{status:400});
+    const name=q.get('name')||body?.name||'附件.pdf',file={id:++seq,name,mime:body?.type||'application/octet-stream',size:Number(body?.size||1024),createdAt:new Date().toISOString(),url:'#'};list.unshift(file);IDEA_FILES.set(idea.id,list);idea.fileCount=list.length;return file;
+  }
+  const mockFileDelete=p.match(/^\/api\/files\/(\d+)$/);
+  if(mockFileDelete&&method==='DELETE'){
+    const id=Number(mockFileDelete[1]);for(const [ideaId,list]of IDEA_FILES){const next=list.filter(file=>file.id!==id);if(next.length!==list.length){IDEA_FILES.set(ideaId,next);const idea=IDEAS.find(item=>item.id===ideaId);if(idea)idea.fileCount=next.length;break;}}return{ok:true};
+  }
+
   const detail = p.match(/^\/api\/ideas\/(\d+)$/);
   if (detail && method === 'GET') {
     const i = IDEAS.find(x => x.id === +detail[1]);
     if (!i) throw Object.assign(new Error('找不到这条灵感'), { status: 404 });
-    return { ...i, comments: COMMENTS[i.id] || [], activities: i.activities || [] };
+    return { ...i, comments: COMMENTS[i.id] || [], activities: i.activities || [],
+      files:[...(IDEA_FILES.get(i.id)||[])],canManageFiles:true };
   }
 
   if (p === '/api/ideas' && method === 'POST') {

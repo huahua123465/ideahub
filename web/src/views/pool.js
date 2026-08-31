@@ -97,6 +97,7 @@ export function cardHTML(x, index = 0) {
         <em><span class="signal-comments">${x.commentCount}</span> 条讨论</em>
       </span>
       <span class="acts idea-engagement">
+        ${x.fileCount?`<span class="idea-file-count" title="${x.fileCount} 个附件">${ICON.clip}<span>${x.fileCount}</span></span>`:''}
         <span class="cmt" title="${x.commentCount} 条讨论">${ICON.comment}<span class="cn">${x.commentCount}</span></span>
         <button class="vote${x.voted ? ' voted' : ''}" data-vote="${x.id}"
           aria-label="支持这条灵感" aria-pressed="${x.voted ? 'true' : 'false'}">

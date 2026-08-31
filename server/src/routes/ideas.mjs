@@ -126,6 +126,8 @@ export function mount(router) {
       SELECT a.*, coalesce(u.name,'系统') AS actor_name FROM idea_activities a
       LEFT JOIN users u ON u.id = a.actor_id
       WHERE a.idea_id = $1 ORDER BY a.created_at`, [id]);
+    const {rows:files}=await query(`SELECT id,orig_name,mime,size,created_at FROM attachments
+      WHERE scope='idea'AND ref_id=$1 ORDER BY created_at DESC,id DESC`,[id]);
 
     // 匿名灵感：作者本人在流转记录里的所有动作都要遮成「匿名」
     const anonymousActorId = rows[0].is_anonymous ? rows[0].author_id : null;
@@ -135,6 +137,9 @@ export function mount(router) {
       tagList: (await loadTags('idea', [id])).get(id) || [],
       comments: cs.map(commentRow),
       activities: as.map(a => activityRow(a, { anonymousActorId })),
+      files:files.map(file=>({id:Number(file.id),name:file.orig_name,mime:file.mime,size:Number(file.size),
+        createdAt:file.created_at,url:`/api/files/${file.id}`})),
+      canManageFiles:me.role==='admin'||Number(rows[0].author_id)===me.id,
     });
   });
 
@@ -295,7 +300,7 @@ export function mount(router) {
     // ?purge=1 —— 管理员永久删除。软删捞得回来，这个捞不回来，所以只开给管理员。
     if (q(url, 'purge')) {
       assertAdmin(me);
-      const stat = await purgeRecord({ entity: 'idea', table: 'ideas', id: id, scope: null });
+      const stat = await purgeRecord({ entity: 'idea', table: 'ideas', id: id, scope:'idea' });
       if (!stat.ok) throw notFound('这条灵感不存在');
       sendJson(res, 200, { ok: true, purged: true, ...stat });
       publish('idea:bulk', {});

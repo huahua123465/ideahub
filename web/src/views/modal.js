@@ -7,6 +7,38 @@ import { tagDict, KIND_ORDER, KIND_LABEL, SOURCE_OPTIONS } from '../tagstore.js'
 export const events = new EventTarget();
 let dupeTimer = null;
 let picksReady = false;
+let filesBound=false;
+let pendingFiles=[];
+const IDEA_FILE_RE=/\.(pdf|doc|docx|xls|xlsx)$/i;
+const MAX_FILE_SIZE=20*1024*1024;
+const MAX_FILES=8;
+const formatSize=value=>value>=1024*1024?`${(value/1024/1024).toFixed(1)} MB`:`${Math.ceil(value/1024)} KB`;
+
+function paintFiles(){
+  const list=$('#fFileList');if(!list)return;
+  list.innerHTML=pendingFiles.map((file,index)=>`<div class="idea-pending-file"><i>${esc(file.name.split('.').pop()?.toUpperCase()||'FILE')}</i><span title="${esc(file.name)}">${esc(file.name)}</span><small>${formatSize(file.size)}</small><button type="button" data-file-remove="${index}" aria-label="移除 ${esc(file.name)}">×</button></div>`).join('');
+}
+
+function bindFiles(){
+  if(filesBound)return;filesBound=true;
+  $('#fFiles').addEventListener('change',event=>{
+    const rejected=[];
+    for(const file of event.target.files||[]){
+      if(!IDEA_FILE_RE.test(file.name)){rejected.push(`${file.name}：格式不支持`);continue;}
+      if(file.size<=0){rejected.push(`${file.name}：文件为空`);continue;}
+      if(file.size>MAX_FILE_SIZE){rejected.push(`${file.name}：超过 20MB`);continue;}
+      if(pendingFiles.length>=MAX_FILES){rejected.push(`最多选择 ${MAX_FILES} 个附件`);break;}
+      if(pendingFiles.some(item=>item.name===file.name&&item.size===file.size)){continue;}
+      pendingFiles.push(file);
+    }
+    event.target.value='';paintFiles();
+    if(rejected.length)toast('info',rejected[0]);
+  });
+  $('#fFileList').addEventListener('click',event=>{
+    const button=event.target.closest('[data-file-remove]');if(!button)return;
+    pendingFiles.splice(Number(button.dataset.fileRemove),1);paintFiles();
+  });
+}
 
 /**
  * 把统一标签和来源两个选择器画出来。
@@ -36,6 +68,7 @@ async function buildPickers() {
 
 export function open() {
   buildPickers();
+  bindFiles();paintFiles();
   $('#mask').classList.add('on');
   $('#modal').classList.add('on');
   setTimeout(() => $('#fTitle').focus(), 240);
@@ -53,6 +86,7 @@ function reset() {
   $('#fCat').selectedIndex = 0;
   $('#anon').classList.remove('on');
   $('#dupe').classList.remove('on');
+  pendingFiles=[];if($('#fFiles'))$('#fFiles').value='';paintFiles();
 }
 
 /**
@@ -90,17 +124,24 @@ export async function submit() {
   if (!content)           { toast('info', '详细说明不能为空'); $('#fBody').focus(); return; }
 
   const btn = $('#btnSubmit');
+  const originalLabel=btn.textContent;
   btn.disabled = true;
   try {
     const idea = await api.create({
       title, content, category, tags, isAnonymous, tagIds, sourceType, sourceUrl });
+    const failed=[];
+    for(const [index,file]of pendingFiles.entries()){
+      btn.textContent=`上传附件 ${index+1}/${pendingFiles.length}`;
+      try{await api.ideaFileUpload(idea.id,file);}catch(error){failed.push(`${file.name}：${error.message}`);}
+    }
     close();
     reset();
-    toast('ok', '灵感已提交');
+    toast(failed.length?'info':'ok',failed.length?`灵感已提交，但有 ${failed.length} 个附件上传失败：${failed[0]}`:'灵感和附件已提交');
     events.dispatchEvent(new CustomEvent('created', { detail: idea }));
   } catch (e) {
     toast('info', e.message);
   } finally {
     btn.disabled = false;
+    btn.textContent=originalLabel;
   }
 }

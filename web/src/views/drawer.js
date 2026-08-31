@@ -114,11 +114,13 @@ function paint(d, { partial }) {
   $('#dVote').classList.toggle('voted', d.voted);
 
   if (partial) {
+    $('#dFiles').hidden=true;
     $('#dProject').hidden = true;
     $('#dCmtN').textContent = '';
     $('#dCmts').innerHTML = '<div class="dim" style="padding:12px 0">载入中…</div>';
     $('#dTl').innerHTML = '';
   } else {
+    renderIdeaFiles(d);
     renderProject(d);
     renderComments(d.comments || []);
     renderTimeline(d.activities || []);
@@ -148,6 +150,30 @@ function paint(d, { partial }) {
     $('#cmtAnon').classList.remove('on');
     $('#dBody').scrollTop = 0;
   }
+}
+
+function fileSize(value){const n=Number(value||0);return n>=1024*1024?`${(n/1024/1024).toFixed(1)} MB`:`${Math.max(1,Math.round(n/1024))} KB`;}
+function renderIdeaFiles(d){
+  const box=$('#dFiles'),files=d.files||[];box.hidden=!files.length&&!d.canManageFiles;
+  if(box.hidden)return;
+  box.innerHTML=`<div class="sec-title">附件${files.length?` · ${files.length}`:''}</div>${files.length?`<div class="idea-drawer-file-list">${files.map(file=>`<div class="idea-drawer-file"><i>${esc(file.name.split('.').pop()?.toUpperCase()||'FILE')}</i><a href="${esc(file.url)}" target="_blank" rel="noopener">${esc(file.name)}</a><small>${fileSize(file.size)}</small><a class="idea-file-download" href="${esc(file.url)}?download=1">下载</a>${d.canManageFiles?`<button type="button" data-idea-file-delete="${file.id}" aria-label="删除 ${esc(file.name)}">×</button>`:''}</div>`).join('')}</div>`:'<p class="dim">还没有附件。</p>'}${d.canManageFiles?`<label class="idea-drawer-upload"><input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx"><span>＋ 继续上传 PDF / Word / Excel</span></label><p class="dim" data-idea-file-status></p>`:''}`;
+  const input=box.querySelector('input[type="file"]');
+  input?.addEventListener('change',async event=>{
+    const selected=[...(event.target.files||[])];if(!selected.length)return;
+    const status=box.querySelector('[data-idea-file-status]');let uploaded=0,failed=0;
+    for(const [index,file]of selected.entries()){
+      status.textContent=`正在上传 ${file.name}（${index+1}/${selected.length}）`;
+      try{await api.ideaFileUpload(d.id,file);uploaded+=1;}catch(error){failed+=1;toast('info',`${file.name}：${error.message}`);}
+    }
+    const fresh=await api.idea(d.id);cur=fresh;paint(fresh,{partial:false});
+    if(uploaded)toast(failed?'info':'ok',failed?`已上传 ${uploaded} 个，${failed} 个失败`:'附件已更新');
+  });
+  box.querySelectorAll('[data-idea-file-delete]').forEach(button=>button.addEventListener('click',async()=>{
+    const file=files.find(item=>Number(item.id)===Number(button.dataset.ideaFileDelete));
+    const ok=await confirmAction({eyebrow:'不可恢复操作',title:'删除这个附件？',message:`「${file?.name||'附件'}」会从这条灵感中移除。`,note:'文件本体会一起删除。',confirmLabel:'确认删除'});
+    if(!ok)return;
+    try{await api.fileDelete(Number(button.dataset.ideaFileDelete));const fresh=await api.idea(d.id);cur=fresh;paint(fresh,{partial:false});toast('ok','附件已删除');}catch(error){toast('info',error.message||'删除失败');}
+  }));
 }
 
 /**
