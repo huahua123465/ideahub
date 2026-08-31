@@ -60,14 +60,18 @@ try{
   await page.focus('#sampleResearchTab-original');
   await page.keyboard.press('ArrowRight');
   await page.waitForFunction(()=>document.querySelector('.research-tabs [aria-selected="true"]')?.dataset.researchTab==='elements');
+  await page.waitForFunction(()=>[...document.querySelectorAll('.element-review-filters button b')].reduce((sum,node)=>sum+Number(node.textContent||0),0)===30);
   state=await page.evaluate(()=>({
     dimensions:document.querySelectorAll('.dimension-card').length,
     focused:document.activeElement?.id,
     panels:document.querySelectorAll('[role="tabpanel"]').length,
     tabs:document.querySelectorAll('.research-tabs [role="tab"]').length,
     trendTab:document.querySelector('[data-research-tab="trend"]')!==null,
+    pending:Number(document.querySelector('[data-element-status-filter="pending"] b')?.textContent),
+    confirmed:Number(document.querySelector('[data-element-status-filter="confirmed"] b')?.textContent),
   }));
-  assert.deepEqual(state,{dimensions:15,focused:'sampleResearchTab-elements',panels:1,tabs:3,trendTab:false});
+  assert.deepEqual(state,{dimensions:10,focused:'sampleResearchTab-elements',panels:1,tabs:3,trendTab:false,pending:10,confirmed:5});
+  await page.click('[data-element-status-filter="all"]');await page.waitForFunction(()=>document.querySelectorAll('.dimension-card').length===15);
   state=await page.evaluate(()=>{const visible=node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0,workspace=document.querySelector('.samples-workspace'),rail=document.querySelector('.samples-list-column'),detail=document.querySelector('.samples-detail'),card=document.querySelector('.sample-card'),sticky=document.querySelector('.research-sticky'),tags=document.querySelector('.research-tag-editor');return{overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,focusNav:visible(document.querySelector('.samples-focus-nav')),pageHead:visible(document.querySelector('.samples-page-head')),railWidth:rail.getBoundingClientRect().width,detailWidth:detail.getBoundingClientRect().width,cardHeight:card.getBoundingClientRect().height,workspaceHeight:workspace.getBoundingClientRect().height,sticky:getComputedStyle(sticky).position,groups:document.querySelectorAll('.dimension-groups>section').length,tagsOpen:tags?.open,sequence:document.querySelectorAll('.research-sequence button').length};});
   const layoutEvidence=JSON.stringify(state);assert.equal(state.overflow,0,layoutEvidence);assert.equal(state.focusNav,true,layoutEvidence);assert.equal(state.pageHead,false,layoutEvidence);assert.ok(state.detailWidth/state.railWidth>=2.4,layoutEvidence);assert.ok(state.cardHeight<=82,layoutEvidence);assert.ok(state.workspaceHeight>=760,layoutEvidence);assert.equal(state.sticky,'sticky',layoutEvidence);assert.equal(state.groups,3,layoutEvidence);assert.equal(state.tagsOpen,false,layoutEvidence);assert.equal(state.sequence,2,layoutEvidence);
   await page.click('[data-sample-nav-toggle]');await page.waitForSelector('#v-samples.samples-nav-collapsed');
@@ -84,13 +88,21 @@ try{
   assert.equal(await page.$eval('[data-research-action="start-ai"]',node=>node.disabled),true);
   await page.waitForFunction(()=>document.querySelector('.research-inline-error')?.textContent.includes('自动重连'),{timeout:5000});
   await page.waitForFunction(before=>!document.querySelector('.analysis-job')&&document.querySelectorAll('#sampleAnalysisVersion option').length===before+1,{timeout:8000},versionsBefore);
+  assert.equal(await page.$$eval('.dimension-card',nodes=>nodes.length),15);
+  await page.click('.dimension-card [data-research-action="decision-confirm"]');
+  await page.waitForFunction(()=>document.querySelectorAll('.dimension-card').length===14&&document.querySelector('.research-progress b')?.textContent==='1/15');
+  await page.waitForFunction(()=>[...document.querySelectorAll('.sample-compact-meta b')].some(node=>/^1\/15/.test(node.textContent)));
+  await page.click('[data-element-status-filter="confirmed"]');await page.waitForFunction(()=>document.querySelectorAll('.dimension-card').length===1);
+  state=await page.$eval('.dimension-card',card=>({status:card.querySelector('header i')?.textContent,button:card.querySelector('[data-research-action="decision-confirm"]')?.textContent.trim(),disabled:card.querySelector('[data-research-action="decision-confirm"]')?.disabled}));
+  assert.deepEqual(state,{status:'已确认',button:'✓ 已确认',disabled:true});
+  await page.click('[data-element-status-filter="pending"]');
 
   // Leaving and returning resumes the same research controller.
   await page.click('#tab-home');
   await page.click('#tab-samples');
   await page.waitForSelector('.research-tabs');
   await page.click('[data-research-tab="elements"]');
-  assert.equal(await page.$$eval('.dimension-card',nodes=>nodes.length),15);
+  assert.equal(await page.$$eval('.dimension-card',nodes=>nodes.length),14);
 
   // Mobile uses an exclusive detail mode and all visible research controls are touch sized.
   await page.setViewport({width:390,height:844,deviceScaleFactor:1});

@@ -29,12 +29,14 @@ const TARGET_HELP = {
 };
 const SOURCE_LABEL = {ai:'AI 拆解',manual:'人工拆解',legacy:'历史迁移'};
 const DECISION_LABEL = {confirmed:'已确认',confirm:'已确认',edited:'已修订',rejected:'已驳回',pending:'待确认'};
+const ELEMENT_FILTERS=[['all','全部'],['pending','待确认'],['confirmed','已确认'],['edited','已修订'],['rejected','已驳回']];
 const EVIDENCE_LABEL = {none:'无证据',weak:'弱',medium:'中等',strong:'强'};
 
 let host = null;
 let sample = null;
 let active = false;
 let tab = 'original';
+let elementStatusFilter='pending';
 let config = null;
 let research = null;
 let versions = [];
@@ -69,7 +71,7 @@ export async function openResearch(container, sampleDetail, options = {}) {
   const changed = Number(sample?.id) !== Number(sampleDetail?.id);
   if (changed) {
     clearTimeout(pollTimer); pollTimer=null; requestSeq+=1;versionSeq+=1;captureSeq+=1;actionSeq+=1;
-    tab='original';research=null;versions=[];selectedVersionId=null;selectedVersion=null;
+    tab='original';elementStatusFilter='pending';research=null;versions=[];selectedVersionId=null;selectedVersion=null;
     evaluations=[];job=null;pollFailures=0;busyAction='';loadError='';actionError='';failedVersionId=null;sectionErrors={};
   }
   active = true;
@@ -151,7 +153,7 @@ async function loadVersion(id, quiet = false) {
     selectedVersion = {...loaded,isCurrent:loaded.isCurrent??loaded.current??String(id)===String(research?.currentVersionId||research?.currentAnalysisVersionId)};
     const index=versions.findIndex(v=>String(v.id)===String(id));
     if(index>=0) versions[index]={...versions[index],...selectedVersion};
-    paint();
+    const focusId=host?.contains(document.activeElement)?document.activeElement.id:null;paint();if(focusId)requestAnimationFrame(()=>host?.querySelector(`#${CSS.escape(focusId)}`)?.focus());
   } catch(error){if(seq===versionSeq&&Number(sample?.id)===sampleId){failedVersionId=id;actionError=error.message||'分析版本读取失败';paint();}}
 }
 
@@ -159,6 +161,7 @@ function onClick(event) {
   const target=event.target.closest('button,[data-research-action]');
   if(!target)return;
   if(target.dataset.researchTab){ tab=target.dataset.researchTab; actionError=''; paint(); return; }
+  if(target.dataset.elementStatusFilter){elementStatusFilter=target.dataset.elementStatusFilter;paint();requestAnimationFrame(()=>host.querySelector(`[data-element-status-filter="${CSS.escape(elementStatusFilter)}"]`)?.focus());return;}
   const action=target.dataset.researchAction;
   if(action==='back'){ callbacks.onBack?.(); return; }
   if(action==='previous-sample'){callbacks.onPrevious?.();return;}
@@ -180,7 +183,7 @@ function onClick(event) {
 }
 
 function onChange(event) {
-  if(event.target.id==='sampleAnalysisVersion') loadVersion(event.target.value);
+  if(event.target.id==='sampleAnalysisVersion'){elementStatusFilter='pending';loadVersion(event.target.value);}
   if(event.target.name==='source'&&event.target.closest('#sampleEvaluationForm')){const form=event.target.closest('form'),ai=event.target.value==='ai';const fields=form.querySelector('[data-evaluation-manual-fields]');if(fields)fields.hidden=ai;const note=form.querySelector('[data-evaluation-source-note]');if(note)note.textContent=ai?'AI 将基于当前拆解版本和已核验证据生成新评价。':'人工填写会作为一个新的评价版本追加保存。';}
 }
 
@@ -210,7 +213,7 @@ function pollJob(jobId,delay=1200){
     try{
       const response=await api.sampleAnalysisJob(sampleId,jobId);if(!active||Number(sample?.id)!==sampleId)return;pollFailures=0;actionError='';job=response.job||response;paint();
       if(['queued','running'].includes(job.status))pollJob(jobId);
-      else if(['completed','done','succeeded'].includes(job.status)){toast('success','十五维拆解已生成');job=null;await loadResearch();tab='elements';paint();}
+      else if(['completed','done','succeeded'].includes(job.status)){toast('success','十五维拆解已生成');job=null;elementStatusFilter='pending';await loadResearch();tab='elements';paint();}
       else {const message=job.errorMessage||job.error_message||'AI拆解未完成，原有版本没有变化';job=null;actionError=message;paint();}
     }catch(error){if(!active||Number(sample?.id)!==sampleId)return;pollFailures+=1;actionError='任务状态暂时无法读取，正在自动重连；后台任务不会因此取消。';paint();pollJob(jobId,Math.min(30_000,1200*(2**Math.min(5,pollFailures))));}
   },delay);
@@ -221,7 +224,7 @@ async function createManualVersion(){
   try{
     const value=await api.sampleAnalysisManual(sampleId,{sourceCaptureId:research?.sourceCaptureId||sample.captures?.[0]?.id||null,selectOnSuccess:true,elements:FALLBACK_DIMENSIONS.map(d=>({dimensionKey:d.key,state:'insufficient',value:null,functionText:null,applicability:null,limitations:null}))});
     if(!sameAction(seq,sampleId))return;
-    toast('success','已建立人工空白拆解');selectedVersionId=value?.id||value?.version?.id;await loadResearch();tab='elements';paint();
+    toast('success','已建立人工空白拆解');selectedVersionId=value?.id||value?.version?.id;elementStatusFilter='pending';await loadResearch();tab='elements';paint();
   }catch(error){if(sameAction(seq,sampleId)){actionError=error.message||'人工拆解建立失败';paint();}}
   finally{if(sameAction(seq,sampleId)){busyAction='';paint();}}
 }
@@ -251,7 +254,7 @@ async function saveDecision(key,decision,value=null,form=null,extra={}){
   try{
     await api.sampleElementDecision(sampleId,versionId,key,{decision,value,note:extra.note||'',functionText:extra.functionText||null,applicability:extra.applicability||null,limitations:extra.limitations||null});
     if(!sameAction(seq,sampleId,versionId))return;
-    saved=true;toast('success',decision==='rejected'?'已驳回该维度':'已确认该维度');await loadVersion(versionId,true);
+    saved=true;toast('success',decision==='rejected'?'已驳回该维度':'已确认该维度');await loadVersion(versionId,true);await callbacks.onUpdated?.();
   }catch(error){if(sameAction(seq,sampleId,versionId)){if(form)setFormError(form,error.message||'人工决定保存失败，输入仍保留');else{actionError=error.message||'人工决定保存失败';paint();}}}
   finally{if(sameAction(seq,sampleId,versionId)){busyAction='';if(saved)paint();else if(button?.isConnected)button.disabled=false;}}
 }
@@ -319,7 +322,7 @@ function elementsTab(current){
   const blocked=Boolean(busyAction);
   return `<div class="research-tools"><label><span>拆解版本</span><select id="sampleAnalysisVersion" ${blocked?'disabled':''}>${versions.length?versions.map(v=>`<option value="${v.id}" ${String(v.id)===String(selectedVersionId)?'selected':''}>v${v.revision||v.id} · ${esc(SOURCE_LABEL[v.source||v.sourceType]||v.source||'拆解')} · ${fmtDate(v.createdAt)}</option>`).join(''):'<option>暂无版本</option>'}</select></label><div><button data-research-action="start-ai" ${job||blocked?'disabled':''}>AI 重新拆解</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'新建人工拆解'}</button>${selectedVersionId&&!selectedVersion?.isCurrent?`<button class="primary" data-research-action="select-version" ${blocked?'disabled':''}>${busyAction==='select'?'切换中…':'设为当前版本'}</button>`:''}</div></div>
     ${job?jobHtml():''}
-    ${selectedVersionId?`<div class="analysis-provenance"><span>${esc(SOURCE_LABEL[source]||source||'拆解')}</span><b>${esc(selectedVersion?.model||selectedVersion?.modelName||'人工建立')}</b><small>输入快照 ${esc(shortHash(selectedVersion?.inputSha256))} · ${selectedVersion?.staleSource?'原始采集已更新，此版结论仍保留':'与原始采集一致'}</small></div>${tagEditor()}${dimensionGroups()}`:`<div class="research-empty"><b>还没有结构化拆解</b><span>可以让 AI 基于已归档证据生成，也可以先建立一份人工空白表。</span><div><button data-research-action="start-ai" ${blocked?'disabled':''}>AI 生成十五维</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'人工开始'}</button></div></div>`}`;
+    ${selectedVersionId?`<div class="analysis-provenance"><span>${esc(SOURCE_LABEL[source]||source||'拆解')}</span><b>${esc(selectedVersion?.model||selectedVersion?.modelName||'人工建立')}</b><small>输入快照 ${esc(shortHash(selectedVersion?.inputSha256))} · ${selectedVersion?.staleSource?'原始采集已更新，此版结论仍保留':'与原始采集一致'}</small></div>${elementReviewFilters()}${tagEditor()}${dimensionGroups()}`:`<div class="research-empty"><b>还没有结构化拆解</b><span>可以让 AI 基于已归档证据生成，也可以先建立一份人工空白表。</span><div><button data-research-action="start-ai" ${blocked?'disabled':''}>AI 生成十五维</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'人工开始'}</button></div></div>`}`;
 }
 function jobHtml(){const attempt=Number(job.attempts||0),limit=Number(job.maxAttempts||0),retrying=job.status==='queued'&&attempt>0&&job.errorMessage;const message=retrying?`准备自动重试：${job.errorMessage}`:job.message||'正在拆解十五个维度…',status=[job.status||'running',limit?`${attempt}/${limit}`:''].filter(Boolean).join(' · ');return `<div class="analysis-job"><div><i></i><b>${esc(message)}</b><span>${esc(status)}</span></div><progress max="100" value="${Number(job.progress||job.progressPercent||8)}"></progress></div>`;}
 function tagEditor(){
@@ -329,17 +332,20 @@ function tagEditor(){
   const groups=groupBy(tags,t=>t.kindLabel||t.kind||'其他');
   return `<details class="research-tag-editor"><summary><span><b>样本标签</b><small>${selected.size?`已选 ${selected.size} 项`:'尚未选择'} · 展开后编辑</small></span><i>展开</i></summary><form id="sampleTagsForm"><p>同一篇可以多选；这里只选择现有字典，不会让 AI 私自造标签。</p>${Object.entries(groups).map(([name,list])=>`<fieldset><legend>${esc(name)}</legend>${list.map(t=>`<label><input type="checkbox" name="tagIds" value="${t.id}" ${selected.has(Number(t.id))?'checked':''}><span>${esc(t.name)}</span></label>`).join('')}</fieldset>`).join('')}<button type="submit">保存标签</button></form></details>`;
 }
+function elementReviewFilters(){const elements=effectiveElements(selectedVersion),counts={all:elements.length,pending:0,confirmed:0,edited:0,rejected:0};for(const element of elements){const decision=decisionOf(element);counts[decision in counts?decision:'pending']+=1;}return `<nav class="element-review-filters" aria-label="拆解确认状态">${ELEMENT_FILTERS.map(([key,label])=>`<button type="button" data-element-status-filter="${key}" aria-pressed="${elementStatusFilter===key}" class="${elementStatusFilter===key?'on':''}"><span>${label}</span><b>${counts[key]}</b></button>`).join('')}</nav>`;}
 function dimensionGroups(){
-  const dims=config?.dimensions||FALLBACK_DIMENSIONS;const byKey=new Map(effectiveElements(selectedVersion).map(e=>[e.dimensionKey||e.key,e]));const groupName=key=>['audience','user_need','topic'].includes(key)?'定位与需求':['layout','visual_style','bgm','cta'].includes(key)?'包装与承接':'内容表达',groups=groupBy(dims,d=>groupName(d.key));
-  return `<div class="dimension-groups">${Object.entries(groups).map(([name,list])=>`<section><header><h3>${esc(name)}</h3><span>${list.filter(d=>byKey.has(d.key)).length}/${list.length}</span></header><div>${list.map(d=>elementCard(d,byKey.get(d.key))).join('')}</div></section>`).join('')}</div>`;
+  const dims=config?.dimensions||FALLBACK_DIMENSIONS,byKey=new Map(effectiveElements(selectedVersion).map(e=>[e.dimensionKey||e.key,e])),visible=dims.filter(dim=>elementStatusFilter==='all'||decisionOf(byKey.get(dim.key))===elementStatusFilter),groupName=key=>['audience','user_need','topic'].includes(key)?'定位与需求':['layout','visual_style','bgm','cta'].includes(key)?'包装与承接':'内容表达',groups=groupBy(visible,d=>groupName(d.key));
+  if(!visible.length)return `<div class="research-empty compact"><b>${elementStatusFilter==='pending'?'所有维度都已处理':'当前状态没有维度'}</b><span>${elementStatusFilter==='pending'?'可以切换到“全部”复查确认结果。':'切换其他状态继续查看。'}</span><button type="button" data-element-status-filter="all">查看全部十五维</button></div>`;
+  return `<div class="dimension-groups">${Object.entries(groups).map(([name,list])=>`<section><header><h3>${esc(name)}</h3><span>${list.length} 项</span></header><div>${list.map(d=>elementCard(d,byKey.get(d.key))).join('')}</div></section>`).join('')}</div>`;
 }
 function effectiveElements(value){return value?.elements||value?.analysisElements||[];}
-function decisionOf(element){return element?.decision?.decision||element?.decisionStatus||element?.reviewStatus||'pending';}
+function decisionOf(element){const value=element?.decision?.decision||element?.decisionStatus||element?.reviewStatus||'pending';return value==='confirm'?'confirmed':value;}
 function elementCard(dim,element={}){
   const decision=decisionOf(element);const status=element.status||element.state||(!element.aiValue&&!element.value?'insufficient':'ok');const ai=valueText(element.aiValue??element.rawValue??element.value);const effective=valueText(element.effectiveValue??element.effective?.value??element.value);const evidence=element.evidence||element.evidences||[];const confidence=element.confidence==null?'—':`${Math.round(Number(element.confidence)*100)}%`;const functionText=element.function??element.functionText??element.effective?.functionText;const source=selectedVersion?.source||selectedVersion?.sourceType;const originalLabel=source==='ai'?'AI 原值':source==='manual'?'人工原值':'历史迁移原值';const effectiveFallback=decision==='rejected'?'已驳回，不参与筛选':status==='not_applicable'?'不适用':status==='insufficient'?'证据不足，待人工补充':'等待人工确认';
+  const confirmLabel=decision==='confirmed'?'✓ 已确认':decision==='pending'?'确认':'恢复 AI 原值',rejectLabel=decision==='rejected'?'✓ 已驳回':'驳回';
   return `<article class="dimension-card ${decision} ${status}"><header><div><span>${String(dim.sortOrder).padStart(2,'0')}</span><h4>${esc(dim.label)}</h4></div><div><i>${esc(DECISION_LABEL[decision]||decision)}</i><b>${confidence}</b></div></header><div class="dimension-values"><div><small>${originalLabel}</small><p>${esc(ai||(status==='not_applicable'?'不适用':status==='insufficient'?'证据不足':'尚未填写'))}</p></div><div><small>当前有效值</small><p>${esc(effective||effectiveFallback)}</p></div></div>${functionText?`<p class="dimension-function"><b>承担功能</b>${esc(functionText)}</p>`:''}${element.applicability||element.limitations?`<p class="dimension-boundary">${element.applicability?`适用：${esc(element.applicability)}`:''}${element.limitations?`<br>限制：${esc(element.limitations)}`:''}</p>`:''}${elementTagEditor(dim,element)}
     <details class="dimension-evidence"><summary>证据 ${evidence.length} 条 · 强度 ${esc(EVIDENCE_LABEL[element.evidenceStrength]||element.evidenceStrength||'—')}</summary>${evidence.length?evidence.map(ev=>`<blockquote><p>${esc(ev.quoteText||ev.quote||ev.text||'证据原文不可用')}</p><footer>${esc(ev.sourceType||ev.kind||'原始作品')} · ${esc(ev.locator||ev.location||ev.jsonPath||ev.commentRef||ev.sourceId||'位置待补')}</footer></blockquote>`).join(''):'<p>没有可核验的证据，因此该维度不应被当作已确认结论。</p>'}</details>
-    <div class="dimension-actions"><button data-research-action="decision-confirm" data-key="${esc(dim.key)}" ${busyAction?'disabled':''}>确认</button><button data-research-action="decision-edit" data-key="${esc(dim.key)}" ${busyAction?'disabled':''}>编辑后确认</button><button class="danger" data-research-action="decision-reject" data-key="${esc(dim.key)}" ${busyAction?'disabled':''}>驳回</button></div>
+    <div class="dimension-actions"><button class="${decision==='confirmed'?'current confirmed':''}" data-research-action="decision-confirm" data-key="${esc(dim.key)}" ${busyAction||decision==='confirmed'?'disabled':''}>${confirmLabel}</button><button class="${decision==='edited'?'current edited':''}" data-research-action="decision-edit" data-key="${esc(dim.key)}" ${busyAction?'disabled':''}>${decision==='edited'?'再次编辑':'编辑后确认'}</button><button class="danger ${decision==='rejected'?'current rejected':''}" data-research-action="decision-reject" data-key="${esc(dim.key)}" ${busyAction||decision==='rejected'?'disabled':''}>${rejectLabel}</button></div>
     <form hidden data-element-edit-form data-element-editor="${esc(dim.key)}" data-key="${esc(dim.key)}"><label><span>修订后的有效值</span><textarea name="value" rows="3">${esc(effective||ai)}</textarea></label><label><span>元素承担的功能</span><textarea name="functionText" rows="2">${esc(functionText||'')}</textarea></label><label><span>适用范围</span><textarea name="applicability" rows="2">${esc(element.effective?.applicability||element.applicability||'')}</textarea></label><label><span>限制与边界</span><textarea name="limitations" rows="2">${esc(element.effective?.limitations||element.limitations||'')}</textarea></label><label><span>人工备注</span><textarea name="note" rows="2"></textarea></label><button type="submit" ${busyAction?'disabled':''}>保存修订</button></form></article>`;
 }
 function elementTagEditor(dim,element){
