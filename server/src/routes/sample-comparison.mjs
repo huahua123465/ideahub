@@ -41,19 +41,25 @@ function compactMetrics(row) {
 function normalizeTimestamp(value) { return value == null ? null : new Date(value).toISOString(); }
 
 async function ensureComparison(client, comparisonId, { lock = false } = {}) {
-  const { rows } = await client.query(`SELECT * FROM sample_comparisons WHERE id=$1${lock?' FOR UPDATE':''}`,[comparisonId]);
+  const { rows } = await client.query(`SELECT * FROM sample_comparisons WHERE id=$1 AND deleted_at IS NULL${lock?' FOR UPDATE':''}`,[comparisonId]);
   if (!rows[0]) throw notFound('比较项目不存在');
   return rows[0];
 }
 
-async function prepareScopeSnapshotTransaction(client,memberIds){
-  await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+async function prepareScopeSnapshotTransaction(client,memberIds,{setIsolation=true}={}){
+  if(setIsolation)await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
   // Utility locks happen before the first MVCC snapshot. A writer already in flight must commit first,
   // so the following sample row locks and all frozen reads observe one post-lock snapshot.
   await client.query('LOCK TABLE sample_element_decisions IN SHARE MODE');
   await client.query('LOCK TABLE sample_metric_snapshots IN SHARE MODE');
   const {rows}=await client.query(`SELECT id FROM samples WHERE id=ANY($1::bigint[]) ORDER BY id FOR SHARE`,[memberIds]);
   if(rows.length!==memberIds.length)throw badRequest('比较成员包含不存在的样本');
+}
+
+function refreshedComparisonTitle(title){
+  const suffix=' · 最新拆解';
+  const base=String(title||'样本比较').replace(/(?: · 最新拆解)+$/u,'').trim()||'样本比较';
+  return `${base.slice(0,STAGE3_LIMITS.titleChars-suffix.length)}${suffix}`;
 }
 
 export async function createScopeInTransaction(client,{ comparisonId,scopeInput,actorId }) {
@@ -460,7 +466,8 @@ export function mount(router) {
     const target=url.searchParams.get('target')?assertTarget(url.searchParams.get('target')):null;
     const memberId=url.searchParams.get('memberId')?strictId(url.searchParams.get('memberId'),'memberId'):null;
     const args=[q,target,memberId,pageSize,offset];
-    const where=`WHERE ($1::text IS NULL OR c.title ILIKE '%'||$1||'%' OR c.purpose ILIKE '%'||$1||'%')
+    const where=`WHERE c.deleted_at IS NULL
+      AND($1::text IS NULL OR c.title ILIKE '%'||$1||'%' OR c.purpose ILIKE '%'||$1||'%')
       AND($2::text IS NULL OR EXISTS(SELECT 1 FROM sample_comparison_assessments a WHERE a.comparison_id=c.id AND a.target=$2))
       AND($3::bigint IS NULL OR EXISTS(SELECT 1 FROM sample_comparison_scope_members m JOIN sample_comparison_scopes s ON s.id=m.scope_id
         WHERE m.comparison_id=c.id AND m.sample_id=$3 AND s.status='complete'))`;
@@ -485,6 +492,48 @@ export function mount(router) {
   router.get('/api/sample-comparisons/:id',async(req,res,params)=>{
     await currentUser(req);sendJson(res,200,await loadComparisonDetail(strictId(params.id,'比较 id')));
   });
+
+  router.post('/api/sample-comparisons/:id/refresh',async(req,res,params)=>guarded(async()=>{
+    const me=await currentUser(req),sourceComparisonId=strictId(params.id,'比较 id'),key=requireIdempotency(req);
+    const outcome=await tx(async client=>{
+      await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      const source=await ensureComparison(client,sourceComparisonId,{lock:true});
+      const {rows:scopeRows}=await client.query(`SELECT * FROM sample_comparison_scopes
+        WHERE comparison_id=$1 AND status='complete' ORDER BY revision DESC,id DESC LIMIT 1`,[sourceComparisonId]);
+      const sourceScope=scopeRows[0];
+      if(!sourceScope)throw notFound('比较记录还没有可重新生成的冻结范围');
+      const {rows:memberRows}=await client.query(`SELECT sample_id FROM sample_comparison_scope_members
+        WHERE scope_id=$1 ORDER BY ordinal,id`,[sourceScope.id]);
+      const memberIds=memberRows.map(row=>Number(row.sample_id));
+      const scopeInput=normalizeScopeInput({memberIds,topicBasis:sourceScope.topic_basis,purpose:sourceScope.purpose});
+      await prepareScopeSnapshotTransaction(client,memberIds,{setIsolation:false});
+      const request={sourceComparisonId,title:refreshedComparisonTitle(source.title),scope:scopeInput};
+      return withIdempotency(client,{aggregateKey:`comparison:${sourceComparisonId}`,action:'refresh',key,
+        request,actorId:me.id},async()=>{
+          const {rows}=await client.query(`INSERT INTO sample_comparisons(title,purpose,created_by)
+            VALUES($1,$2,$3)RETURNING *`,[request.title,source.purpose,me.id]);
+          await createScopeInTransaction(client,{comparisonId:Number(rows[0].id),scopeInput,actorId:me.id});
+          return {responseKind:'comparison',responseId:Number(rows[0].id),status:201};
+        });
+    });
+    const detail=await loadComparisonDetail(outcome.responseId);
+    sendJson(res,idempotentStatus(outcome),{...detail,sourceComparisonId});
+  }));
+
+  router.del('/api/sample-comparisons/:id',async(req,res,params)=>guarded(async()=>{
+    const me=await currentUser(req);assertStage3Admin(me);
+    const comparisonId=strictId(params.id,'比较 id'),key=requireIdempotency(req);
+    const outcome=await tx(client=>withIdempotency(client,{aggregateKey:`comparison:${comparisonId}`,action:'delete',key,
+      request:{comparisonId},actorId:me.id},async()=>{
+        await ensureComparison(client,comparisonId,{lock:true});
+        const {rows:activeJobs}=await client.query(`SELECT id FROM sample_comparison_assessment_jobs
+          WHERE comparison_id=$1 AND status IN('queued','running')LIMIT 1`,[comparisonId]);
+        if(activeJobs[0])throw conflict('该比较仍有 AI 评价任务处理中，请等待任务结束后再删除');
+        await client.query('UPDATE sample_comparisons SET deleted_at=now(),deleted_by=$2 WHERE id=$1',[comparisonId,me.id]);
+        return {responseKind:'comparison_deletion',responseId:comparisonId,status:200};
+      }));
+    sendJson(res,200,{id:comparisonId,deleted:true,reused:!!outcome.reused});
+  }));
 
   router.post('/api/sample-comparisons/:id/scopes',async(req,res,params)=>guarded(async()=>{
     const me=await currentUser(req),comparisonId=strictId(params.id,'比较 id');
@@ -817,7 +866,7 @@ export function mount(router) {
 }
 
 async function loadComparisonDetail(comparisonId) {
-  const {rows:comparisons}=await query('SELECT * FROM sample_comparisons WHERE id=$1',[comparisonId]);
+  const {rows:comparisons}=await query('SELECT * FROM sample_comparisons WHERE id=$1 AND deleted_at IS NULL',[comparisonId]);
   if(!comparisons[0])throw notFound('比较项目不存在');
   const {rows:scopes}=await query(`SELECT s.*,(SELECT count(*) FROM sample_comparison_scope_members m WHERE m.scope_id=s.id)member_count
     FROM sample_comparison_scopes s WHERE comparison_id=$1 AND status='complete' ORDER BY revision DESC,id DESC`,[comparisonId]);

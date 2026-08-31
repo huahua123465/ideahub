@@ -222,6 +222,21 @@ try{
   assert.equal(mismatch.status,409);
   ok('Idempotency-Key returns 200 for same hash and 409 for a different hash');
 
+  const refreshed=await invoke('POST',`/api/sample-comparisons/${comparisonId}/refresh`,{key:'comparison-refresh-latest',body:{}});
+  assert.equal(refreshed.status,201,JSON.stringify(refreshed.json));assert.equal(refreshed.json.sourceComparisonId,comparisonId);
+  assert.notEqual(refreshed.json.id,comparisonId);assert.match(refreshed.json.title,/最新拆解$/);
+  assert.equal(refreshed.json.scopes[0].memberCount,3);
+  const refreshedId=refreshed.json.id;
+  assert.equal((await invoke('DELETE',`/api/sample-comparisons/${refreshedId}`,{userId:memberId,key:'comparison-delete-member'})).status,403);
+  assert.equal((await invoke('DELETE',`/api/sample-comparisons/${refreshedId}`,{userId:reviewerId,key:'comparison-delete-reviewer'})).status,403);
+  const deleted=await invoke('DELETE',`/api/sample-comparisons/${refreshedId}`,{userId:adminId,key:'comparison-delete-admin'});
+  assert.equal(deleted.status,200,JSON.stringify(deleted.json));assert.equal(deleted.json.deleted,true);
+  assert.equal((await invoke('GET',`/api/sample-comparisons/${refreshedId}`)).status,404);
+  assert.equal((await invoke('GET',`/api/sample-comparisons/${comparisonId}`)).status,200);
+  const visibleAfterDelete=await invoke('GET','/api/sample-comparisons',{queryString:`?q=${encodeURIComponent('最新拆解')}`});
+  assert.equal(visibleAfterDelete.status,200);assert.equal(visibleAfterDelete.json.items.some(item=>item.id===refreshedId),false);
+  ok('refresh creates a separate latest-analysis snapshot and admin delete hides only that comparison aggregate');
+
   const direct=schemaUrl(testUrl,testSchema);const raw=new pg.Client({connectionString:direct});await raw.connect();
 
   // A writer that began first must be observed after scope finalization waits for source-table locks.

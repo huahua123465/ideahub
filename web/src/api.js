@@ -311,6 +311,8 @@ export const api = {
   sampleComparisons:    (opts = {}) => call('GET', '/api/sample-comparisons' + qs(opts)),
   sampleComparison:     (id) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}`),
   sampleComparisonCreate:(payload, idempotencyKey) => call('POST', '/api/sample-comparisons', payload, { 'Idempotency-Key':idempotencyKey }),
+  sampleComparisonRefresh:(id, idempotencyKey) => call('POST', `/api/sample-comparisons/${encodeURIComponent(id)}/refresh`, {}, { 'Idempotency-Key':idempotencyKey }),
+  sampleComparisonDelete:(id, idempotencyKey) => call('DELETE', `/api/sample-comparisons/${encodeURIComponent(id)}`, undefined, { 'Idempotency-Key':idempotencyKey }),
   sampleComparisonScope:(id, scopeId) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}/scopes/${encodeURIComponent(scopeId)}`),
   sampleComparisonScopeCreate:(id, payload, idempotencyKey) => call('POST', `/api/sample-comparisons/${encodeURIComponent(id)}/scopes`, payload, { 'Idempotency-Key':idempotencyKey }),
   comparisonAssessments:(id, opts = {}) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}/assessments` + qs(opts)),

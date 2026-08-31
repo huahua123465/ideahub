@@ -46,10 +46,14 @@ CREATE TABLE IF NOT EXISTS sample_comparisons (
   purpose           TEXT,
   created_by        BIGINT REFERENCES users(id) ON DELETE SET NULL,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at        TIMESTAMPTZ,
+  deleted_by        BIGINT REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT sample_comparisons_title_chk CHECK (char_length(title) BETWEEN 1 AND 200),
   CONSTRAINT sample_comparisons_purpose_chk CHECK (purpose IS NULL OR char_length(purpose) <= 4000)
 );
 CREATE INDEX IF NOT EXISTS sample_comparisons_created_idx ON sample_comparisons(created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS sample_comparisons_active_created_idx
+  ON sample_comparisons(created_at DESC,id DESC) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS sample_comparison_scopes (
   id                BIGSERIAL PRIMARY KEY,

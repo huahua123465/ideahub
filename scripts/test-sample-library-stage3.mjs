@@ -161,6 +161,7 @@ test('browser cannot submit server-derived actor, origin, role, provider, model 
 });
 
 const migration=await readFile(new URL('./migrations/20260829-sample-library-stage3.sql',import.meta.url),'utf8');
+const lifecycleMigration=await readFile(new URL('./migrations/20260831-sample-comparison-lifecycle.sql',import.meta.url),'utf8');
 const schema=await readFile(new URL('../server/src/schema.sql',import.meta.url),'utf8');
 const routes=await readFile(new URL('../server/src/routes/sample-comparison.mjs',import.meta.url),'utf8');
 const helper=await readFile(new URL('../server/src/lib/sample-comparison.mjs',import.meta.url),'utf8');
@@ -183,9 +184,15 @@ test('migration is additive, idempotent DDL and contains the required ownership 
   assert.doesNotMatch(migration,/\b(?:DROP TABLE|TRUNCATE|DELETE FROM)\b/i);
 });
 
+test('comparison lifecycle migration adds a reversible access-state without deleting source data',()=>{
+  for(const token of ['deleted_at','deleted_by','sample_comparisons_active_created_idx'])assert.match(lifecycleMigration,new RegExp(token));
+  assert.doesNotMatch(lifecycleMigration,/\b(?:DROP TABLE|TRUNCATE|DELETE FROM)\b/i);
+  assert.match(schema,/deleted_at\s+TIMESTAMPTZ/);
+});
+
 test('every contracted route is mounted and the server installs it',()=>{
   for(const route of [
-    '/api/sample-comparisons','/api/sample-comparisons/:id','/api/sample-comparisons/:id/scopes',
+    '/api/sample-comparisons','/api/sample-comparisons/:id','/api/sample-comparisons/:id/refresh','/api/sample-comparisons/:id/scopes',
     '/api/sample-comparisons/:id/scopes/:scopeId','/api/sample-comparisons/:id/scopes/:scopeId/assessments/manual',
     '/api/sample-comparisons/:id/scopes/:scopeId/assessment-jobs','/api/sample-comparisons/:id/assessment-jobs/:jobId',
     '/api/sample-comparisons/:id/assessments','/api/sample-comparisons/:id/assessments/:assessmentId',
@@ -211,8 +218,9 @@ test('relation list batches compact evidence and events without heavy quotes or 
 
 test('mutating handlers require idempotency and role gates are explicit',()=>{
   const postCount=(routes.match(/router\.post\(/g)||[]).length;
+  const deleteCount=(routes.match(/router\.del\(/g)||[]).length;
   const keyCount=(routes.match(/requireIdempotency\(req\)/g)||[]).length;
-  assert.equal(keyCount,postCount);
+  assert.equal(keyCount,postCount+deleteCount);
   assert.match(routes,/assertCanReview\(me\)/);assert.match(routes,/assertStage3Admin\(me\)/);
   assert.match(routes,/scheduleAssessmentRecovery\(await nextRecoveryDelay/);
   assert.match(helper,/actor.*origin.*provider.*model/s);

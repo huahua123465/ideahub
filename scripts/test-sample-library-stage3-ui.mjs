@@ -162,9 +162,31 @@ try{
   assert.doesNotMatch(reusableText,/点赞|播放|浏览|排名|总分/);
   await page.focus('[data-component-action="mode"][data-mode="reusable"]');await page.keyboard.press('Home');await page.waitForFunction(()=>document.activeElement?.dataset.mode==='management');
 
+  // Refresh creates a separate latest-analysis record; deleting it uses the centered project dialog and keeps the old record.
+  await page.click('[data-library-mode="comparisons"]');await page.waitForSelector('.comparison-record-card');
+  const recordsBeforeLifecycle=await page.$$eval('.comparison-record-card',nodes=>nodes.length);
+  const sourceTitle=await page.$eval('.comparison-record-card h3',node=>node.textContent.trim());
+  await page.click('.comparison-record-card [data-comparison-action="refresh-comparison"]');
+  await page.waitForSelector('#confirmLayer.on');
+  assert.match(await page.$eval('#confirmMessage',node=>node.textContent),new RegExp(sourceTitle.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  assert.match(await page.$eval('#confirmNote',node=>node.textContent),/旧比较记录.*保留/);
+  await page.click('#confirmSubmit');
+  await page.waitForFunction(()=>document.querySelector('.comparison-workspace-head h2')?.textContent.includes('最新拆解'));
+  assert.equal(await page.$$eval('.comparison-workspace-tools [data-comparison-action="delete-comparison"]',nodes=>nodes.length),1);
+  await page.click('.comparison-workspace-tools [data-comparison-action="delete-comparison"]');
+  await page.waitForSelector('#confirmLayer.on');
+  assert.match(await page.$eval('#confirmNote',node=>node.textContent),/原始样本.*拆解结果.*不会删除/);
+  await page.click('#confirmSubmit');
+  await page.waitForSelector('.comparison-record-grid');
+  assert.equal(await page.$$eval('.comparison-record-card',nodes=>nodes.length),recordsBeforeLifecycle);
+  assert.ok(await page.$$eval('.comparison-record-card h3',(nodes,title)=>nodes.some(node=>node.textContent.trim()===title),sourceTitle));
+
   // Member sees deterministic list failure/retry and cannot review or change lifecycle.
   await page.goto(`${BASE}/?stage3=1&mock=1&mockRole=member`,{waitUntil:'domcontentloaded'});await openSamples(page);
-  await page.click('[data-library-mode="comparisons"]');await page.waitForSelector('.comparison-record-card [data-comparison-id="31"]');await page.click('.comparison-record-card [data-comparison-id="31"]');await page.waitForSelector('#comparisonTab-assessments');await page.click('#comparisonTab-assessments');await page.waitForSelector('.comparison-assessment-card');
+  await page.click('[data-library-mode="comparisons"]');await page.waitForSelector('.comparison-record-card [data-comparison-id="31"]');
+  assert.equal(await page.$$eval('[data-comparison-action="delete-comparison"]',nodes=>nodes.length),0);
+  assert.ok(await page.$$eval('[data-comparison-action="refresh-comparison"]',nodes=>nodes.length)>=1);
+  await page.click('.comparison-record-card [data-comparison-id="31"]');await page.waitForSelector('#comparisonTab-assessments');await page.click('#comparisonTab-assessments');await page.waitForSelector('.comparison-assessment-card');
   assert.equal(await page.$$eval('[data-comparison-action="select-assessment"]',nodes=>nodes.length),0);
   assert.ok(await page.$$eval('[data-comparison-action="load-assessment-detail"]',nodes=>nodes.length)>=1);state=await page.evaluate(()=>{const official=document.querySelector('.comparison-assessment-card header i')?.closest('.comparison-assessment-card');return{official:!!official,officialLoad:!!official?.querySelector('[data-comparison-action="load-assessment-detail"]')};});assert.deepEqual(state,{official:true,officialLoad:false});const lazyId=await page.$eval('[data-comparison-action="load-assessment-detail"]',node=>node.dataset.id);await page.click(`[data-comparison-action="load-assessment-detail"][data-id="${lazyId}"]`);await page.waitForFunction(id=>!document.querySelector(`[data-comparison-action="load-assessment-detail"][data-id="${id}"]`),{},lazyId);
   await page.click('#comparisonTab-relations');await page.waitForSelector('.comparison-relation-card');

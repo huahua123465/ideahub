@@ -2,6 +2,7 @@
 import { api } from '../api.js';
 import { esc } from '../util.js';
 import { toast } from '../toast.js';
+import { confirmAction } from '../confirm.js';
 
 const TARGETS = {
   traffic:['流量目标','观察点击、传播与停留线索'],
@@ -54,6 +55,7 @@ const relationEvidenceOptions = new Map();
 let requestSeq = 0;
 let recordsTimer = null;
 let dialogReturnFocus = null;
+const lifecycleBusy = new Set();
 
 const key = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
 const fmt = value => {
@@ -133,6 +135,8 @@ function onClick(event) {
   const action = button.dataset.comparisonAction;
   if (button.dataset.comparisonId) return callbacks.onOpen?.(Number(button.dataset.comparisonId));
   if (action === 'new-from-samples') return callbacks.onNewFromSamples?.();
+  if (action === 'refresh-comparison') return refreshComparison(button);
+  if (action === 'delete-comparison') return deleteComparison(button);
   if (action === 'retry-records') return loadRecords();
   if (action === 'records') { screen='records';for(const timer of pollTimers.values())clearTimeout(timer);pollTimers.clear();loadRecords(); return; }
   if (action === 'retry-workspace' && comparison?.id) return loadWorkspace(comparison.id);
@@ -219,6 +223,41 @@ async function loadRecords() {
   } catch(error) {
     if(seq!==requestSeq)return;recordsLoading=false;recordsError=error.message||'比较记录读取失败';paint();
   }
+}
+
+async function refreshComparison(button){
+  const id=Number(button.dataset.id||comparison?.id),title=button.dataset.title||comparison?.title||comparison?.name||'这条比较记录';
+  if(!id||lifecycleBusy.has(`refresh:${id}`))return;
+  const ok=await confirmAction({eyebrow:'建立新的冻结快照',title:'基于最新拆解重新比较？',
+    message:`系统会读取「${title}」中相同的样本，并使用每篇作品当前最新的完整拆解创建一条新比较。`,
+    note:'旧比较记录、旧评价和旧快照都会保留；新记录不会自动继承旧评价。',confirmLabel:'创建最新比较'});
+  if(!ok)return;
+  lifecycleBusy.add(`refresh:${id}`);button.disabled=true;button.textContent='正在创建…';
+  try{
+    const created=await api.sampleComparisonRefresh(id,key('comparison-refresh'));
+    const nextId=Number(created?.id||created?.comparison?.id);
+    if(!nextId)throw new Error('服务端没有返回新的比较记录 ID');
+    toast('ok','已用最新拆解创建新比较，旧记录仍然保留');
+    callbacks.onOpen?.(nextId);
+  }catch(error){toast('info',error.message||'最新比较创建失败');button.disabled=false;button.textContent='基于最新拆解重新比较';}
+  finally{lifecycleBusy.delete(`refresh:${id}`);}
+}
+
+async function deleteComparison(button){
+  const id=Number(button.dataset.id||comparison?.id),title=button.dataset.title||comparison?.title||comparison?.name||'这条比较记录';
+  if(!id||lifecycleBusy.has(`delete:${id}`))return;
+  const ok=await confirmAction({eyebrow:'仅删除比较快照',title:'删除这条比较记录？',
+    message:`「${title}」将从比较记录中移除，之后无法再打开这份冻结对照。`,
+    note:'原始样本、图片、拆解结果和已经沉淀的组件都不会删除。',confirmLabel:'确认删除'});
+  if(!ok)return;
+  lifecycleBusy.add(`delete:${id}`);button.disabled=true;button.textContent='正在删除…';
+  try{
+    await api.sampleComparisonDelete(id,key('comparison-delete'));
+    toast('ok','比较记录已删除，原始样本与拆解未受影响');
+    if(screen==='workspace'){screen='records';comparison=null;scope=null;await loadRecords();}
+    else await loadRecords();
+  }catch(error){toast('info',error.message||'比较记录删除失败');button.disabled=false;button.textContent='删除记录';}
+  finally{lifecycleBusy.delete(`delete:${id}`);}
 }
 
 async function loadWorkspace(id) {
@@ -313,7 +352,8 @@ function recordCard(item) {
   const targets=item.targets||item.currentAssessments||{};
   const counts=item.assessmentCounts||{};
   const memberCount=Number(item.memberCount??item.latestScope?.memberCount??item.scope?.memberCount??item.members?.length??0);
-  return `<article class="comparison-record-card"><header><span>范围 v${item.scopeRevision||item.currentScopeRevision||item.latestScope?.revision||1}</span><b>${memberCount} 篇样本</b></header><h3>${esc(item.name||item.title||'未命名比较')}</h3><p>${esc(item.topic||item.latestScope?.topicBasis||item.purpose||'未填写研究主题')}</p><div class="comparison-target-summary">${Object.entries(TARGETS).map(([target,[label]])=>{const count=Number(counts[target]||0);return `<span class="${count||targets[target]?'ready':''}">${label}<b>${count?`${count} 个版本`:targets[target]?'已选官方版本':'未评价'}</b></span>`;}).join('')}</div><footer><span>${fmt(item.updatedAt||item.createdAt)}</span><button type="button" data-comparison-id="${item.id}">打开工作台</button></footer></article>`;
+  const title=item.name||item.title||'未命名比较';
+  return `<article class="comparison-record-card"><header><span>范围 v${item.scopeRevision||item.currentScopeRevision||item.latestScope?.revision||1}</span><b>${memberCount} 篇样本</b></header><h3>${esc(title)}</h3><p>${esc(item.topic||item.latestScope?.topicBasis||item.purpose||'未填写研究主题')}</p><div class="comparison-target-summary">${Object.entries(TARGETS).map(([target,[label]])=>{const count=Number(counts[target]||0);return `<span class="${count||targets[target]?'ready':''}">${label}<b>${count?`${count} 个版本`:targets[target]?'已选官方版本':'未评价'}</b></span>`;}).join('')}</div><footer><span>${fmt(item.updatedAt||item.createdAt)}</span><div class="comparison-record-actions"><button type="button" data-comparison-action="refresh-comparison" data-id="${item.id}" data-title="${esc(title)}">最新拆解重建</button>${currentUser?.role==='admin'?`<button type="button" class="danger" data-comparison-action="delete-comparison" data-id="${item.id}" data-title="${esc(title)}">删除</button>`:''}<button type="button" class="primary" data-comparison-id="${item.id}">打开工作台</button></div></footer></article>`;
 }
 
 function paintWorkspace() {
@@ -322,7 +362,7 @@ function paintWorkspace() {
   if(!comparison||!scope){host.innerHTML=errorBlock('比较范围不可用','请返回记录列表后重试。','records');return;}
   const tabs=[['matrix','维度对照'],['assessments','目标评价'],['relations','作品关系'],['extractions','局部提取']];
   host.innerHTML=`<div class="comparison-workspace">
-    <header class="comparison-workspace-head"><button type="button" data-comparison-action="records">← 比较记录</button><div><span>冻结范围 v${scope.revision||scope.scopeRevision||1}</span><h2>${esc(comparison.name||comparison.title||'样本比较')}</h2><p>${esc(scope.topicBasis||scope.topic||comparison.topic||comparison.purpose||'未填写研究主题')}</p></div><div class="comparison-scope-status"><b>${members().length}</b><span>篇固定样本</span></div></header>
+    <header class="comparison-workspace-head"><button type="button" data-comparison-action="records">← 比较记录</button><div><span>冻结范围 v${scope.revision||scope.scopeRevision||1}</span><h2>${esc(comparison.name||comparison.title||'样本比较')}</h2><p>${esc(scope.topicBasis||scope.topic||comparison.topic||comparison.purpose||'未填写研究主题')}</p></div><div class="comparison-workspace-tools"><div class="comparison-scope-status"><b>${members().length}</b><span>篇固定样本</span></div><button type="button" data-comparison-action="refresh-comparison" data-id="${comparison.id}" data-title="${esc(comparison.name||comparison.title||'样本比较')}">基于最新拆解重新比较</button>${currentUser?.role==='admin'?`<button type="button" class="danger" data-comparison-action="delete-comparison" data-id="${comparison.id}" data-title="${esc(comparison.name||comparison.title||'样本比较')}">删除记录</button>`:''}</div></header>
     ${frozenDisclosure()}
     <div class="comparison-tabs" role="tablist" aria-label="比较工作台">${tabs.map(([name,label])=>`<button id="comparisonTab-${name}" role="tab" aria-selected="${tab===name}" aria-controls="comparisonPanel-${name}" tabindex="${tab===name?'0':'-1'}" class="${tab===name?'on':''}" data-comparison-action="tab" data-tab="${name}">${label}</button>`).join('')}</div>
     <section class="comparison-panel" id="comparisonPanel-${tab}" role="tabpanel" aria-labelledby="comparisonTab-${tab}">${tab==='matrix'?matrixPanel():tab==='assessments'?assessmentPanel():tab==='relations'?relationsPanel():extractionsPanel()}</section>
