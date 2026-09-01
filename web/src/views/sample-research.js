@@ -340,7 +340,19 @@ function elementsTab(current){
   const partial=singleRerunMeta(selectedVersion);
   return `<div class="research-tools"><label><span>拆解版本</span><select id="sampleAnalysisVersion" ${blocked?'disabled':''}>${versions.length?versions.map(v=>`<option value="${v.id}" ${String(v.id)===String(selectedVersionId)?'selected':''}>v${v.revision||v.id} · ${esc(versionSourceLabel(v))} · ${fmtDate(v.createdAt)}</option>`).join(''):'<option>暂无版本</option>'}</select></label><div><button data-research-action="start-ai" ${job||blocked?'disabled':''}>AI 重新拆解</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'新建人工拆解'}</button>${selectedVersionId&&!selectedVersion?.isCurrent?`<button class="primary" data-research-action="select-version" ${blocked?'disabled':''}>${busyAction==='select'?'切换中…':'设为当前版本'}</button>`:''}</div></div>
     ${job?jobHtml():''}
+    ${qualityFeedback()}
     ${selectedVersionId?`<div class="analysis-provenance"><span>${esc(versionSourceLabel(selectedVersion))}</span><b>${esc(selectedVersion?.model||selectedVersion?.modelName||'人工建立')}</b><small>${partial?`仅更新“${esc((config?.dimensions||FALLBACK_DIMENSIONS).find(item=>item.key===partial.key)?.label||partial.key)}”，其余继承 v${partial.baseVersionId} · `:''}输入快照 ${esc(shortHash(selectedVersion?.inputSha256))} · ${selectedVersion?.staleSource?'原始采集已更新，此版结论仍保留':'与原始采集一致'}</small></div>${elementReviewFilters()}${tagEditor()}${dimensionGroups()}`:`<div class="research-empty"><b>还没有结构化拆解</b><span>可以让 AI 基于已归档证据生成，也可以先建立一份人工空白表。</span><div><button data-research-action="start-ai" ${blocked?'disabled':''}>AI 生成十五维</button><button data-research-action="manual-version" ${blocked?'disabled':''}>${busyAction==='manual'?'建立中…':'人工开始'}</button></div></div>`}`;
+}
+function qualityFeedback(){
+  const quality=config?.quality,overall=quality?.overall;if(!overall?.total)return '';
+  const percent=value=>value==null?'—':`${Math.round(Number(value)*100)}%`;
+  const labels=new Map((config?.dimensions||FALLBACK_DIMENSIONS).map(item=>[item.key,item.label]));
+  const needsReview=(quality.dimensions||[]).filter(item=>item.reviewed>0)
+    .sort((a,b)=>(b.correctionRate||0)+(b.rejectionRate||0)-(a.correctionRate||0)-(a.rejectionRate||0)).slice(0,3);
+  return `<details class="research-quality"><summary><span><b>AI 质量反馈</b><small>基于当前使用中的 AI 拆解版本</small></span><i>人工覆盖 ${percent(overall.reviewCoverage)}</i></summary><div class="research-quality-grid">${[
+    ['人工已审',`${overall.reviewed}/${overall.total}`],['原值确认',percent(overall.exactConfirmationRate)],
+    ['人工修订',percent(overall.correctionRate)],['人工驳回',percent(overall.rejectionRate)],
+  ].map(([label,value])=>`<div><small>${label}</small><b>${value}</b></div>`).join('')}</div>${needsReview.length?`<p>优先复盘：${needsReview.map(item=>`${esc(labels.get(item.dimensionKey)||item.dimensionKey)}（修订/驳回 ${percent((item.correctionRate||0)+(item.rejectionRate||0))}）`).join('、')}</p>`:'<p>完成更多人工确认后，这里会显示最需要优化的维度。</p>'}</details>`;
 }
 function jobHtml(){const attempt=Number(job.attempts||0),limit=Number(job.maxAttempts||0),retrying=job.status==='queued'&&attempt>0&&job.errorMessage;const message=retrying?`准备自动重试：${job.errorMessage}`:job.message||'正在拆解十五个维度…',status=[job.status||'running',limit?`${attempt}/${limit}`:''].filter(Boolean).join(' · ');return `<div class="analysis-job"><div><i></i><b>${esc(message)}</b><span>${esc(status)}</span></div><progress max="100" value="${Number(job.progress||job.progressPercent||8)}"></progress></div>`;}
 function tagEditor(){

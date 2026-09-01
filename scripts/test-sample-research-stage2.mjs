@@ -7,10 +7,10 @@ import {
   SAMPLE_ANALYSIS_AI_TIMEOUT_MS, SAMPLE_EVALUATION_AI_TIMEOUT_MS, analysisFailureTransition,
   effectiveElement, normalizeAnalysisElements, normalizeDecision, normalizeManualElements,
   normalizeMetrics, parseMetricValue, requestAiAnalysis, requestAiEvaluation, safeAnalysisError,
-  recordMetricSnapshot,sha256, stableJson,
+  recordMetricSnapshot,requestAssetVisionEvidence,sha256, stableJson,
 } from '../server/src/lib/sample-research.mjs';
 import { legacyElements } from './migrate-sample-research-stage2.mjs';
-import { combinationSearch,insertEvaluation,literalLikePattern, persistAnalysisVersion } from '../server/src/routes/sample-research.mjs';
+import { analysisQualitySummary,combinationSearch,insertEvaluation,literalLikePattern, persistAnalysisVersion } from '../server/src/routes/sample-research.mjs';
 
 function fixture() {
   return {
@@ -112,6 +112,13 @@ test('分析输入固定到source capture，不被样本后续编辑或其它cap
   assert.ok(first.sources.every(item=>!String(item.locator).includes('id=10')));
 });
 
+test('补媒体采集快照通过asset_ids固定继承的历史资产',()=>{
+  const source=fixture();source.assets.push({id:10,capture_id:99,kind:'image',mime_type:'image/jpeg',width:900,height:1200});
+  source.capture.raw_payload.asset_ids=[9,10];
+  const manifest=buildEvidenceManifest(source);
+  assert.ok(manifest.sources.some(item=>item.sourceKind==='asset_metadata'&&item.assetId===10));
+});
+
 test('OCR、transcript、comment_list与BGM locator记录实际命中字段',()=>{
   const source=fixture();
   source.capture.raw_payload={
@@ -146,6 +153,40 @@ test('没有视觉能力或BGM元数据时不能靠OCR/资产名猜测',()=>{
   assert.equal(out.find(item=>item.dimensionKey==='visual_style').state,'insufficient');
   assert.equal(out.find(item=>item.dimensionKey==='visual_style').confidence,.2);
   assert.equal(out.find(item=>item.dimensionKey==='bgm').state,'insufficient');
+});
+
+test('采集器视觉观察进入image_vision证据并保留图片索引和视频时间码',()=>{
+  const source=fixture();
+  source.capture.raw_payload.vision_evidence=[
+    {asset_kind:'image',image_index:1,filename:'must-not-leak.png',description:'人物位于画面中央',composition:'居中构图',confidence:.9},
+    {asset_kind:'video',time_start_ms:1500,time_end_ms:4200,description:'镜头由全景切换为近景',camera:'推进近景',confidence:.8},
+  ];
+  const manifest=buildEvidenceManifest(source);
+  const visual=manifest.sources.filter(item=>item.sourceKind==='image_vision');
+  assert.equal(visual.length,2);assert.equal(visual[0].assetId,9);
+  assert.match(visual[0].displayLabel,/第 1 张图/);assert.equal(visual[1].timeStartMs,1500);
+  assert.doesNotMatch(JSON.stringify(visual),/must-not-leak/);
+  const raw=modelElements(manifest),visualElement=raw.find(item=>item.dimensionKey==='visual_style');
+  visualElement.evidenceSourceIds=[visual[0].sourceId];
+  const out=normalizeAnalysisElements(raw,manifest,[{id:101,kind:'audience'}]);
+  assert.equal(out.find(item=>item.dimensionKey==='visual_style').state,'value');
+});
+
+test('手工上传图片可在拆解任务内生成运行时视觉证据',async()=>{
+  let request;
+  const items=await requestAssetVisionEvidence({assets:[{id:9,kind:'image',mime_type:'image/png',
+    storage_key:'a'.repeat(48),original_name:'upload.png'}],provider:{baseUrl:'https://provider.test/v1',
+    model:'mock-vision',apiKey:'secret'},loadAsset:async()=>Buffer.from('image-bytes'),fetchImpl:async(_url,options)=>{
+      request=JSON.parse(options.body);return jsonResponse({output:[{content:[{type:'output_text',text:JSON.stringify({items:[{
+        assetId:9,description:'人物居中站立',composition:'居中构图',subjects:'一名人物',setting:null,
+        palette:'低饱和暖色',lighting:null,typography:null,camera:'平视中景',visualRhythm:null,confidence:.86,
+      }]})}]}]});}});
+  assert.equal(items.length,1);assert.equal(items[0].asset_id,9);assert.equal(items[0].confidence,.86);
+  assert.equal(request.store,false);assert.equal(request.text.format.type,'json_schema');
+  assert.ok(request.input[0].content.some(part=>part.type==='input_image'));
+  assert.doesNotMatch(JSON.stringify(request),/upload\.png|[A-Z]:\\/);
+  const manifest=buildEvidenceManifest({...fixture(),supplementalVisionEvidence:items});
+  assert.equal(manifest.sources.filter(source=>source.sourceKind==='image_vision').length,1);
 });
 
 test('模型不能缺维度或交叉使用其它维度的标签',()=>{
@@ -221,6 +262,19 @@ test('指标解析保留NULL与raw warning，支持中英文缩写',()=>{
   const out=normalizeMetrics({点赞:'4万',collects:'1.2k',comments:'抓取失败'});
   assert.deepEqual({likes:out.likes,saves:out.saves,comments:out.comments},{likes:40000,saves:1200,comments:null});
   assert.ok(out.parseWarnings.some(item=>item.startsWith('comments:'))); assert.equal(out.views,null);
+});
+
+test('人工反馈质量汇总区分确认、修订、驳回和待审',async()=>{
+  const calls=[];const db={async query(sql){calls.push(sql);
+    if(/GROUP BY e\.dimension_key/.test(sql))return{rows:[{dimension_key:'topic',total:10,reviewed:8,confirmed:5,edited:2,rejected:1}]};
+    if(/GROUP BY v\.model_name/.test(sql))return{rows:[{model_name:'mock',prompt_version:'p1',total:10,reviewed:8,confirmed:5,edited:2,rejected:1}]};
+    return{rows:[{total:10,reviewed:8,confirmed:5,edited:2,rejected:1}]};
+  }};
+  const quality=await analysisQualitySummary(db);
+  assert.deepEqual(quality.overall,{total:10,reviewed:8,pending:2,confirmed:5,edited:2,rejected:1,
+    reviewCoverage:.8,exactConfirmationRate:.625,correctionRate:.25,rejectionRate:.125});
+  assert.equal(quality.dimensions[0].dimensionKey,'topic');assert.equal(quality.models[0].modelName,'mock');
+  assert.equal(calls.length,3);
 });
 
 test('旧ai_analysis只映射四个允许字段，其余11维insufficient且无verified证据',()=>{

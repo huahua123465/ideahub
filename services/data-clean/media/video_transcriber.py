@@ -35,16 +35,18 @@ from config import (
 from security import redact_sensitive_text
 
 
-_PROMPT = """你是视频字幕逐字提取器。请完整观看这段视频，而不是按固定时间间隔抽图。
-任务：提取画面中承载口播或叙事内容的每一次字幕/文案变化，并给出它第一次清晰出现的时间。
+_PROMPT = """你是视频字幕与视觉证据记录器。请完整观看这段视频，而不是按固定时间间隔抽图。
+任务一：提取画面中承载口播或叙事内容的每一次字幕/文案变化，并给出它第一次清晰出现的时间。
+任务二：在主体、场景、构图、色彩、光线、文字版式、景别或镜头运动发生有意义变化时，记录可直接观察到的视觉证据。
 要求：
 1. 不总结、不改写、不补写；尽量保留原字、标点和语序。
 2. 连续字幕每发生一次新增、替换或换句，都单独记录，不能只取每 3 秒的画面。
 3. 忽略账号水印、点赞评论按钮、进度条、系统 UI 和长期不变的装饰文字。
 4. 音频只可用于辨认模糊字，不得凭音频虚构画面上没有出现的文字。
 5. 时间以当前视频片段开头为 0 秒，允许小数。
+6. visual_evidence只写客观画面事实，不推断人物身份、性格、心理、收入或传播效果；每段最多4条。
 只返回 JSON 对象，不要 Markdown：
-{"segments":[{"start_seconds":0.0,"text":"画面文字"}]}"""
+{"segments":[{"start_seconds":0.0,"text":"画面文字"}],"visual_evidence":[{"start_seconds":0.0,"end_seconds":3.0,"description":"客观画面描述","composition":"构图","subjects":"主体","setting":"场景","palette":"色彩","lighting":"光线","typography":"文字与版式","camera":"景别、视角或运动","visual_rhythm":"剪辑与画面节奏","confidence":0.9}]}"""
 
 
 def _provider_config() -> dict:
@@ -72,6 +74,7 @@ def _provider_config() -> dict:
 def _base_result(status: str, provider: dict, message: str = "") -> dict:
     return {
         "text": "",
+        "visual_evidence": [],
         "status": status,
         "method": f"{provider['provider']}_video",
         "provider": provider["provider"],
@@ -227,6 +230,50 @@ def _parse_model_segments(text: str, offset_seconds: float = 0.0) -> list[dict]:
     return segments
 
 
+def _visual_text(value: Any, limit: int = 1200) -> str | None:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text[:limit] or None
+
+
+def _parse_model_visual_evidence(text: str, offset_seconds: float = 0.0) -> list[dict]:
+    data = _json_value(text)
+    raw_items = data.get("visual_evidence") if isinstance(data, dict) else []
+    if not isinstance(raw_items, list):
+        return []
+    items = []
+    for raw in raw_items[:4]:
+        if not isinstance(raw, dict):
+            continue
+        relative_start = _seconds(raw.get("start_seconds", raw.get("start")))
+        relative_end = _seconds(raw.get("end_seconds", raw.get("end")))
+        start = offset_seconds + (relative_start or 0.0)
+        end = offset_seconds + relative_end if relative_end is not None else None
+        fields = {
+            key: _visual_text(raw.get(key))
+            for key in (
+                "description", "composition", "subjects", "setting", "palette",
+                "lighting", "typography", "camera", "visual_rhythm",
+            )
+        }
+        if not fields["description"]:
+            fields["description"] = next((value for value in fields.values() if value), None)
+        if not fields["description"]:
+            continue
+        try:
+            confidence = round(max(0.0, min(1.0, float(raw.get("confidence")))), 3)
+        except (TypeError, ValueError):
+            confidence = 0.5
+        items.append({
+            "source_kind": "image_vision",
+            "asset_kind": "video",
+            "time_start_ms": round(start * 1000),
+            "time_end_ms": round(end * 1000) if end is not None and end >= start else None,
+            **fields,
+            "confidence": confidence,
+        })
+    return items
+
+
 def _caption_key(text: str) -> str:
     return re.sub(r"[\W_]+", "", str(text or "").lower(), flags=re.UNICODE)
 
@@ -264,6 +311,25 @@ def _merge_segments(segments: list[dict]) -> list[dict]:
     return merged
 
 
+def _merge_visual_evidence(items: list[dict]) -> list[dict]:
+    merged: list[dict] = []
+    for item in sorted(items, key=lambda value: int(value.get("time_start_ms") or 0)):
+        description = str(item.get("description") or "").strip()
+        key = _caption_key(description)
+        duplicate = False
+        for previous in reversed(merged[-6:]):
+            gap = int(item.get("time_start_ms") or 0) - int(previous.get("time_start_ms") or 0)
+            if gap > 8000:
+                break
+            previous_key = _caption_key(previous.get("description"))
+            if key and previous_key and (key == previous_key or key in previous_key or previous_key in key):
+                duplicate = True
+                break
+        if not duplicate:
+            merged.append(item)
+    return merged
+
+
 def _format_segments(segments: list[dict]) -> str:
     lines = []
     for item in segments:
@@ -274,7 +340,7 @@ def _format_segments(segments: list[dict]) -> str:
 
 def _request_openrouter_chunk(
     client: httpx.Client, chunk_path: Path, model: str
-) -> tuple[list[dict], str]:
+) -> tuple[list[dict], list[dict], str]:
     encoded = base64.b64encode(chunk_path.read_bytes()).decode("ascii")
     payload = {
         "model": model,
@@ -295,17 +361,18 @@ def _request_openrouter_chunk(
     try:
         response = client.post("/chat/completions", json=payload)
     except httpx.HTTPError:
-        return [], "OpenRouter 网络请求失败"
+        return [], [], "OpenRouter 网络请求失败"
     if response.status_code >= 400:
-        return [], f"OpenRouter 请求失败（HTTP {response.status_code}）"
+        return [], [], f"OpenRouter 请求失败（HTTP {response.status_code}）"
     try:
         text = _message_text(response.json())
     except (ValueError, TypeError):
-        return [], "OpenRouter 返回了无法解析的响应"
+        return [], [], "OpenRouter 返回了无法解析的响应"
     segments = _parse_model_segments(text)
-    if not segments:
-        return [], "视频模型未返回可用的画面文字"
-    return segments, ""
+    visual = _parse_model_visual_evidence(text)
+    if not segments and not visual:
+        return [], [], "视频模型未返回可用的字幕或视觉证据"
+    return segments, visual, ""
 
 
 def _gemini_message_text(payload: dict) -> str:
@@ -325,7 +392,7 @@ def _request_moxus_chunk(
     chunk_path: Path,
     model: str,
     api_key: str,
-) -> tuple[list[dict], str]:
+) -> tuple[list[dict], list[dict], str]:
     encoded = base64.b64encode(chunk_path.read_bytes()).decode("ascii")
     payload = {
         "contents": [{
@@ -356,7 +423,7 @@ def _request_moxus_chunk(
             )
         except httpx.HTTPError:
             if attempt + 1 >= max(1, VIDEO_MODEL_REQUEST_RETRIES):
-                return [], "Moxus 网络请求失败"
+                return [], [], "Moxus 网络请求失败"
             time.sleep(2 ** attempt)
             continue
         if response.status_code not in {429, 500, 502, 503, 504, 529}:
@@ -364,7 +431,7 @@ def _request_moxus_chunk(
         if attempt + 1 < max(1, VIDEO_MODEL_REQUEST_RETRIES):
             time.sleep(2 ** attempt)
     if response is None:
-        return [], "Moxus 网络请求失败"
+        return [], [], "Moxus 网络请求失败"
     if response.status_code >= 400:
         message = ""
         try:
@@ -373,15 +440,16 @@ def _request_moxus_chunk(
             pass
         safe_message = redact_sensitive_text(message, max_length=160)
         suffix = f"：{safe_message}" if safe_message else ""
-        return [], f"Moxus 请求失败（HTTP {response.status_code}）{suffix}"
+        return [], [], f"Moxus 请求失败（HTTP {response.status_code}）{suffix}"
     try:
         text = _gemini_message_text(response.json())
     except (ValueError, TypeError):
-        return [], "Moxus 返回了无法解析的响应"
+        return [], [], "Moxus 返回了无法解析的响应"
     segments = _parse_model_segments(text)
-    if not segments:
-        return [], "视频模型未返回可用的画面文字"
-    return segments, ""
+    visual = _parse_model_visual_evidence(text)
+    if not segments and not visual:
+        return [], [], "视频模型未返回可用的字幕或视觉证据"
+    return segments, visual, ""
 
 
 def transcribe_video_with_model(video_path: str, output_dir: str) -> dict:
@@ -401,6 +469,7 @@ def transcribe_video_with_model(video_path: str, output_dir: str) -> dict:
     result = _base_result("unavailable", provider)
     result["chunks_total"] = len(starts)
     all_segments: list[dict] = []
+    all_visual_evidence: list[dict] = []
     errors: list[str] = []
     chunk_dir = Path(output_dir)
     headers = {"Content-Type": "application/json"}
@@ -425,11 +494,11 @@ def transcribe_video_with_model(video_path: str, output_dir: str) -> dict:
                 continue
             try:
                 if provider["provider"] == "moxus":
-                    segments, error = _request_moxus_chunk(
+                    segments, visual, error = _request_moxus_chunk(
                         client, chunk_path, provider["model"], provider["api_key"]
                     )
                 else:
-                    segments, error = _request_openrouter_chunk(
+                    segments, visual, error = _request_openrouter_chunk(
                         client, chunk_path, provider["model"]
                     )
             finally:
@@ -450,10 +519,21 @@ def transcribe_video_with_model(video_path: str, output_dir: str) -> dict:
                 }
                 for item in segments
             )
+            for entry in visual:
+                all_visual_evidence.append({
+                    **entry,
+                    "time_start_ms": int(start * 1000) + int(entry.get("time_start_ms") or 0),
+                    "time_end_ms": (
+                        int(start * 1000) + int(entry["time_end_ms"])
+                        if entry.get("time_end_ms") is not None else None
+                    ),
+                    "chunk_index": index,
+                })
 
     merged = _merge_segments(all_segments)
     result["text"] = _format_segments(merged)
-    if result["text"]:
+    result["visual_evidence"] = _merge_visual_evidence(all_visual_evidence)
+    if result["text"] or result["visual_evidence"]:
         result["status"] = (
             "ok" if result["chunks_succeeded"] == result["chunks_total"] else "partial"
         )

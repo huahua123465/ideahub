@@ -318,7 +318,8 @@ function uploadMetadata(url, req) {
 }
 
 async function uploadForSample(req, res, sampleId, url, me) {
-  if (!await loadSample(sampleId)) throw notFound('样本不存在或已删除');
+  const sample = await loadSample(sampleId);
+  if (!sample) throw notFound('样本不存在或已删除');
   const meta = uploadMetadata(url, req);
   const contentLength = req.headers['content-length'] === undefined ? null : req.headers['content-length'];
   const saved = await saveAssetWithRecord({
@@ -345,8 +346,30 @@ async function uploadForSample(req, res, sampleId, url, me) {
     if (!rows[0]) throw badRequest('captureId 不属于当前样本');
     return rows[0];
   });
+  let record=saved.record;
+  if(!meta.captureId){
+    const [{rows:previousCaptures},{rows:assetRows}]=await Promise.all([
+      query('SELECT raw_payload FROM sample_captures WHERE sample_id=$1 ORDER BY captured_at DESC,id DESC LIMIT 1',[sampleId]),
+      query('SELECT id FROM sample_assets WHERE sample_id=$1 AND deleted_at IS NULL ORDER BY id',[sampleId]),
+    ]);
+    const previousRaw=previousCaptures[0]?.raw_payload&&typeof previousCaptures[0].raw_payload==='object'
+      ?previousCaptures[0].raw_payload:{};
+    const supplement=await tx(client=>upsertSampleWithCapture(client,{
+      ingestMethod:'upload',platform:sample.platform,platformContentId:sample.platform_content_id,
+      sourceUrl:sample.source_url,title:sample.title,bodyText:sample.body_text,
+      contentType:sample.content_type,accountName:sample.account_name,accountHandle:sample.account_handle,
+      publishedAt:sample.published_at,metrics:sample.metrics,captureKey:`upload-asset:${record.id}`,
+      hasCover:meta.kind==='cover',hasMedia:true,
+      rawPayload:{...previousRaw,source:'media_supplement',asset_ids:assetRows.map(row=>Number(row.id)),
+        media_supplements:[...(Array.isArray(previousRaw.media_supplements)?previousRaw.media_supplements:[]),
+          {assetId:Number(record.id),kind:meta.kind,sha256:record.sha256}]},
+    },me.id,{canonicalKey:sample.canonical_key}));
+    const {rows}=await query('UPDATE sample_assets SET capture_id=$2 WHERE id=$1 AND capture_id IS NULL RETURNING *',
+      [record.id,supplement.capture.id]);
+    record=rows[0]||record;
+  }
   const completeness = await refreshCompleteness(sampleId);
-  sendJson(res, 201, { ...assetDto(saved.record), completeness });
+  sendJson(res, 201, { ...assetDto(record), completeness });
 }
 
 async function archiveCollectorAssets(sampleId, captureId, payload) {

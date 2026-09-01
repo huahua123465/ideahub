@@ -246,6 +246,11 @@ class PipelineStorageTests(unittest.TestCase):
             patch.object(app_module, "hydrate_account", side_effect=self._account) as account,
             patch.object(app_module, "extract_hot_comments", side_effect=self._comments) as comments,
             patch.object(app_module, "analyze_content_with_audit", return_value=_analysis_with_audit()),
+            patch.object(app_module, "analyze_images_visual_evidence", return_value={
+                "items": [{"source_kind":"image_vision","asset_kind":"image","image_index":1,
+                    "description":"居中构图的文字卡片","composition":"居中构图","confidence":.9}],
+                "meta": {"status":"ok","model":"mock-vision","images_total":1,"images_succeeded":1},
+            }),
             patch.object(app_module, "download_post_images", side_effect=self._download_images),
             patch.object(
                 app_module, "extract_images_text",
@@ -276,6 +281,8 @@ class PipelineStorageTests(unittest.TestCase):
             content = self._run(root)
             task_dir = Path(root) / "task-1"
             self.assertEqual("analyze", content["collection_mode"])
+            self.assertEqual("image_vision", content["vision_evidence"][0]["source_kind"])
+            self.assertEqual("mock-vision", content["visual_evidence_meta"]["model"])
             self.assertEqual("采集分析", content["collection_mode_label"])
             self.assertEqual("source_linked", content["storage"]["policy"])
             self.assertTrue(content["storage"]["local_media_retained"])
@@ -363,6 +370,8 @@ class PipelineStorageTests(unittest.TestCase):
                 patch.object(app_module, "download_video", side_effect=download),
                 patch.object(app_module, "transcribe_video_with_model", return_value={
                     "text": "[00:01] 字幕",
+                    "visual_evidence": [{"source_kind":"image_vision","asset_kind":"video",
+                        "time_start_ms":1000,"description":"人物居中近景","confidence":.9}],
                     "status": "ok",
                     "method": "moxus_video",
                     "model": "gemini-3.6-flash",
@@ -381,6 +390,7 @@ class PipelineStorageTests(unittest.TestCase):
 
         self.assertEqual("video", content["media_type"])
         self.assertEqual("[00:01] 字幕", content["video_text"])
+        self.assertEqual("video", content["vision_evidence"][0]["asset_kind"])
         self.assertEqual("video_download", content["collection_status"]["media"]["method"])
 
     def test_result_api_can_render_remote_images_without_local_files(self):

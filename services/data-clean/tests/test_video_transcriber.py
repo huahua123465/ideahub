@@ -31,6 +31,26 @@ class VideoTranscriberTests(unittest.TestCase):
         ]'''
         self.assertEqual(2, len(video_transcriber._parse_model_segments(text)))
 
+    def test_visual_evidence_keeps_objective_fields_and_time_offset(self):
+        text = '''{"segments":[],"visual_evidence":[{
+            "start_seconds":1.25,"end_seconds":3.5,
+            "description":"人物从全景走到近景","composition":"居中构图",
+            "camera":"推进镜头","confidence":0.88
+        }]}'''
+        evidence = video_transcriber._parse_model_visual_evidence(text, 10)
+        self.assertEqual(1, len(evidence))
+        self.assertEqual(11250, evidence[0]["time_start_ms"])
+        self.assertEqual(13500, evidence[0]["time_end_ms"])
+        self.assertEqual("image_vision", evidence[0]["source_kind"])
+
+    def test_overlapping_visual_evidence_is_deduplicated(self):
+        merged = video_transcriber._merge_visual_evidence([
+            {"time_start_ms":58000,"description":"人物居中近景"},
+            {"time_start_ms":60000,"description":"人物居中近景。"},
+            {"time_start_ms":70000,"description":"切换为室外全景"},
+        ])
+        self.assertEqual(2, len(merged))
+
     def test_overlapping_chunk_duplicates_are_removed(self):
         merged = video_transcriber._merge_segments([
             {"seconds": 58.1, "text": "这是重复字幕"},

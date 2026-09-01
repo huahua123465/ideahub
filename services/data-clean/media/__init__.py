@@ -11,6 +11,7 @@ from .subtitle_extractor import extract_burned_subtitles, extract_or_load_subtit
 from .text_ocr import (extract_video_text, download_post_images, extract_images_text,
                        extract_cover_title_from_path, reconcile_cover_title)
 from .video_transcriber import transcribe_video_with_model
+from .visual_evidence import analyze_images_visual_evidence
 from .comment_extractor import extract_hot_comments
 from .platform_login import (
     clear_xhs_login_session,

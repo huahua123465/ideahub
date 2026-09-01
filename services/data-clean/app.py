@@ -46,7 +46,8 @@ from media import (download_video, extract_video_text,
                    sync_saved_xhs_account, friendly_xhs_login_error,
                    extract_cover_title_from_path,
                    download_video_cover, reconcile_cover_title,
-                   transcribe_video_with_model, url_declares_video)
+                   transcribe_video_with_model, analyze_images_visual_evidence,
+                   url_declares_video)
 from media import XHS_QR_FILE
 from media.content_extractor import (extract_page, clean_post_title,
                                      strip_topics_from_description)
@@ -766,6 +767,8 @@ def _run_pipeline(
         engagement = {"likes": "", "collects": "", "comments": ""}
         topics = []
         image_results = []
+        vision_evidence = []
+        visual_evidence_meta = {}
         cover_title_info = {}
         title = ""
         description = ""
@@ -888,8 +891,10 @@ def _run_pipeline(
                     video_path, str(working_dir / "video_model")
                 )
                 video_text = model_video_text.get("text") or ""
+                vision_evidence.extend(model_video_text.get("visual_evidence") or [])
                 video_text_meta = {
-                    key: value for key, value in model_video_text.items() if key != "text"
+                    key: value for key, value in model_video_text.items()
+                    if key not in {"text", "visual_evidence"}
                 }
                 if not video_text:
                     progress(46, "视频模型不可用，正在使用本地抽帧 OCR 兜底...")
@@ -899,6 +904,9 @@ def _run_pipeline(
                         "method": "frame_ocr",
                         "interval_seconds": 3.0,
                         "fallback_reason": model_video_text.get("message") or "视频模型未返回文字",
+                        "vision_status": model_video_text.get("status") or "unavailable",
+                        "vision_provider": model_video_text.get("provider") or "",
+                        "vision_model": model_video_text.get("model") or "",
                     }
                 if video_text:
                     video_ocr_path = task_dir / "video_ocr.txt"
@@ -952,6 +960,13 @@ def _run_pipeline(
                 image_results = extract_images_text(image_downloads)
                 if image_results:
                     cover_title_info = image_results[0].get("cover_title") or {}
+                    progress(58, "正在生成可核验的图片视觉证据...")
+                    image_vision = analyze_images_visual_evidence([
+                        {**item, "index": index}
+                        for index, item in enumerate(image_results, 1)
+                    ])
+                    vision_evidence.extend(image_vision.get("items") or [])
+                    visual_evidence_meta = image_vision.get("meta") or {}
                 for item in image_results:
                     add_artifact("image", item["path"], {"ocr_text": item["text"]})
             media_probe.update({
@@ -1051,6 +1066,13 @@ def _run_pipeline(
             "video_text": video_text,
             "video_text_meta": video_text_meta,
             "audio_text": audio_text,
+            "vision_evidence": vision_evidence,
+            "visual_evidence_meta": visual_evidence_meta or {
+                "status": "ok" if vision_evidence else "empty",
+                "provider": video_text_meta.get("provider") or video_text_meta.get("vision_provider") or "",
+                "model": video_text_meta.get("model") or video_text_meta.get("vision_model") or "",
+                "items_succeeded": len(vision_evidence),
+            },
             "comments": comment_result["comments"],
             "comment_summary": comment_result["comment_summary"],
             "images": [

@@ -70,8 +70,10 @@ try{
     trendTab:document.querySelector('[data-research-tab="trend"]')!==null,
     pending:Number(document.querySelector('[data-element-status-filter="pending"] b')?.textContent),
     confirmed:Number(document.querySelector('[data-element-status-filter="confirmed"] b')?.textContent),
+    quality:document.querySelector('.research-quality summary')?.textContent.replace(/\s+/g,' ').trim(),
   }));
-  assert.deepEqual(state,{dimensions:10,focused:'sampleResearchTab-elements',panels:1,tabs:3,trendTab:false,pending:10,confirmed:5});
+  assert.deepEqual(state,{dimensions:10,focused:'sampleResearchTab-elements',panels:1,tabs:3,trendTab:false,pending:10,confirmed:5,
+    quality:'AI 质量反馈基于当前使用中的 AI 拆解版本人工覆盖 69%'});
   await page.click('[data-element-status-filter="all"]');await page.waitForFunction(()=>document.querySelectorAll('.dimension-card').length===15);
   // The inline preview fallback stays readable if detail focus mode is absent or temporarily restored late.
   state=await page.evaluate(()=>{const root=document.querySelector('#v-samples');root.classList.remove('samples-detail-mode');const grid=document.querySelector('.dimension-groups>section>div'),tags=document.querySelector('.dimension-tags'),pills=[...document.querySelectorAll('.dimension-tags label i')];return{columns:getComputedStyle(grid).gridTemplateColumns,tagColumns:getComputedStyle(tags).gridTemplateColumns,verticalPill:pills.some(node=>node.getBoundingClientRect().height>node.getBoundingClientRect().width*1.6)};});

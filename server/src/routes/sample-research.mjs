@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { query, tx } from '../db/index.mjs';
 import { currentUser } from '../lib/auth.mjs';
+import { activeProvider } from '../lib/ai-provider.mjs';
 import { sampleListItem } from '../lib/sample-archive.mjs';
 import {
   ANALYSIS_DIMENSIONS,
@@ -14,6 +15,7 @@ import {
   normalizeDecision,
   normalizeManualElements,
   recordMetricSnapshot,
+  requestAssetVisionEvidence,
   requestAiAnalysis,
   requestAiEvaluation,
   analysisFailureTransition,
@@ -122,6 +124,34 @@ async function loadResearchSource(sampleId, captureId = null, db = { query }) {
   const { rows:assets } = await db.query(
     'SELECT * FROM sample_assets WHERE sample_id=$1 AND deleted_at IS NULL ORDER BY id', [sampleId]);
   return { sample, capture:captures[0], assets };
+}
+
+async function manifestWithRuntimeVision(source,provider,{preserveInputSha=false,supplemental=[]}={}){
+  const base=buildEvidenceManifest({...source,supplementalVisionEvidence:supplemental});
+  const pinnedIds=new Set(base.sources.filter(item=>item.sourceKind==='asset_metadata'&&item.assetId!=null)
+    .map(item=>Number(item.assetId)));
+  const coveredIds=new Set(base.sources.filter(item=>item.sourceKind==='image_vision'&&item.assetId!=null)
+    .map(item=>Number(item.assetId)));
+  const missing=(source.assets||[]).filter(asset=>pinnedIds.has(Number(asset.id))&&!coveredIds.has(Number(asset.id)));
+  if(!missing.length)return base;
+  const generated=await requestAssetVisionEvidence({assets:missing,provider});
+  if(!generated.length)return base;
+  const enriched=buildEvidenceManifest({...source,supplementalVisionEvidence:generated});
+  if(preserveInputSha)enriched.inputSha256=base.inputSha256;
+  return enriched;
+}
+
+function carriedRuntimeVision(version){
+  const byLocator=new Map();
+  for(const element of version?.elements||[])for(const evidence of element.evidence||[]){
+    if(evidence.kind!=='image_vision'||!String(evidence.locator||'').startsWith('runtime.asset_vision['))continue;
+    if(byLocator.has(evidence.locator))continue;
+    let observation;try{observation=JSON.parse(evidence.quoteText||'{}');}catch{continue;}
+    if(!observation?.description)continue;
+    byLocator.set(evidence.locator,{...observation,source_kind:'image_vision',asset_kind:'image',
+      asset_id:evidence.assetId??null});
+  }
+  return [...byLocator.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([,item])=>item);
 }
 
 async function activeDimensionTags(db = { query }) {
@@ -262,12 +292,14 @@ async function processAnalysisJob(jobId) {
   if (!job) return;
   try {
     const source = await loadResearchSource(Number(job.sample_id), Number(job.source_capture_id));
-    const manifest = buildEvidenceManifest(source);
-    if (manifest.inputSha256 !== job.input_sha256) {
+    const baseManifest = buildEvidenceManifest(source);
+    if (baseManifest.inputSha256 !== job.input_sha256) {
       const error = new Error('analysis input changed'); error.code = 'INPUT_CHANGED'; throw error;
     }
+    const provider=await activeProvider();
+    const manifest=await manifestWithRuntimeVision(source,provider,{preserveInputSha:true});
     const tags = await activeDimensionTags();
-    const result = await requestAiAnalysis({ manifest, activeTags:tags });
+    const result = await requestAiAnalysis({ manifest, activeTags:tags,provider });
     const version = await tx(async client => {
       const {rows:owned}=await client.query(`SELECT id FROM sample_analysis_jobs
         WHERE id=$1 AND status='running' AND attempts=$2 FOR UPDATE`,[job.id,job.attempts]);
@@ -388,7 +420,9 @@ async function loadVersionDetail(sampleId, versionId) {
     evidenceByElement.get(key).push({
       id:Number(item.id), sourceId:item.source_id, verificationStatus:item.verification_status,
       verified:item.verification_status==='verified', sourceType:item.display_label || item.source_kind,
-      kind:item.source_kind, locator:item.locator?.pointer || item.locator?.jsonPath || null,
+      kind:item.locator?.semanticKind || item.source_kind,
+      locator:item.locator?.pointer || item.locator?.jsonPath || null,
+      assetId:item.asset_id==null?null:Number(item.asset_id),
       contentSha256:item.content_sha256,
       quoteText:item.quote_text, startOffset:item.start_offset, endOffset:item.end_offset,
       timeStartMs:item.time_start_ms == null ? null : Number(item.time_start_ms),
@@ -618,14 +652,44 @@ export async function combinationSearch(body = {}) {
     incomplete:Number(counts[0]?.incomplete||0) } };
 }
 
+function qualityRow(row={}){
+  const total=Number(row.total||0),reviewed=Number(row.reviewed||0),confirmed=Number(row.confirmed||0);
+  const edited=Number(row.edited||0),rejected=Number(row.rejected||0);
+  const ratio=value=>reviewed?Number((value/reviewed).toFixed(4)):null;
+  return { total,reviewed,pending:Math.max(0,total-reviewed),confirmed,edited,rejected,
+    reviewCoverage:total?Number((reviewed/total).toFixed(4)):null,
+    exactConfirmationRate:ratio(confirmed),correctionRate:ratio(edited),rejectionRate:ratio(rejected) };
+}
+
+export async function analysisQualitySummary(db={query}){
+  const base=`FROM samples s JOIN sample_analysis_versions v ON v.id=s.current_analysis_version_id
+    JOIN sample_analysis_elements e ON e.version_id=v.id
+    LEFT JOIN LATERAL(SELECT decision FROM sample_element_decisions d WHERE d.element_id=e.id
+      ORDER BY d.created_at DESC,d.id DESC LIMIT 1)d ON true
+    WHERE s.deleted_at IS NULL AND v.source='ai' AND v.status='complete'`;
+  const aggregate=`count(*)::int total,count(d.decision)::int reviewed,
+    count(*) FILTER(WHERE d.decision='confirmed')::int confirmed,
+    count(*) FILTER(WHERE d.decision='edited')::int edited,
+    count(*) FILTER(WHERE d.decision='rejected')::int rejected`;
+  const [{rows:overallRows},{rows:dimensionRows},{rows:modelRows}]=await Promise.all([
+    db.query(`SELECT ${aggregate} ${base}`),
+    db.query(`SELECT e.dimension_key,${aggregate} ${base} GROUP BY e.dimension_key ORDER BY e.dimension_key`),
+    db.query(`SELECT v.model_name,v.prompt_version,${aggregate} ${base}
+      GROUP BY v.model_name,v.prompt_version ORDER BY count(*) DESC,v.model_name,v.prompt_version`),
+  ]);
+  return { overall:qualityRow(overallRows[0]),
+    dimensions:dimensionRows.map(row=>({dimensionKey:row.dimension_key,...qualityRow(row)})),
+    models:modelRows.map(row=>({modelName:row.model_name,promptVersion:row.prompt_version,...qualityRow(row)})) };
+}
+
 export function mount(router) {
   router.get('/api/sample-research/config', async (req, res) => {
     await currentUser(req);
-    const tags = await activeDimensionTags();
+    const [tags,quality] = await Promise.all([activeDimensionTags(),analysisQualitySummary()]);
     const tagsByKind = Object.fromEntries(ANALYSIS_DIMENSIONS.map(dimension => [dimension.key,
       tags.filter(tag => tag.kind === dimension.key)]));
     sendJson(res, 200, { dimensions:ANALYSIS_DIMENSIONS, targets:ANALYSIS_TARGETS, tagsByKind,
-      schemaVersion:RESEARCH_SCHEMA_VERSION, promptVersion:RESEARCH_PROMPT_VERSION });
+      schemaVersion:RESEARCH_SCHEMA_VERSION, promptVersion:RESEARCH_PROMPT_VERSION,quality });
   });
 
   router.post('/api/samples/:id/analysis-jobs', async (req, res, params) => {
@@ -636,7 +700,6 @@ export function mount(router) {
       body.sourceCaptureId == null ? null : strictId(body.sourceCaptureId, '采集版本 id'));
     const manifest = buildEvidenceManifest(source);
     // Refuse before inserting a fake queued/completed job when there is no provider key.
-    const { activeProvider } = await import('../lib/ai-provider.mjs');
     const provider = await activeProvider();
     if (!provider?.apiKey) {
       throw new HttpError(503, '尚未配置 AI，可继续使用人工拆解',
@@ -738,17 +801,17 @@ export function mount(router) {
     }
     const source = await loadResearchSource(sampleId,
       body.sourceCaptureId == null ? null : strictId(body.sourceCaptureId, '采集版本 id'));
-    const manifest = buildEvidenceManifest(source);
+    const provider = await activeProvider();
+    if (!provider?.apiKey) throw new HttpError(503, '尚未配置 AI，可继续使用人工拆解',
+      { code:'AI_NOT_CONFIGURED', manualEntryAllowed:true });
+    const carriedVision=carriedRuntimeVision(base);
+    const manifest=await manifestWithRuntimeVision(source,provider,{supplemental:carriedVision});
     const manifestIds = new Set(manifest.sources.map(item => item.sourceId));
     const incompatible = base.elements.filter(element => element.dimensionKey !== dimensionKey
       && element.state === 'value' && !(element.evidence || []).some(item => manifestIds.has(item.sourceId)));
     if (incompatible.length) {
       throw conflict('原版部分证据不在当前采集快照中，无法保证其他维度原样继承；请改用整篇 AI 重新拆解');
     }
-    const { activeProvider } = await import('../lib/ai-provider.mjs');
-    const provider = await activeProvider();
-    if (!provider?.apiKey) throw new HttpError(503, '尚未配置 AI，可继续使用人工拆解',
-      { code:'AI_NOT_CONFIGURED', manualEntryAllowed:true });
     const activeTags = await activeDimensionTags();
     const activeTagIds = new Set(activeTags.map(tag => Number(tag.id)));
     const idempotencyKey = `partial:${versionId}:${dimensionKey}:${randomUUID()}`;
