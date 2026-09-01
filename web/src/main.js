@@ -25,6 +25,7 @@ import * as tagadmin from './views/tagadmin.js';
 import * as tagfilter from './views/tagfilter.js';
 import * as importer from './views/importer.js';
 import * as dashboard from './views/dashboard.js';
+import * as functionTree from './views/function-tree.js';
 import * as learning from './views/learning.js';
 import * as collector from './views/collector.js';
 import * as samples from './views/samples.js';
@@ -39,6 +40,7 @@ let view = 'home';
  */
 const CHROME = {
   home:         { group: '总览', title: '今日工作台' },
+  functionTree: { group: '总览', title: '项目功能树' },
   pool:         { group: '市场与内容', title: '灵感池',   create: '提交灵感' },
   demands:      { group: '市场与内容', title: '用户需求', create: '新增需求' },
   formal:       { group: '市场与内容', title: '正式库',   create: '提交灵感' },
@@ -226,7 +228,7 @@ function syncDrawerVote(d) {
 /** 所有一级视图。
     clientDetail 没有对应的导航按钮 —— 它是从客户档案点进去的二级页面，
     所以下面切视图时要单独处理它的 tab 高亮（客户档案那颗仍然亮着）。 */
-const VIEWS = ['home', 'pool', 'formal', 'stats', 'funnel', 'samples', 'collector', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
+const VIEWS = ['home', 'functionTree', 'pool', 'formal', 'stats', 'funnel', 'samples', 'collector', 'clientDetail', 'tagadmin', 'learning', ...BOARD_ORDER];
 
 function go(next) {
   // 全局搜索只服务当前操作，不把上一页关键词带进下一个业务页面。
@@ -234,6 +236,7 @@ function go(next) {
   if (next === view) return;
   if (view === 'collector') collector.leave();
   if (view === 'samples') samples.leave();
+  if (view === 'functionTree') functionTree.leave();
   view = next;
   for (const k of VIEWS) {
     $('#v-' + k).classList.toggle('on', k === next);
@@ -262,6 +265,7 @@ function go(next) {
 
   if (next === 'stats') { stats.reset(); stats.render(); }
   if (next === 'home') dashboard.render();
+  if (next === 'functionTree') functionTree.render();
   if (next === 'formal') formal.render();
   if (next === 'pool') pool.render();
   if (BOARD_ORDER.includes(next)) board.render(next);
@@ -331,6 +335,13 @@ function bind() {
     }
   });
   learning.events.addEventListener('back', () => go('home'));
+  functionTree.events.addEventListener('navigate', event => {
+    const { action, target, section } = event.detail;
+    if (action === 'search') { focusGlobalSearch(); return; }
+    if (action === 'import') { importer.open(); return; }
+    if (target === 'learning') learning.setSection(section || 'framework');
+    if (target) go(target);
+  });
   collector.events.addEventListener('open-sample', event => {
     samples.openSample(event.detail.sampleId);
     go('samples');
