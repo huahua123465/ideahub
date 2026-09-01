@@ -1,0 +1,41 @@
+{
+  "skill_name": "ideahub-ui-qa",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我刚改了 web/styles.css 和提交弹窗，帮我完整验收一下桌面与手机界面。",
+      "expected_output": "运行语法与通用 UI QA，读取 report.json，查看桌面/手机截图并报告专项风险。",
+      "files": [],
+      "expectations": [
+        "运行 npm run test:ui 或 Windows 等价命令",
+        "检查 scripts/.uidiff/report.json 的 browserErrors",
+        "查看 1440×900 与 390×844 截图",
+        "不连接生产环境或真实数据库"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "样本库四个 tab 快速来回点的时候偶尔显示错数据。修完后应该跑哪些验收？",
+      "expected_output": "通用 UI QA 加样本库专项测试，明确旧响应覆盖、控制台、移动布局与未执行项。",
+      "files": [],
+      "expectations": [
+        "通用 smoke test 不替代样本库专项业务断言",
+        "验证慢响应和旧请求不得覆盖最后选择",
+        "检查 console/page errors 与页面级横向溢出",
+        "报告已验证和未执行的范围"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "npm run test:ui 绿了，是不是就能说全站没问题？",
+      "expected_output": "拒绝扩大测试结论，解释通用合同覆盖面，并列出 API、数据库、Collector 和人工视觉判断的额外门禁。",
+      "files": [],
+      "expectations": [
+        "不把通用 UI smoke 通过声称为全站所有业务通过",
+        "区分 DOM 断言、截图人工判断和专项业务测试",
+        "指出 mock 页面不能证明生产 API 合约",
+        "根据改动范围选择额外测试"
+      ]
+    }
+  ]
+}

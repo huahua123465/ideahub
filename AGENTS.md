@@ -1,166 +1,60 @@
-# IdeaHub 项目全局修改与部署规则
+# IdeaHub 全局安全与技能路由
 
-> 本文件适用于整个仓库。任何人或代码助手在修改项目前必须先读完。
-> 当前工作模式是：Windows 本地修改并推送，VPS 端由维护者拉取、重建、切换容器并验证。
+> 本文件适用于整个仓库，只保留每次任务都必须知道的安全规则。开发、验收、数据库、Collector 与发布细节放在 `.agents/skills/`，按任务加载。
+> 当前工作模式是 Windows 本地修改并推送，VPS 维护者人工拉取、重建和验证；推送不会自动上线。
 
-## 1. 先明确：这不是热部署
+## 1. 动手前的全局门槛
 
-代码推送后不会自动上线，也没有仓库轮询或 CI/CD 自动部署。
+1. 运行 `git status --short --branch`，确认当前目录是 Git 工作区且没有来历不明的改动。
+2. 运行 `git fetch origin --prune`，再识别当前分支及其 upstream。存在 upstream 时必须执行无参数 `git pull --ff-only`，先同步当前远端分支；不能用拉取 `origin/main` 代替同步当前分支。
+3. 单独检查 `origin/main` 是否为当前 `HEAD` 的祖先。不是祖先时停止修改，先决定如何安全接入 main；不要让 `git pull` 隐式生成合并提交。
+4. 已有的用户改动不覆盖、不丢弃、不替用户提交；需要绕开时明确说明。
+5. 先判断任务是否涉及数据库、`.env`、依赖、Docker/Caddy、端口/域名、Collector、生产数据或线上操作，再加载对应 skill。
+6. 默认只在本地工作。没有用户明确要求和相应权限，不连接、不修改生产环境。
 
-实际流程：
+## 2. 按需技能路由
 
-1. Windows 本地：拉取最新代码 → 修改 → 本地验证 → 提交并推送。
-2. 修改者主动通知 VPS 维护者，并说明本次改动属于哪种部署类型。
-3. VPS：`git pull` → `docker compose up -d --build` → 健康检查与页面验证。
-4. 用户刷新浏览器查看效果。
+任务匹配下列范围时，修改前完整读取相应 `SKILL.md`；跨多个范围就同时使用多个 skill。
 
-构建镜像时旧容器仍在运行，网站通常正常；切换容器和等待健康检查时会有几秒不可访问。因此准确说法是“重新构建并短暂停机切换”，不要称为“热更新”或“无感发布”。有同事正在使用时，应先约定切换时间。
+| 任务范围 | 必须读取 |
+|---|---|
+| 页面、导航、弹窗、交互、CSS、响应式、前端 mock/API | `.agents/skills/ideahub-frontend/SKILL.md` |
+| 任何 `web/` 界面改动的完成验收 | `.agents/skills/ideahub-ui-qa/SKILL.md` |
+| 后端 route/lib、认证、DTO、上传、事件、AI provider | `.agents/skills/ideahub-backend/SKILL.md` |
+| 表、字段、索引、约束、迁移、备份恢复 | `.agents/skills/ideahub-database/SKILL.md` |
+| 内容采集、Collector 代理、二维码、Cookie、OCR/FFmpeg/Chromium | `.agents/skills/ideahub-collector/SKILL.md` |
+| 提交、推送、上传仓库、依赖、部署、VPS、`.env`、Docker/Caddy/端口 | `.agents/skills/ideahub-release/SKILL.md` |
 
-## 2. 动手前的强制检查
+VPS 上工作时还必须完整读取 `CLAUDE.md`。它记录同机邻居服务、共享 Caddy、18080 端口与生产禁止项，skills 不能替代它。
 
-1. 确认当前目录是真正的 Git 工作区：`git status --short --branch` 必须能够正常执行。
-2. **每次修改任何文件前都必须先同步远端 `main`。** VPS 每天会把数据库备份、附件变化和可能的服务器端改动自动提交并推送到同一个仓库；不能假定本地仍是最新版。推荐顺序：
-   - 先执行 `git status --short --branch`，确认本地没有来历不明的改动。
-   - 再执行 `git pull --ff-only origin main`；同步失败就停止修改并查明原因，不能跳过。
-   - 同步成功后再开始编辑，不在同步前预先修改文件。
-3. 工作区若已有不属于本次任务的改动，不覆盖、不丢弃、不替用户提交；先说明情况。
-4. 先判断改动是否会涉及数据库、`.env`、端口、域名、Docker/Caddy、生产数据或依赖。
-5. 不连接、不修改线上环境，除非用户明确要求并提供相应权限。本地改代码不等于获准部署。
+## 3. 始终有效的数据与秘密边界
 
-### 推送前再次防止覆盖 VPS
+- `.env`、内部 token、API Key、平台 Cookie 和 storage state 默认不修改、不展示、不复制到聊天或日志，也绝不能进入 `web/`。
+- `backup/ideahub-db.sql` 和 `data/uploads/` 是生产快照与真实附件，不是测试素材；没有逐项授权不修改、不删除、不批量整理。
+- 不删除 `data/pg/`、Docker volume、数据库或任何生产数据，不用删库重建和 `npm run db:reset` 代替迁移。
+- 不把真实配置、数据库导出或客户附件上传到公开仓库、公开链接或第三方服务。含生产数据的远端仓库必须保持 Private。
+- 本地测试使用隔离数据库和单独测试文件，不提交测试产生的数据目录、临时附件、bundle、截图或日志。
+- 不执行可能波及同机项目的全局 Docker 清理、批量停止、跨项目 compose 或 `/opt/ai-stack/**` 修改。
 
-- 提交前检查差异，确保没有误提交 `.env`、数据库快照、附件或生成物的变化。
-- 推送前执行 `git fetch origin main`，确认远端在修改期间是否新增了 VPS 自动备份提交。
-- 如果远端已前进或 `git push` 被拒绝，**严禁使用 `git push --force`、`--force-with-lease` 或任何改写远端历史的方式**。
-- 应先保留本地提交，再安全接入远端的新提交；有冲突时逐项检查，尤其不能用本地旧版覆盖 VPS 新产生的 `.env`、`backup/ideahub-db.sql` 或 `data/uploads/`。
-- 只有确认本地提交建立在最新远端之上、差异范围正确后才能推送。
+## 4. 修改与验证总则
 
-## 3. 可正常修改的区域
+- 只改完成任务所需的源码、测试、文档和配置，不顺手重构无关区域。
+- JavaScript 修改至少运行 `node --check`；前端改动必须使用 `ideahub-ui-qa`；后端、数据库和 Collector 使用各自专项门禁。
+- `web/dist/` 是生成物，不手工编辑、不提交。生产前端由 `scripts/build-web.mjs` 构建，源码变更需要重建镜像才会线上生效。
+- 新增 npm 依赖必须同时更新 `package.json` 与 `package-lock.json`，并按 B 类发布交接。
+- 不为了让测试变绿而放宽安全边界、删除有效场景、隐藏浏览器错误或自动更新未经确认的视觉基准。
+- 不为普通本地验证触碰生产环境。
 
-以下内容通常可以在本地直接修改，但仍需按第 7 节验证：
+## 5. 提交与推送保护
 
-- `web/src/`：前端业务逻辑和页面行为。
-- `web/*.css`、`web/*.html`：页面样式和结构。
-- `server/src/routes/`、`server/src/lib/` 等不涉及表结构的后端逻辑。
-- `scripts/`：仅作用于本项目的开发、构建和检查脚本。
-- `docs/`、`README.md`、`进度记录.md` 等文档。
-- `package.json` 和依赖锁文件中的项目级 npm 依赖，但必须按“依赖变更”要求交接。
+1. 提交前查看完整差异并运行 `git diff --check`，确认没有误提交秘密、备份、附件或生成物。
+2. 推送前再次执行 `git fetch origin --prune`，同时比较当前 upstream 与 `origin/main`。
+3. 远端已前进或 push 被拒绝时，安全接入新提交并逐项检查冲突；严禁 `git push --force`、`--force-with-lease` 或任何远端历史改写。
+4. 不能用本地旧版覆盖 VPS 新产生的 `.env`、`backup/ideahub-db.sql`、`data/uploads/` 或其他备份资产。
+5. Collector 功能分支没有通过 `ideahub-collector` 的 VPS/真实平台门禁前，不得合并 main。
 
-特别注意：
+## 6. 完成交接
 
-- `web/styles.css` 是已确认 UI 的主要样式真源，改动前要确认确实需要改变既有视觉；改后必须做页面检查。
-- 生产前端会在镜像构建时由 `scripts/build-web.mjs` 打包。只改源码、只 `git pull` 都不会让线上生效，仍需重建镜像。
-- 新增 npm 依赖可以随镜像构建自动安装；提交时必须同时更新 `package.json` 和 `package-lock.json`，并在交接中明确写“新增/升级依赖，需要重新构建镜像”。
+完成任务时使用 `ideahub-release` 的交接格式，说明改动、本地验证、A/B/C/D 上线类型和 VPS 待办。
 
-## 4. 必须先提示、确认后才能修改的区域
-
-### 数据库结构
-
-涉及 `server/src/schema.sql`、表、字段、索引、约束、枚举、触发器或数据迁移时，必须先明确提示：
-
-- `docker compose up -d --build` 不会自动执行 `schema.sql`。
-- 只提交 `schema.sql` 不会改变线上已有数据库。
-- 必须为现有生产库准备单独的 `ALTER`/迁移 SQL，并由 VPS 维护者在备份后人工执行。
-- 不得用 `npm run db:reset`、删库重建或恢复整库备份来代替生产迁移。
-- 迁移应尽量可重复检查、可回滚，并说明执行顺序和验证查询。
-
-除非用户明确授权，不执行任何线上 SQL。完成此类改动后，最终交接必须醒目标注“数据库迁移未自动生效，VPS 端还有人工步骤”。
-
-### `.env` 和密钥
-
-`.env` 包含生产口令和 API Key，并按当前项目策略随私有仓库备份。默认不修改、不展示内容、不复制到聊天或日志，也绝不能把其中的秘密写进 `web/`。
-
-修改 `.env` 前必须先说明并取得确认，因为 VPS 执行 `git pull` 时服务器上的 `.env` 可能被仓库版本覆盖。新增环境变量时还要同步检查：
-
-- `.env.example` 是否需要补充说明。
-- `docker-compose.yml` 是否已把该变量显式传入对应容器。
-- 是否需要重建/重启容器才能生效。
-- 私有仓库属性是否仍然成立；含秘密的仓库不得转为 Public。
-
-### 部署和网络配置
-
-修改以下文件前必须先提示影响并确认：
-
-- `docker-compose.yml`
-- `docker-compose.override.yml`
-- `Dockerfile`
-- `Caddyfile`
-- HTTP/HTTPS 端口、域名、证书、反向代理和健康检查配置
-
-VPS 上 IdeaHub 使用宿主机端口 `18080`。公网 HTTPS 入口位于另一个项目的 `/opt/ai-stack/new-api/Caddyfile.canvas-media`，同一个前置 Caddy 还服务其他项目。不得在本地仓库改动的名义下擅自修改那个外部文件或重启 `canvas-media-https`。完整的 VPS 邻居服务与端口限制见 `CLAUDE.md`。
-
-## 5. 默认禁止触碰的内容
-
-没有用户逐项明确授权时，不做以下操作：
-
-- 修改或删除 `backup/ideahub-db.sql` 中的生产数据库快照。
-- 修改、删除、批量整理 `data/uploads/` 中的真实用户附件。
-- 删除 `data/pg/`、Docker volume、数据库或任何生产数据。
-- 把真实 `.env`、数据库导出或客户附件上传到公开仓库、公开链接或第三方服务。
-- 执行 `docker system prune`、`docker volume prune`、批量停止容器等可能影响 VPS 其他项目的命令。
-- 在 VPS 上执行 `npm run db:reset`，或为图省事而删除现有数据库再恢复。
-- 改动 `/opt/ai-stack/**`、xray/x-ui 或其他项目的服务和端口。
-
-备份文件和 `data/uploads/` 是生产快照/数据，不是普通测试素材。需要测试写入时使用本地数据库和单独的测试文件。
-
-## 6. 本地运行与数据隔离
-
-有 Docker Desktop 时可在 Windows 本地运行完整副本。推荐只在全新的本地数据库上恢复仓库快照：
-
-```powershell
-docker compose up -d db
-Get-Content backup/ideahub-db.sql | docker compose exec -T db psql -U ideahub -d ideahub
-docker compose up -d --build
-```
-
-浏览器打开 `http://localhost:18080`。本地 `data/pg/` 与 VPS 数据库不是同一份，本地操作不会自动同步线上。
-
-注意：
-
-- 恢复 SQL 只适用于空的本地库；已有数据时先判断，不能直接重复灌入。
-- Windows 上不能直接使用 Bash 的 `< backup/ideahub-db.sql` 写法时，使用上面的 PowerShell 管道。
-- 也可使用 `docker-compose.dev.yml` 只启动开发数据库，再通过 `npm run dev` 开发。
-- 不要把本地测试产生的数据库文件、临时附件或生成物误提交。
-
-## 7. 每次修改后的验证要求
-
-按改动范围做最小充分验证，并如实报告未能执行的项目：
-
-- JavaScript：对改过的 `.js`/`.mjs` 文件执行语法检查。
-- 前端：运行 `node scripts/build-web.mjs` 验证能打包，并检查主要页面；构建脚本会改写 `web/index.html` 并生成被忽略的 `web/dist/`，不要误把一次性版本号当业务改动。
-- 后端/API：在可用的本地数据库上运行相关接口测试；当前完整自测入口是 `npm run test:api`。
-- Docker/依赖/环境配置：至少运行 `docker compose config`；Docker Desktop 可用时再实际构建和健康检查。
-- 数据库变更：在本地副本执行迁移，验证旧数据保留、应用可启动，并提供 VPS 人工迁移步骤。
-- UI：人工检查受影响页面。现有 `npm run test:ui` 的依赖和基准已知失效，未修复前不得把它声称为通过依据。
-
-不要为了验证普通代码改动而触碰生产环境。
-
-## 8. 完成修改时的强制交接格式
-
-每次完成任务都要向用户说清楚以下四项：
-
-1. **改了什么**：列出功能和关键文件。
-2. **本地验证**：列出已通过和未执行的检查。
-3. **上线类型**：从下面选择并明确写出。
-   - A：仅代码/样式改动——推送后，VPS 拉取并重建即可。
-   - B：新增或升级 npm 依赖——推送后重建会自动安装，但要明确提醒。
-   - C：数据库结构/数据迁移——重建不够，VPS 必须另执行迁移 SQL。
-   - D：`.env`/端口/域名/Docker/Caddy——高风险，需维护者先审核部署步骤。
-4. **VPS 待办**：明确写“无”或列出人工操作；不能只说“可以部署”。
-
-如果改动同时属于多类，按最高风险类别交接。推送完成后必须主动通知 VPS 维护者；VPS 不会自动轮询仓库。
-
-## 9. VPS 端发布核对
-
-VPS 维护者发布时应遵循 `CLAUDE.md` 的完整规则。最小流程为：
-
-1. 发布前确认 VPS 工作区干净，避免覆盖服务器端未提交改动。
-2. 检查邻居服务基线。
-3. `git pull`。
-4. 如果是 C 类，先备份并按交接执行迁移；如果是 D 类，先人工审核配置和影响范围。
-5. `docker compose up -d --build`。
-6. 检查容器健康状态和 `/api/health`，再验证受影响页面。
-7. 再次确认邻居服务未受影响。
-8. 告知用户切换完成和实际停机情况。
-
-任何发布失败都优先保住现有数据并回滚应用版本，不通过删库、删卷或清理全机 Docker 资源来排错。
+只有远端可读取到目标提交时才能说“已上传”。VPS 发布失败时优先保住数据并回滚应用版本，绝不通过删库、删卷或清理全机 Docker 资源排错。

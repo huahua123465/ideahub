@@ -16,6 +16,8 @@
     "db:reset": "node server/src/db/init.mjs --drop && node server/src/seed.mjs",
     "test:api": "node scripts/test-api.mjs",
     "test:ui": "node scripts/ui-check.mjs",
+    "lint:skills": "node scripts/lint-agent-skills.mjs",
+    "eval:skills": "node scripts/evaluate-agent-skills.mjs",
     "test": "npm run db:seed && npm run test:api && npm run test:ui",
     "demo": "node scripts/record-demo.mjs",
     "setup": "node scripts/setup.mjs"
