@@ -1,204 +1,350 @@
 /**
- * UI 一致性验收：npm run test:ui
+ * IdeaHub UI 基础验收：npm run test:ui
  *
- * 把真实应用逐屏截图，和客户确认过的演示原型（docs/UI原型-基准.html）逐像素比对，
- * 输出每一屏的差异比例和一张差异标注图。
+ * 目标不是把已经持续演进的产品强行与早期静态原型逐像素对齐，而是建立稳定、
+ * 可重复的产品级 UI 合同：生产 bundle 能构建，核心页面能打开，桌面和手机无
+ * 页面级横向溢出，关键弹窗留在视口内，并且浏览器没有脚本或 console 错误。
  *
- * 需要 playwright（只是开发工具，不进生产依赖）：
- *   npm i -D playwright && npx playwright install chromium
+ * 截图和机器可读报告写入 scripts/.uidiff/（已忽略，不进入 Git）。
  */
-import '../server/src/lib/env.mjs';
-import { chromium } from 'playwright';
-import sharp from 'sharp';
-import { mkdir, writeFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { build } from 'esbuild';
+import puppeteer from 'puppeteer';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const WEB = join(ROOT, 'web');
+const LEARNING = join(ROOT, 'server', 'content', 'learning');
 const OUT = join(ROOT, 'scripts', '.uidiff');
-const APP = process.env.UI_BASE || `http://127.0.0.1:${process.env.PORT || 3000}`;
-const BASE = 'file://' + join(ROOT, 'docs', 'UI原型-基准.html');
-const VIEW = { width: 1440, height: 900 };
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.pdf': 'application/pdf',
+  '.woff2': 'font/woff2',
+};
 
-/** 差异容忍度：单通道差 ≤ 该值算同色（抗锯齿会带来 1-2 的抖动） */
-const CHANNEL_TOL = 16;
-/** 每一屏允许的差异像素占比 */
-const LIMIT = 0.015;
+const wait = ms => new Promise(resolveWait => setTimeout(resolveWait, ms));
+const report = {
+  generatedAt: new Date().toISOString(),
+  bundleBytes: 0,
+  checks: [],
+  screenshots: [],
+  browserErrors: [],
+};
 
+await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
-const browser = await chromium.launch();
 
-/** 打开一个页面，禁掉 API 浮层和一切动画，让截图稳定 */
-async function page(url) {
-  const p = await browser.newPage({ viewport: VIEW, deviceScaleFactor: 1 });
-  await p.addInitScript(() => { window.IDEAHUB_SHOW_APILOG = false; });
-  await p.goto(url, { waitUntil: 'networkidle' });
-  await p.addStyleTag({ content: `*,*::before,*::after{
-    animation-duration:0s!important;animation-delay:0s!important;
-    transition-duration:0s!important;transition-delay:0s!important}
-    /* 调用浮层是运行时状态，不参与外观比对 */
-    #apilog{display:none!important}` });
-  return p;
-}
+// 在内存中构建与生产相同的 ESM bundle。这样 test:ui 能验证构建，又不会为了一个
+// 测试改写被 Git 跟踪的 web/index.html cache-busting 版本号。
+const buildResult = await build({
+  entryPoints: [join(WEB, 'src', 'main.js')],
+  bundle: true,
+  format: 'esm',
+  minify: true,
+  sourcemap: false,
+  target: ['es2022'],
+  write: false,
+  outfile: 'app.js',
+  logLevel: 'warning',
+});
+const bundleFile = buildResult.outputFiles?.find(file => file.path.endsWith('app.js'));
+assert.ok(bundleFile, 'esbuild did not produce app.js');
+const bundle = Buffer.from(bundleFile.contents);
+report.bundleBytes = bundle.length;
 
-/** 截图前统一收尾：鼠标挪开、焦点清掉，避免 hover / focus 环造成假差异 */
-async function settle(p) {
-  await p.mouse.move(1435, 895);
-  await p.evaluate(() => {
-    document.activeElement?.blur?.();
-    // 「我投过票了」是真实的用户状态，基准原型里没有。属于状态差异，不是样式差异。
-    document.querySelectorAll('.vote.voted, .big-vote.voted')
-      .forEach(e => e.classList.remove('voted'));
+const sourceHtml = await readFile(join(WEB, 'index.html'), 'utf8');
+const qaHtml = sourceHtml
+  .replace(
+    /<link rel="modulepreload"[\s\S]*?<!-- \/modulepreload -->/,
+    '<!-- UI QA uses one in-memory production bundle -->',
+  )
+  .replace(
+    /<script type="module" src="\.\/(?:src\/main\.js|dist\/app\.js[^"]*)"><\/script>/,
+    '<script type="module" src="/__qa/app.js"></script>',
+  );
+assert.match(qaHtml, /src="\/__qa\/app\.js"/, 'index.html entry script was not recognized');
+
+const server = createServer(async (req, res) => {
+  try {
+    const pathname = decodeURIComponent(new URL(req.url || '/', 'http://127.0.0.1').pathname);
+
+    if (pathname === '/__qa/app.js') {
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'content-length': bundle.length,
+        'cache-control': 'no-store',
+      }).end(bundle);
+      return;
+    }
+
+    if (pathname === '/favicon.ico') {
+      res.writeHead(204).end();
+      return;
+    }
+
+    const learning = /^\/api\/learning\/(framework|detail)\/([^/]+\.pdf)$/.exec(pathname);
+    if (learning) {
+      const file = join(LEARNING, learning[1], learning[2]);
+      const body = await readFile(file);
+      res.writeHead(200, {
+        'content-type': 'application/pdf',
+        'content-length': body.length,
+        'cache-control': 'no-store',
+      }).end(body);
+      return;
+    }
+
+    // mock 模式不应误用静态 HTML 伪装成 API JSON。
+    if (pathname.startsWith('/api/')) {
+      const body = Buffer.from(JSON.stringify({ error: 'UI QA runs with local mock data' }));
+      res.writeHead(404, {
+        'content-type': 'application/json; charset=utf-8',
+        'content-length': body.length,
+      }).end(body);
+      return;
+    }
+
+    let rel = normalize(pathname).replace(/^([/\\])+/, '');
+    if (!rel || rel.endsWith('/') || rel === 'index.html') {
+      const body = Buffer.from(qaHtml);
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-length': body.length,
+        'cache-control': 'no-store',
+      }).end(body);
+      return;
+    }
+
+    const webRoot = resolve(WEB) + sep;
+    const file = resolve(WEB, rel);
+    if (!file.startsWith(webRoot)) {
+      res.writeHead(403).end('Forbidden');
+      return;
+    }
+    if ((await stat(file)).isDirectory()) throw new Error('directory');
+    const body = await readFile(file);
+    res.writeHead(200, {
+      'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream',
+      'content-length': body.length,
+      'cache-control': 'no-store',
+    }).end(body);
+  } catch {
+    const body = Buffer.from('Not Found');
+    res.writeHead(404, {
+      'content-type': 'text/plain; charset=utf-8',
+      'content-length': body.length,
+      'cache-control': 'no-store',
+    }).end(body);
+  }
+});
+
+await new Promise((resolveListen, rejectListen) => {
+  server.once('error', rejectListen);
+  server.listen(0, '127.0.0.1', resolveListen);
+});
+const port = server.address().port;
+const base = `http://127.0.0.1:${port}/?mock=1&uiqa=1`;
+
+let browser;
+try {
+  browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
-  await p.waitForTimeout(180);
+
+  await runDesktop(browser);
+  await runMobile(browser);
+
+  assert.deepEqual(
+    report.browserErrors,
+    [],
+    `browser errors must fail UI QA:\n${report.browserErrors.map(item => `${item.scene}: ${item.message}`).join('\n')}`,
+  );
+
+  await writeFile(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
+  console.log(`UI QA passed: ${report.checks.length} checks, ${report.screenshots.length} screenshots`);
+  console.log(`Bundle: ${Math.round(report.bundleBytes / 1024)} KB`);
+  console.log(`Evidence: ${OUT}`);
+} catch (error) {
+  report.failure = error?.stack || String(error);
+  await writeFile(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
+  throw error;
+} finally {
+  if (browser) await browser.close();
+  await new Promise(resolveClose => server.close(resolveClose));
 }
 
-/**
- * 灵感池的卡片顺序由真实热度决定，而基准原型里是手写的固定顺序 ——
- * 这属于数据差异，不是 UI 差异。比对前按基准的标题顺序把卡片重排，
- * 这样红色差异点反映的就只有样式和布局问题。
- */
-async function alignCardOrder(pApp, pBase) {
-  const order = await pBase.$$eval('.card h3', els => els.map(e => e.textContent.trim()));
-  await pApp.evaluate(titles => {
-    const grid = document.querySelector('#poolGrid');
-    const byTitle = new Map([...grid.querySelectorAll('.card')]
-      .map(c => [c.querySelector('h3').textContent.trim(), c]));
-    for (const t of titles) { const el = byTitle.get(t); if (el) grid.appendChild(el); }
-  }, order);
+async function newPage(browserInstance, scene, viewport) {
+  const page = await browserInstance.newPage();
+  await page.setViewport({ ...viewport, deviceScaleFactor: 1 });
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+  page.on('pageerror', error => {
+    report.browserErrors.push({ scene, type: 'pageerror', message: error.message });
+  });
+  page.on('console', message => {
+    if (message.type() === 'error') {
+      report.browserErrors.push({ scene, type: 'console', message: message.text() });
+    }
+  });
+  await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+  await page.waitForSelector('#v-home.on .dash-hero', { timeout: 15_000 });
+  await page.addStyleTag({
+    content: `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important}`,
+  });
+  await wait(80);
+  return page;
 }
 
-const SCENES = [
-  {
-    name: '灵感池',
-    async base(p) { await p.waitForTimeout(300); },
-    async app(p)  { await p.waitForSelector('.card'); await p.waitForTimeout(300); },
-    async afterAlign(p) { await p.waitForTimeout(120); },
-  },
-  {
-    name: '正式库',
-    async base(p) { await p.click('#tab-formal'); await p.waitForTimeout(300); },
-    async app(p)  { await p.waitForSelector('.card'); },
-    async afterAlign(p) { await p.click('#tab-formal'); await p.waitForSelector('#formalBody tr'); await p.waitForTimeout(300); },
-  },
-  {
-    name: '统计看板',
-    async base(p) { await p.click('#tab-stats'); await p.waitForTimeout(1400); },
-    async app(p)  { await p.waitForSelector('.card'); },
-    async afterAlign(p) { await p.click('#tab-stats'); await p.waitForSelector('.stat-key-card'); await p.waitForTimeout(900); },
-    async normalize(p) {
-      await p.evaluate(() => {
-        const set = (sel, vals) => document.querySelectorAll(sel)
-          .forEach((e, i) => { e.textContent = vals[i % vals.length]; });
-        const r = document.querySelector('#statsRange'); if (r) r.textContent = '五类关键资料与基础销售漏斗 · 删除记录不参与统计';
-        set('.stat-key-value', ['32', '18', '14', '26', '9']);
-        set('.sales-value', ['26', '21', '13', '7', '3']);
-      });
-      await p.waitForTimeout(150);
-    },
-  },
-  {
-    name: '提交弹窗',
-    async base(p) { await p.click('#btnNew'); await p.waitForTimeout(400); },
-    async app(p)  { await p.waitForSelector('.card'); },
-    async afterAlign(p) { await p.click('#btnNew'); await p.waitForTimeout(400); },
-  },
-  {
-    name: '详情抽屉',
-    async base(p) { await p.click('.card[data-id="7"]'); await p.waitForTimeout(500); },
-    async app(p)  { await p.waitForSelector('.card'); },
-    async afterAlign(p) {
-      await p.locator('.card', { hasText: '用大模型自动给客服工单打标签' }).first().click();
-      await p.waitForSelector('#drawer.on .cmt-item');
-      await p.waitForTimeout(500);
-    },
-    async normalize(p) {
-      // 基准原型里这条灵感的卡片写着 12 条讨论、抽屉里却只画了 3 条（静态稿的自相矛盾）。
-      // 真实应用两处都是 12，是对的。比对时统一截到前 3 条，测的才是抽屉的样式而不是数据量。
-      await p.evaluate(() => {
-        const items = document.querySelectorAll('#dCmts .cmt-item');
-        items.forEach((e, i) => { if (i >= 3) e.remove(); });
-        const n = document.querySelector('#dCmtN'); if (n) n.textContent = '（12）';
-        const v = document.querySelector('#dViews'); if (v) v.textContent = '147 次浏览';
-      });
-      await p.waitForTimeout(120);
-    },
-  },
-];
-
-console.log(`\n\x1b[90m（比对基于种子数据的初始状态。数据被改过的话先跑 npm run db:seed）\x1b[0m`);
-console.log(`\n基准：${BASE.replace('file://', '')}`);
-console.log(`应用：${APP}\n`);
-
-let worst = 0, failed = 0;
-const report = [];
-
-for (const s of SCENES) {
-  const [pb, pa] = await Promise.all([page(BASE), page(APP)]);
-  await s.app(pa);
-  await alignCardOrder(pa, pb);
-  await s.base(pb);
-  if (s.afterAlign) await s.afterAlign(pa);
-  // 数字和条长是数据，不是 UI。归一化后再比，红点反映的才是样式问题。
-  if (s.normalize) { await s.normalize(pb); await s.normalize(pa); }
-  await Promise.all([settle(pb), settle(pa)]);
-  const [a, b] = await Promise.all([pb.screenshot(), pa.screenshot()]);
-  await Promise.all([pb.close(), pa.close()]);
-
-  const { pct, diffPng } = await compare(a, b);
-  const ok = pct <= LIMIT * 100;
-  worst = Math.max(worst, pct);
-  if (!ok) failed++;
-
-  const slug = s.name.replace(/\s/g, '');
-  await writeFile(join(OUT, `${slug}-基准.png`), a);
-  await writeFile(join(OUT, `${slug}-实际.png`), b);
-  await writeFile(join(OUT, `${slug}-差异.png`), diffPng);
-
-  report.push({ name: s.name, pct, ok });
-  console.log(`  ${ok ? '✓' : '✗'} ${s.name.padEnd(6)} 差异 ${pct.toFixed(3)}%${ok ? '' : `   ← 超过 ${LIMIT * 100}% 阈值`}`);
-}
-
-console.log(`\n${'─'.repeat(46)}`);
-console.log(`  最大差异 ${worst.toFixed(3)}%   不通过 ${failed} 屏`);
-console.log(`  截图与差异图：scripts/.uidiff/`);
-console.log(`${'─'.repeat(46)}\n`);
-
-await browser.close();
-process.exit(failed ? 1 : 0);
-
-/** 逐像素比对，返回差异比例和一张把差异标红的图 */
-async function compare(pngA, pngB) {
-  const toRaw = async png => {
-    const img = sharp(png).ensureAlpha().raw();
-    const { data, info } = await img.toBuffer({ resolveWithObject: true });
-    return { data, info };
-  };
-  const A = await toRaw(pngA), B = await toRaw(pngB);
-  const w = Math.min(A.info.width, B.info.width);
-  const h = Math.min(A.info.height, B.info.height);
-  const out = Buffer.alloc(w * h * 4);
-  let diff = 0;
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const ia = (y * A.info.width + x) * 4;
-      const ib = (y * B.info.width + x) * 4;
-      const io = (y * w + x) * 4;
-      const d = Math.max(
-        Math.abs(A.data[ia]     - B.data[ib]),
-        Math.abs(A.data[ia + 1] - B.data[ib + 1]),
-        Math.abs(A.data[ia + 2] - B.data[ib + 2]));
-      if (d > CHANNEL_TOL) {
-        diff++;
-        out[io] = 255; out[io + 1] = 0; out[io + 2] = 0; out[io + 3] = 255;
-      } else {
-        // 相同的地方压成浅灰底，让红点显眼
-        const g = 235 + Math.round(A.data[ia] * 0.06);
-        out[io] = g; out[io + 1] = g; out[io + 2] = g; out[io + 3] = 255;
-      }
+async function go(page, tab, view, ready) {
+  const mobile = await page.evaluate(() => innerWidth <= 1180);
+  if (mobile) {
+    const open = await page.$eval('#appNav', node => node.classList.contains('mobile-open'));
+    if (!open) {
+      await page.click('#navToggle');
+      await page.waitForSelector('#appNav.mobile-open');
     }
   }
-  const diffPng = await sharp(out, { raw: { width: w, height: h, channels: 4 } }).png().toBuffer();
-  return { pct: diff / (w * h) * 100, diffPng };
+  await page.click(`#tab-${tab}`);
+  await page.waitForSelector(`#v-${view}.on`);
+  if (ready) await page.waitForSelector(ready, { timeout: 15_000 });
+  await wait(80);
+}
+
+async function assertNoOverflow(page, label) {
+  const metrics = await page.evaluate(() => ({
+    viewport: [innerWidth, innerHeight],
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    bodyScrollWidth: document.body.scrollWidth,
+  }));
+  const overflow = Math.max(metrics.scrollWidth, metrics.bodyScrollWidth) - metrics.clientWidth;
+  assert.ok(overflow <= 1, `${label} has ${overflow}px horizontal page overflow: ${JSON.stringify(metrics)}`);
+  report.checks.push({ label, kind: 'horizontal-overflow', passed: true, metrics });
+}
+
+async function shot(page, name) {
+  const path = join(OUT, `${name}.png`);
+  await page.screenshot({ path, fullPage: false });
+  report.screenshots.push(name);
+}
+
+async function runDesktop(browserInstance) {
+  const page = await newPage(browserInstance, 'desktop', { width: 1440, height: 900 });
+  try {
+    const home = await page.evaluate(() => ({
+      context: document.querySelector('#pageContext')?.textContent.trim(),
+      navItems: document.querySelectorAll('#appNav [data-go]').length,
+      quickActions: document.querySelectorAll('.dash-quick button').length,
+    }));
+    assert.equal(home.context, '今日工作台');
+    assert.ok(home.navItems >= 18, home);
+    assert.ok(home.quickActions >= 5, home);
+    report.checks.push({ label: 'desktop-home-contract', passed: true, metrics: home });
+    await assertNoOverflow(page, 'desktop-home');
+    await shot(page, 'home-desktop-1440x900');
+
+    await go(page, 'functionTree', 'functionTree', '.ft-domain');
+    const tree = await page.evaluate(() => ({
+      domains: document.querySelectorAll('.ft-domain').length,
+      modules: document.querySelectorAll('.ft-node').length,
+    }));
+    assert.ok(tree.domains >= 8, tree);
+    assert.ok(tree.modules >= 19, tree);
+    report.checks.push({ label: 'desktop-function-tree-contract', passed: true, metrics: tree });
+    await assertNoOverflow(page, 'desktop-function-tree');
+    await shot(page, 'function-tree-desktop-1440x900');
+
+    await go(page, 'pool', 'pool', '#poolGrid .card');
+    const poolCards = await page.$$eval('#poolGrid .card', nodes => nodes.length);
+    assert.ok(poolCards > 0, 'mock pool must render at least one card');
+    report.checks.push({ label: 'desktop-pool-cards', passed: true, metrics: { poolCards } });
+    await assertNoOverflow(page, 'desktop-pool');
+
+    await page.click('#btnNew');
+    await page.waitForSelector('#modal.on');
+    const modal = await page.$eval('#modal', node => {
+      const box = node.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+    });
+    assert.ok(modal.left >= -1 && modal.right <= 1441 && modal.top >= -1 && modal.bottom <= 901, modal);
+    report.checks.push({ label: 'desktop-create-modal-in-viewport', passed: true, metrics: modal });
+    await shot(page, 'idea-modal-desktop-1440x900');
+    await page.click('#modal [data-close]');
+    await page.waitForSelector('#modal:not(.on)');
+
+    await go(page, 'formal', 'formal', '#formalBody tr');
+    await assertNoOverflow(page, 'desktop-formal');
+    await go(page, 'stats', 'stats', '.stat-key-card');
+    const statCards = await page.$$eval('.stat-key-card', nodes => nodes.length);
+    assert.ok(statCards >= 5, { statCards });
+    report.checks.push({ label: 'desktop-stats-contract', passed: true, metrics: { statCards } });
+    await assertNoOverflow(page, 'desktop-stats');
+
+    await go(page, 'samples', 'samples', '#v-samples .sample-card');
+    await assertNoOverflow(page, 'desktop-samples');
+    await shot(page, 'samples-desktop-1440x900');
+
+    await go(page, 'home', 'home', '.dash-hero');
+    await page.click('[data-dash-learning="framework"]');
+    await page.waitForSelector('#v-learning.on .learning-item');
+    await assertNoOverflow(page, 'desktop-learning');
+
+    await go(page, 'collector', 'collector', '#collectorForm');
+    await assertNoOverflow(page, 'desktop-collector');
+  } finally {
+    await page.close();
+  }
+}
+
+async function runMobile(browserInstance) {
+  const page = await newPage(browserInstance, 'mobile', { width: 390, height: 844 });
+  try {
+    await assertNoOverflow(page, 'mobile-home');
+    const reduced = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+    assert.equal(reduced, true);
+    report.checks.push({ label: 'mobile-reduced-motion', passed: true });
+    await shot(page, 'home-mobile-390x844');
+
+    await page.click('#navToggle');
+    await page.waitForSelector('#appNav.mobile-open');
+    assert.equal(await page.$eval('#navToggle', node => node.getAttribute('aria-expanded')), 'true');
+    await page.click('#tab-functionTree');
+    await page.waitForSelector('#v-functionTree.on .ft-domain');
+    assert.equal(await page.$eval('#appNav', node => node.classList.contains('mobile-open')), false);
+    await assertNoOverflow(page, 'mobile-function-tree');
+    await shot(page, 'function-tree-mobile-390x844');
+
+    await go(page, 'pool', 'pool', '#poolGrid .card');
+    await assertNoOverflow(page, 'mobile-pool');
+    await page.click('#btnNew');
+    await page.waitForSelector('#modal.on');
+    const modal = await page.$eval('#modal', node => {
+      const box = node.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+    });
+    assert.ok(modal.left >= -1 && modal.right <= 391 && modal.top >= -1 && modal.bottom <= 845, modal);
+    report.checks.push({ label: 'mobile-create-modal-in-viewport', passed: true, metrics: modal });
+    await shot(page, 'idea-modal-mobile-390x844');
+    await page.click('#modal [data-close]');
+    await page.waitForSelector('#modal:not(.on)');
+
+    await go(page, 'samples', 'samples', '#v-samples .sample-card');
+    await assertNoOverflow(page, 'mobile-samples');
+    await shot(page, 'samples-mobile-390x844');
+  } finally {
+    await page.close();
+  }
 }

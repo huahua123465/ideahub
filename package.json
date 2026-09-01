@@ -22,6 +22,7 @@
     "test:samples:stage4": "node scripts/build-web.mjs && node --test scripts/test-sample-library-stage4.mjs && node scripts/test-sample-library-stage4-ui.mjs",
     "test:samples:stage4:db": "node scripts/test-sample-library-stage4-db.mjs",
     "test:idea-files": "node --test scripts/test-idea-attachments.mjs && node scripts/test-idea-files-ui.mjs",
+    "benchmark:skills": "node scripts/benchmark-agent-skills.mjs",
     "benchmark:samples:stage4": "node scripts/benchmark-sample-library-stage4.mjs",
     "test": "npm run db:seed && npm run test:api && npm run test:ui",
     "demo": "node scripts/record-demo.mjs",

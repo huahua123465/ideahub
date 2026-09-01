@@ -241,44 +241,38 @@ node scripts/cron.mjs
 
 ---
 
-## UI 一致性验收
+## 项目级 Agent Skills
 
-> ⚠️ **这套验收目前是断的，下面的通过率是历史数据，别拿它当现状。**
->
-> 两处都断：**依赖没装**（脚本 import 了 `playwright` 和 `sharp`，而 package.json 的
-> devDependencies 里只有 `puppeteer`）；**基准已作废**（2026-08-20 的改版和 2026-08-22
-> 的柔化都是有意偏离原型的，装上依赖也必然全红 —— 那不是回归）。
->
-> 恢复之前先想清楚：重新生成基准会把这个测试从「实现有没有偏离**客户确认的设计稿**」
-> 变成「跟**上次跑的时候**一不一样」。后者也有用，但原来那份设计稿的语义就丢了。
->
-> 另外本项目没有 CI，逐像素测试靠人记得手动跑的话，通常很快就没人跑了 ——
-> 恢复它之前建议先想好谁来跑、什么时候跑。
->
-> 想要回归网又不想装重依赖：`puppeteer` 已装好（chromium 在 `~/.cache/puppeteer`），
-> `sharp` 在 `ui-check.mjs` 里只用于 PNG 解码/编码，可换成纯 JS 的 `pngjs`。
+仓库把始终有效的安全规则留在 `AGENTS.md`，把具体工作流放到 `.agents/skills/` 按需加载：
 
-`web/styles.css` 来自客户已确认的演示原型。为了保证后续改动不会悄悄改坏样式，
-`npm run test:ui` 会把应用逐屏截图，和 `docs/UI原型-基准.html` 逐像素比对：
+- `ideahub-frontend`：原生 ES Module 架构、现有视觉语言、响应式与异步 UI 状态。
+- `ideahub-ui-qa`：生产 bundle、桌面/手机、关键路径、console 与截图验收。
+- `ideahub-backend`、`ideahub-database`、`ideahub-collector`、`ideahub-release`：分别约束 API、迁移、采集和发布。
+
+确定性契约对照可以随时重跑：
 
 ```bash
-npm i -D playwright sharp && npx playwright install chromium
-npm start                # 另开终端
+npm run benchmark:skills
+```
+
+结果写入 `docs/agent-skills-benchmark.md` 与 JSON 明细。这个对照证明任务规则是否在激活 skill 后进入上下文，不冒充模型能力跑分；真实行为测试提示位于各 skill 的 `evals/evals.json`。
+
+## UI 验收
+
+`npm run test:ui` 已改为复用项目现有的 esbuild 与 Puppeteer，不再需要 Playwright、Sharp、额外浏览器安装或提前启动服务：
+
+```bash
 npm run test:ui
 ```
 
-历史结果（2026-08-20 改版**之前**，5 屏全部通过，阈值 1.5%）：
+验收脚本会在内存中构建生产 ESM bundle，并在随机本地端口使用内置 mock 数据检查：
 
-| 界面 | 像素差异 |
-|---|---|
-| 灵感池 | 0.030% |
-| 正式库 | 0.001% |
-| 统计看板 | 0.001% |
-| 提交弹窗 | 0.017% |
-| 详情抽屉 | 0.043% |
+- 今日工作台、项目功能树、灵感池、正式库、统计、样本库、学习中心与内容采集。
+- 1440×900 桌面和 390×844 手机视口。
+- 页面级横向溢出、移动导航、提交弹窗和 reduced motion。
+- 未处理脚本异常与 `console error`。
 
-比对前会先归一化掉三类**数据**差异（不是样式差异）：卡片排序、统计数字、
-「我投过票」这类用户状态。截图和标红的差异图会写到 `scripts/.uidiff/`。
+截图和机器可读报告写入被忽略的 `scripts/.uidiff/`。`report.json` 记录 bundle 大小、每项测量、截图清单和浏览器错误；视觉改动仍需实际查看相关截图，通用 smoke test 也不能替代样本库、附件、Collector 或 API 的专项测试。
 
 ---
 

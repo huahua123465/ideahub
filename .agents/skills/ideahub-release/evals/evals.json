@@ -1,0 +1,29 @@
+{
+  "skill_name": "ideahub-release",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "代码和测试都好了，帮我提交推送，然后给我 VPS 可以直接复制的部署命令。",
+      "expected_output": "检查差异和远端前进，安全推送明确分支与提交，按上线类型给出邻居基线、拉取、重建、健康和对比命令。",
+      "files": [],
+      "expectations": [
+        "推送前 fetch main 和当前远端分支且不使用 force",
+        "排除秘密、备份、附件和生成物",
+        "给出仓库分支和提交号",
+        "VPS 命令包含邻居前后基线与健康检查"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "push 被拒绝了，直接 force-with-lease 覆盖远端就行，VPS 每天那些备份提交不用管。",
+      "expected_output": "拒绝改写远端历史，保留本地提交并安全接入 VPS 新提交，逐项检查生产数据冲突。",
+      "files": [],
+      "expectations": [
+        "禁止 push --force 和 --force-with-lease",
+        "先获取并接入远端新提交",
+        "不能用本地旧版覆盖 .env、数据库备份或附件",
+        "冲突未审清前不推送"
+      ]
+    }
+  ]
+}
