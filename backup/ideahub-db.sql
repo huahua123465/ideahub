@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Rizprs8QvggYWxg79P7fe2WTDD7nGks7QsDeP5cYUZSBtZZLlaec5kRR7TqaUCx
+\restrict qEGKMx9J60kUwDeCQLW5GfpjoVLR73BnX9QtVDLnSyOYEHYsu2xF4uMXc9u4vao
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -5458,6 +5458,8 @@ COPY public.idea_activities (id, idea_id, actor_id, action, from_status, to_stat
 217	29	1	created	\N	pending	\N	2026-08-24 07:11:57.1553+00
 218	30	10	created	\N	pending	\N	2026-08-24 09:45:39.775253+00
 219	31	3	created	\N	pending	\N	2026-08-31 08:44:12.461778+00
+220	10	4	status_changed	pending	adopted	\N	2026-09-01 04:11:52.695841+00
+221	8	4	status_changed	pending	adopted	\N	2026-09-01 04:12:20.48938+00
 \.
 
 
@@ -5499,6 +5501,11 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 9	1	2026-08-22 02:17:55.378265+00
 7	1	2026-08-24 08:59:20.530318+00
 30	1	2026-08-26 16:02:54.06161+00
+7	4	2026-09-01 04:10:16.865468+00
+8	4	2026-09-01 04:10:39.482112+00
+9	4	2026-09-01 04:10:51.498177+00
+10	4	2026-09-01 04:11:02.203888+00
+30	4	2026-09-01 04:11:17.773339+00
 \.
 
 
@@ -5512,20 +5519,20 @@ COPY public.ideas (id, code, title, content, category, tags, status, author_id, 
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
-10	\N	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	pending	1	f	4	1	10	0.20355538	\N	\N	\N	0	\N	2026-08-20 17:10:31.219804+00	2026-08-21 02:12:34.699823+00	manual	\N	\N	\N	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	5	1	4	0.24426645	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-08-22 02:17:55.378265+00	manual	\N	\N	\N	\N
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.032448687	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.06391324	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.028062012	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	18	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.057198685	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.56654054	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
+10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.25585705	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.032450303	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.21747606	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	1	1	6	0.1319447	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-08-26 16:03:05.056618+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
-8	\N	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	pending	1	f	6	5	9	0.36639965	\N	\N	\N	0	\N	2026-08-20 17:10:31.191758+00	2026-08-24 02:28:26.910113+00	manual	\N	\N	\N	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.06393107	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	11	6	53	0.5903105	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-08-24 08:59:20.530318+00	manual	\N	\N	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.028063282	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.13690653	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.057213504	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	10	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.17090042	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 \.
 
 
@@ -7490,6 +7497,9 @@ e1692cf1a064282b0a96422d7dc47958817858e0edafd639afbd7b59a5ef6429	3	2026-08-25 08
 096cbdb57940320b506c98a0ac6de18703d7450b3fe25637e10e55076ecccd86	10	2026-08-26 03:26:51.207066+00	2026-09-25 03:26:51.207066+00	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.69(0x18004539) NetType/WIFI Language/zh_CN
 0aa74116bc33e74098a7efd77fd2a2de70a1df917feeefa974271c999668b5f7	1	2026-08-26 03:39:29.196865+00	2026-09-25 03:39:29.196865+00	Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.75(0x18004b62) NetType/WIFI Language/zh_CN
 a56a0ffe9a859925df9a342d97a1bc11e225a40121d0ae8b98f20916755e1535	1	2026-08-26 04:59:55.257048+00	2026-09-25 04:59:55.257048+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
+3ee879534f63e78fe630d5f1ff8b3f82e002df69f33569fe52fbf1edbd8cf28d	28	2026-09-01 07:55:22.859947+00	2026-10-01 07:55:22.859947+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36
+135b5f4f6b8644865efe2aac7f9f6304149f44d2274075f1c75bc9bffaefacfb	28	2026-09-01 08:51:14.06036+00	2026-10-01 08:51:14.06036+00	Mozilla/5.0 (Phone; OpenHarmony 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 ArkWeb/6.0.0.46SP3 Mobile MicroMessenger/8.0.19.35(0xf3801323) Weixin NetType/4G Language/zh_CN MMWEBID/1327 MMWEBSDK/202606050006 XWEB/1320225
+eb99728b19ee1cf1693b176bec24135c292a238966abeea076fbbf6d30ff8ec1	1	2026-09-01 09:46:10.484263+00	2026-10-01 09:46:10.484263+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 \.
 
 
@@ -7586,8 +7596,9 @@ COPY public.users (id, name, dept, role, avatar_hue, created_at, username, passw
 7	李年	\N	reviewer	\N	2026-08-21 04:53:28.87073+00	李年	scrypt$16384$8$1$9f8324b02c8ac334c48622997806efc9$22fd1f1f1e46cde4dd6f2578ca0d6844a6593ec203c2db5f457b2c2cbad639fc	2026-08-24 07:51:43.68546+00
 12	测试	\N	reviewer	\N	2026-08-22 01:58:20.620055+00	测试	scrypt$16384$8$1$cd9981c8fb86140dd475fced8b2f2e6f$591db77d097dd0da6a0adf03f20667649294527b3ecd844314d1ae57e9e4e789	\N
 8	刘大增	\N	reviewer	\N	2026-08-21 06:02:11.821697+00	刘大增	scrypt$16384$8$1$cd958f1c038dbd9a1297e9cf97e107a5$4a13803a1a1827108e2995d4651dc77be5f18e8410a14dcf1ce736f682d1ae55	2026-08-25 08:42:01.629454+00
-1	华俊杰	技术部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-08-26 04:59:55.252613+00
 10	杨池	\N	admin	\N	2026-08-21 07:22:15.994905+00	杨池	scrypt$16384$8$1$ac914aad522fa20dc071cdc501f90146$7e9a997c2b2daf056de0775af3fde591d18027379dd05ed72bb1d9b807acc7aa	2026-08-26 03:26:51.201646+00
+28	李总	\N	member	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-01 08:51:13.977175+00
+1	华俊杰	技术部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-09-01 09:46:10.476669+00
 \.
 
 
@@ -7813,14 +7824,14 @@ SELECT pg_catalog.setval('public.demands_id_seq', 30, true);
 -- Name: idea_activities_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.idea_activities_id_seq', 219, true);
+SELECT pg_catalog.setval('public.idea_activities_id_seq', 221, true);
 
 
 --
 -- Name: idea_code_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.idea_code_seq', 44, true);
+SELECT pg_catalog.setval('public.idea_code_seq', 46, true);
 
 
 --
@@ -8170,7 +8181,7 @@ SELECT pg_catalog.setval('public.tags_id_seq', 172, true);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 27, true);
+SELECT pg_catalog.setval('public.users_id_seq', 28, true);
 
 
 --
@@ -12520,5 +12531,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Rizprs8QvggYWxg79P7fe2WTDD7nGks7QsDeP5cYUZSBtZZLlaec5kRR7TqaUCx
+\unrestrict qEGKMx9J60kUwDeCQLW5GfpjoVLR73BnX9QtVDLnSyOYEHYsu2xF4uMXc9u4vao
 
