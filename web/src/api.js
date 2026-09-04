@@ -81,6 +81,14 @@ const qs = o => {
   return s ? '?' + s : '';
 };
 
+// Header values must remain ASCII. Research account ids may contain Chinese
+// handles, so business identifiers never belong in Idempotency-Key.
+const requestKey = scope => {
+  const random = globalThis.crypto?.randomUUID?.()
+    || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `${scope}-${random}`.slice(0, 160);
+};
+
 export const api = {
   me:        ()            => call('GET',   '/api/me'),
   logout:    ()            => call('POST',  '/api/auth/logout'),
@@ -313,11 +321,11 @@ export const api = {
   accountResearchConfig: () => call('GET', '/api/research-accounts/config'),
   researchAccounts:     (opts = {}) => call('GET', '/api/research-accounts' + qs(opts)),
   researchAccount:      (id, opts = {}) => call('GET', `/api/research-accounts/${encodeURIComponent(id)}` + qs(opts)),
-  researchAccountRunCreate:(id, payload, idempotencyKey = `account-${id}-${Date.now()}`) =>
+  researchAccountRunCreate:(id, payload, idempotencyKey = requestKey('account-run')) =>
     call('POST', `/api/research-accounts/${encodeURIComponent(id)}/runs`, payload, { 'Idempotency-Key':idempotencyKey }),
-  researchAccountRerun: (id, runId, payload, idempotencyKey = `account-${id}-run-${runId}-${Date.now()}`) =>
+  researchAccountRerun: (id, runId, payload, idempotencyKey = requestKey('account-rerun')) =>
     call('POST', `/api/research-accounts/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}/rerun`, payload, { 'Idempotency-Key':idempotencyKey }),
-  researchAccountClaimDecision:(id, runId, claimId, payload, idempotencyKey = `account-${id}-claim-${claimId}-${Date.now()}`) =>
+  researchAccountClaimDecision:(id, runId, claimId, payload, idempotencyKey = requestKey('account-decision')) =>
     call('POST', `/api/research-accounts/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}/claims/${encodeURIComponent(claimId)}/decisions`, payload, { 'Idempotency-Key':idempotencyKey }),
 
   /* ---------- Sample library: stage 3 comparison and reusable components ---------- */
