@@ -16,6 +16,14 @@ export const state = { mode: 'live' };   // live | mock
 
 /** 启动时探一次后端。探不到就整场用 mock。 */
 export async function probe() {
+  // 自动化验收使用随机本地端口，不能依赖固定的 5173。显式 mock 只允许回环
+  // 地址，避免生产域名被查询参数切换到演示数据。
+  const requestedMock = new URLSearchParams(location.search).get('mock') === '1';
+  const localMockAllowed = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
+  if (requestedMock && localMockAllowed) {
+    state.mode = 'mock';
+    return state.mode;
+  }
   // 生产环境的静态页面和 /api 都由同一个 Node 进程提供：index.html 能打开，
   // 就没必要再串行请求一次 /api/health 后才去拿登录用户。跨洋网络下这会白等
   // 一个完整 RTT。本地 5173 才需要探测 3000 端口并决定是否降级到 mock。

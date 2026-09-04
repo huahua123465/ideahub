@@ -1,0 +1,23 @@
+export function bind__PLACEHOLDER__Tabs(root, activate) {
+  const tabs = () => [...root.querySelectorAll('[role="tab"]')].filter(tab => !tab.disabled && !tab.hidden);
+  root.addEventListener('keydown', event => {
+    const items = tabs();
+    const current = items.indexOf(event.target.closest('[role="tab"]'));
+    if (current < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0
+      : event.key === 'End' ? items.length - 1
+      : (current + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+    items[next].focus();
+    activate(items[next].dataset.__PLACEHOLDER__Tab);
+  });
+}
+
+export function paint__PLACEHOLDER__Tabs(root, activeKey) {
+  for (const tab of root.querySelectorAll('[role="tab"]')) {
+    const selected = tab.dataset.__PLACEHOLDER__Tab === activeKey;
+    tab.classList.toggle('on', selected);
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  }
+}

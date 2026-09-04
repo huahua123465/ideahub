@@ -52,6 +52,7 @@ function build() {
     const next = e.shiftKey ? (at <= 0 ? buttons.length - 1 : at - 1)
                             : (at >= buttons.length - 1 ? 0 : at + 1);
     e.preventDefault();
+    e.stopPropagation();
     buttons[next].focus();
   });
 }

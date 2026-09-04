@@ -1,7 +1,7 @@
 /**
  * 把前端模块打包成一个文件。
  *
- * 为什么需要：源码是 27 个 ES 模块，浏览器要一个个去取。
+ * 为什么需要：源码由多个 ES 模块组成，浏览器在源码模式下要逐个获取。
  * 实测在 120ms 延迟的网络上，首屏 1.2 秒里绝大部分是这些请求的往返 ——
  * 加了 ETag 之后传输量从 107KB 降到 11KB，但时间几乎没变，
  * 说明卡的不是带宽是**往返次数**。打成一个文件，往返次数从 31 降到个位数。
@@ -12,23 +12,23 @@
  *   node scripts/build-web.mjs          # 生成 web/dist/app.js 并切到打包版
  *   node scripts/build-web.mjs --dev    # 切回未打包的源码模式
  */
-import { build } from 'esbuild';
 import { readFile, writeFile, rm } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const html = join(root, 'web', 'index.html');
+import { join } from 'node:path';
+import {
+  PROJECT_ROOT as root,
+  WEB_BUNDLE,
+  WEB_HTML as html,
+  PDF_JS_INPUTS,
+  buildWebBundle,
+  makeDevelopmentHtml,
+  makeProductionHtml,
+} from './lib/web-build.mjs';
 const dev = process.argv.includes('--dev');
-
-const SRC_TAG = '<script type="module" src="./src/main.js"></script>';
-const DIST_TAG = '<script type="module" src="./dist/app.js?v=BUILD"></script>';
 
 let s = await readFile(html, 'utf8');
 
 if (dev) {
-  s = s.replace(/<script type="module" src="\.\/dist\/app\.js[^"]*"><\/script>/, SRC_TAG);
-  await writeFile(html, s);
+  await writeFile(html, makeDevelopmentHtml(s));
   // 源码模式才需要 modulepreload：把清单重新生成回去
   await import('./gen-preload.mjs');
   await rm(join(root, 'web', 'dist'), { recursive: true, force: true });
@@ -36,31 +36,13 @@ if (dev) {
   process.exit(0);
 }
 
-const r = await build({
-  entryPoints: [join(root, 'web', 'src', 'main.js')],
-  bundle: true,
-  format: 'esm',
-  minify: true,
-  sourcemap: true,          // 出错时堆栈还能对回源码行号
-  target: ['es2022'],
-  outfile: join(root, 'web', 'dist', 'app.js'),
-  logLevel: 'warning',
-});
-if (r.errors?.length) process.exit(1);
+await buildWebBundle();
 
-const { size } = await import('node:fs').then(m => m.promises.stat(join(root, 'web', 'dist', 'app.js')));
+const { size } = await import('node:fs').then(m => m.promises.stat(WEB_BUNDLE));
 const stamp = Date.now().toString(36);
 
-// 换成打包产物。带上版本号：文件名不变的话，浏览器缓存住旧版就更新不了了
-s = s.replace(SRC_TAG, DIST_TAG.replace('BUILD', stamp));
-s = s.replace(/<script type="module" src="\.\/dist\/app\.js[^"]*"><\/script>/, DIST_TAG.replace('BUILD', stamp));
-// 打包后 modulepreload 那一串必须整块拿掉。
-// 注意不能用 `<!-- x -->` 逐行前缀的写法把它们「注释掉」—— 那是个自闭合注释，
-// 后面的 <link> 照样生效，结果打包之后还多拉 23 个根本用不到的文件。
-s = s.replace(/<link rel="modulepreload"[\s\S]*?<!-- \/modulepreload -->/,
-  '<!-- 已打包成 dist/app.js，不需要逐个模块预加载 -->\n<!-- /modulepreload -->');
-
-await writeFile(html, s);
+// HTML 入口切换与测试使用同一组解析规则，避免测试能识别而生产脚本识别失败。
+await writeFile(html, makeProductionHtml(s, stamp));
 
 // 顺手把对接方要用的推送脚本复制进 web/，让它有一个可下载的地址。
 // 源文件只有 scripts/ 下那一份 —— 在这里复制而不是手工放两份，
@@ -75,9 +57,9 @@ const fsp = (await import('node:fs')).promises;
 const pdfVendor = join(root, 'web', 'vendor', 'pdfjs');
 await fsp.mkdir(pdfVendor, { recursive: true });
 await Promise.all([
-  fsp.copyFile(join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'), join(pdfVendor, 'pdf.min.mjs')),
-  fsp.copyFile(join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'), join(pdfVendor, 'pdf.worker.min.mjs')),
-  fsp.copyFile(join(root, 'node_modules', 'pdfjs-dist', 'LICENSE'), join(pdfVendor, 'LICENSE.txt')),
+  fsp.copyFile(PDF_JS_INPUTS[0], join(pdfVendor, 'pdf.min.mjs')),
+  fsp.copyFile(PDF_JS_INPUTS[1], join(pdfVendor, 'pdf.worker.min.mjs')),
+  fsp.copyFile(PDF_JS_INPUTS[2], join(pdfVendor, 'LICENSE.txt')),
 ]);
 const 同步 = async (从, 到, 说明) => {
   try {

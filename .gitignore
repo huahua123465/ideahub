@@ -29,4 +29,6 @@ data/caddy/
 # ---- 跑出来的临时文件 ----
 *.log
 scripts/.uidiff/
+scripts/.agent-evals/
+IdeaHub演示.mp4
 scripts/推送失败待补.jsonl

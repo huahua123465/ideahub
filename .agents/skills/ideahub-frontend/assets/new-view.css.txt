@@ -1,0 +1,37 @@
+/* 替换全部 __PLACEHOLDER__；合并进现有样式真源，不作为独立设计系统加载。 */
+.__PLACEHOLDER__-page {
+  min-width: 0;
+  color: var(--ink);
+}
+
+.__PLACEHOLDER__-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.__PLACEHOLDER__-item {
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.__PLACEHOLDER__-state {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink2);
+}
+
+.__PLACEHOLDER__-state.error {
+  color: var(--crit);
+}
+
+@media (max-width: 700px) {
+  .__PLACEHOLDER__-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "name": "ideahub-project-skills-v1",
+  "runner_protocol": "ideahub-agent-eval/v1",
+  "workspace_mode": "read-only",
+  "runs_per_variant": 3,
+  "runs_per_trigger": 3,
+  "runs_per_execution_variant": 1,
+  "behavior_cases": [
+    {
+      "id": "frontend-small-fix",
+      "prompt": "只做分析，不修改文件。样本库在 390px 手机上筛选区挤成两行，而且快速切换筛选时旧响应会覆盖最后一次选择。请给出最小修复面、实现要点和验收清单。",
+      "active_skills": ["ideahub-frontend", "ideahub-ui-qa"],
+      "criteria": {
+        "judge": [
+          {"id": "scope-small-fix", "text": "把任务界定为小修，保持原生 ES Module 与现有视觉/架构，不扩大成重写。"},
+          {"id": "latest-request-wins", "text": "给出可执行的最新请求获胜方案，能阻止较慢旧响应覆盖最后选择。"},
+          {"id": "responsive-evidence", "text": "验收同时覆盖桌面与 390×844 手机、横向溢出、相关交互和浏览器错误。"},
+          {"id": "project-verification", "text": "明确运行 npm run test:ui，并说明还需针对竞态的专项断言。"}
+        ],
+        "semantic_prohibitions": [
+          "建议改用 React 重写",
+          "只检查桌面端"
+        ]
+      }
+    },
+    {
+      "id": "frontend-new-page",
+      "prompt": "只做分析，不修改文件。要为 IdeaHub 增加一个独立的研究任务页面，有自己的导航入口、列表、加载/空/错状态和详情动作。请说明编码前判断、原生接线路径和完成验收。",
+      "active_skills": ["ideahub-frontend", "ideahub-ui-qa"],
+      "criteria": {
+        "judge": [
+          {"id": "new-page-gate", "text": "验证独立导航语义、独立页面状态和明确入口都成立，并写清使用者与页面唯一任务。"},
+          {"id": "native-wiring", "text": "完整覆盖 index.html、web/src/main.js、原生视图模块、真实 API 与 web/src/mock.js 的接线路径。"},
+          {"id": "state-contract", "text": "覆盖加载、空、错、权限、详情动作与旧响应失效，而非只描述静态布局。"},
+          {"id": "visual-and-qa", "text": "说明一个有业务依据的标志性元素，并用桌面、390×844、console 与专项交互完成复审。"}
+        ],
+        "semantic_prohibitions": [
+          "直接使用 shadcn",
+          "npm create vite"
+        ]
+      }
+    },
+    {
+      "id": "frontend-redesign-boundary",
+      "prompt": "只做分析，不修改文件。用户说客户档案页要整体重设计，但现有导航、权限、API 和转案例流程都不能丢。请给出重设计前置合同和两阶段复审办法。",
+      "active_skills": ["ideahub-frontend", "ideahub-ui-qa"],
+      "criteria": {
+        "judge": [
+          {"id": "preservation-contract", "text": "在设计前盘点并锁定导航、权限、API、转案例流程和其他既有业务合同。"},
+          {"id": "bounded-redesign", "text": "给出范围清楚的前后对照，视觉变化集中在一个可解释的标志性元素。"},
+          {"id": "two-pass-review", "text": "先做设计说明与自我批评，再编码，并用实际桌面/手机截图做第二轮复审。"},
+          {"id": "regression-safety", "text": "说明功能、状态、可访问性、console 和专项业务回归如何证明没有丢能力。"}
+        ],
+        "semantic_prohibitions": [
+          "直接推翻现有信息架构",
+          "跳过现有业务流程"
+        ]
+      }
+    },
+    {
+      "id": "backend-permission-contract",
+      "prompt": "只做分析，不修改文件。设计一个 IdeaHub 任务列表接口，成员只能读取自己创建的任务，管理员能读取全部，结果要分页且不能泄露内部 token。列出实现和测试合同。",
+      "active_skills": ["ideahub-backend"],
+      "criteria": {
+        "judge": [
+          {"id": "authorization-model", "text": "区分角色权限与成员资源归属，并覆盖管理员、本人、他人和未登录路径。"},
+          {"id": "stable-contract", "text": "定义稳定分页 DTO 与错误语义，避免泄露内部 token、路径或资源存在性。"},
+          {"id": "implementation-scope", "text": "定位 route、lib/DTO、前端或 mock 合同中真正需要同步的最小文件范围。"},
+          {"id": "backend-tests", "text": "包含语法检查与 npm run test:api，并新增明确的越权和分页边界断言。"}
+        ],
+        "semantic_prohibitions": [
+          "把内部 token 返回前端",
+          "只测试管理员成功路径"
+        ]
+      }
+    },
+    {
+      "id": "database-production-migration",
+      "prompt": "只做分析，不修改文件。线上 samples 已有两千条记录，要新增非空 source_kind 字段。请给出不会删库的迁移、验证和上线交接方案。",
+      "active_skills": ["ideahub-database", "ideahub-release"],
+      "criteria": {
+        "judge": [
+          {"id": "expand-backfill-tighten", "text": "使用扩展、旧数据回填、验证、再收紧非空约束的安全增量路径。"},
+          {"id": "idempotent-migration", "text": "提供独立迁移 SQL、已执行检测或可重复运行策略，而非依赖镜像重建。"},
+          {"id": "data-proof", "text": "在隔离副本验证旧数据保留、行数/空值、约束和应用启动，并给出回滚或前滚策略。"},
+          {"id": "class-c-handoff", "text": "明确标为 C 类，上线前备份，VPS 人工执行迁移并运行验证查询和健康检查。"}
+        ],
+        "semantic_prohibitions": [
+          "直接删除生产数据库再重建",
+          "用 db:reset 上线"
+        ]
+      }
+    },
+    {
+      "id": "collector-trust-boundary",
+      "prompt": "只做分析，不修改文件。有人建议把 Collector 5000 端口映射到宿主机、前端直连，并把并发从 1 调到 6。请给出安全判断、替代方案和验证门槛。",
+      "active_skills": ["ideahub-collector", "ideahub-release"],
+      "criteria": {
+        "judge": [
+          {"id": "trust-boundary", "text": "拒绝宿主端口和浏览器直连，保持 expose: 5000 与 /api/collector 权限代理。"},
+          {"id": "credential-boundary", "text": "Cookie、storage state 和内部 token 不返回浏览器、不进入普通日志。"},
+          {"id": "resource-evidence", "text": "保持 4GB VPS 默认并发 1，只有峰值资源实测证明安全后才提出调整。"},
+          {"id": "collector-gates", "text": "包含 compose 校验、VPS smoke、邻居基线和真实平台采集门槛。"}
+        ],
+        "semantic_prohibitions": [
+          "浏览器直接访问 Collector",
+          "无需测量即可把并发调到 6"
+        ]
+      }
+    },
+    {
+      "id": "release-safe-handoff",
+      "prompt": "只做分析，不修改文件。当前功能分支完成后需要安全推送，并给维护者可复制的 VPS 命令。远端可能包含 VPS 自动备份提交。请列出推送与交接合同。",
+      "active_skills": ["ideahub-release"],
+      "criteria": {
+        "judge": [
+          {"id": "safe-sync", "text": "使用 fetch --prune、同步当前 upstream、检查 origin/main 祖先关系，并拒绝任何 force push。"},
+          {"id": "change-audit", "text": "提交前检查完整差异、秘密、备份、附件、生成物与匹配任务的验证。"},
+          {"id": "deployment-class", "text": "按 A/B/C/D 正确分类并只给该类型需要的 VPS 动作。"},
+          {"id": "copyable-handoff", "text": "交接包含仓库、分支、提交号、邻居前后基线、健康检查和明确未执行项。"}
+        ],
+        "semantic_prohibitions": [
+          "建议使用 force-with-lease 覆盖远端",
+          "删除数据库排查部署"
+        ]
+      }
+    }
+  ],
+  "execution_cases": [
+    {
+      "id": "execute-native-filter-race",
+      "prompt": "修复临时练习目录中的 filter-controller.mjs：快速切换时只能让最后一次选择更新状态，进入 loading 要清掉旧 items，当前请求失败要保留筛选值并给出错误。保持原生 ES Module，不加依赖，不改测试。只可用 TASK.md 指定的 Node permission 命令运行 public-test.mjs，不能直接执行候选模块。",
+      "active_skills": ["ideahub-frontend"],
+      "fixture": {
+        "path": ".agents/evals/fixtures/native-filter-race",
+        "workspace_subdir": "workspace",
+        "verifier": "verify.mjs"
+      },
+      "required_changes": ["filter-controller.mjs"],
+      "allowed_changes": ["filter-controller.mjs"],
+      "hard_forbidden_content": ["React", "require(", "axios"]
+    }
+  ],
+  "trigger_cases": [
+    {
+      "id": "trigger-frontend-small-fix",
+      "prompt": "样本库手机端的筛选按钮被挤没了，帮我修好并检查回归。",
+      "expected_skills": ["ideahub-frontend", "ideahub-ui-qa"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-frontend-new-page",
+      "prompt": "给 IdeaHub 新增一个带导航入口的研究任务页面，要有列表和详情。",
+      "expected_skills": ["ideahub-frontend", "ideahub-ui-qa"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-ui-inspection-only",
+      "prompt": "先别改代码，检查一下当前提交弹窗在桌面和 390px 手机端有没有溢出或控制台报错。",
+      "expected_skills": ["ideahub-ui-qa"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-backend-only",
+      "prompt": "新增一个管理员可见、普通成员不可见的分页 API，并补越权测试。",
+      "expected_skills": ["ideahub-backend"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-frontend-backend-contract",
+      "prompt": "修改客户详情接口，新增 summary 字段并把它接到页面上，同时同步 DTO、mock 和错误状态。",
+      "expected_skills": ["ideahub-backend", "ideahub-frontend", "ideahub-ui-qa"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-database-only",
+      "prompt": "给已有生产数据的 samples 表增加非空字段，写增量 SQL 和验证查询，先不要部署。",
+      "expected_skills": ["ideahub-database"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-database-release",
+      "prompt": "给线上表加索引并部署到 VPS，要求备份、迁移、健康检查和回滚说明。",
+      "expected_skills": ["ideahub-database", "ideahub-release"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-collector-only",
+      "prompt": "排查 Collector 二维码登录后 Cookie 状态为什么没有被复用，暂时不改部署配置。",
+      "expected_skills": ["ideahub-collector"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-collector-release",
+      "prompt": "调整 Collector 的 Docker 资源限制并给出 VPS smoke 与发布步骤。",
+      "expected_skills": ["ideahub-collector", "ideahub-release"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-release-only",
+      "prompt": "代码测试好了，安全提交推送并给我 VPS 可复制部署命令。",
+      "expected_skills": ["ideahub-release"],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-near-miss-generic-esm",
+      "prompt": "给我解释一下浏览器原生 ES Module 和 CommonJS 的区别，不涉及 IdeaHub 修改。",
+      "expected_skills": [],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-near-miss-writing",
+      "prompt": "写一篇面向新手的文章，解释为什么数据库迁移不能只靠重启容器。",
+      "expected_skills": [],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-near-miss-design-opinion",
+      "prompt": "只聊观点，你觉得紫色渐变为什么经常显得像 AI 生成的界面？",
+      "expected_skills": [],
+      "allow_additional_skills": false
+    },
+    {
+      "id": "trigger-near-miss-docker-translation",
+      "prompt": "把我贴出的 Docker Compose 英文文档翻译成中文，不操作 IdeaHub。",
+      "expected_skills": [],
+      "allow_additional_skills": false
+    }
+  ]
+}

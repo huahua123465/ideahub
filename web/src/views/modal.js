@@ -7,6 +7,7 @@ import { tagDict, KIND_ORDER, KIND_LABEL, SOURCE_OPTIONS } from '../tagstore.js'
 export const events = new EventTarget();
 let dupeTimer = null;
 let picksReady = false;
+let returnFocus = null;
 
 /**
  * 把统一标签和来源两个选择器画出来。
@@ -35,6 +36,7 @@ async function buildPickers() {
 }
 
 export function open() {
+  returnFocus = document.activeElement;
   buildPickers();
   $('#mask').classList.add('on');
   $('#modal').classList.add('on');
@@ -42,9 +44,12 @@ export function open() {
 }
 
 export function close() {
+  const wasOpen = $('#modal').classList.contains('on');
   $('#modal').classList.remove('on');
   $('#mask').classList.remove('on');
   $('#dupe').classList.remove('on');
+  if (wasOpen && returnFocus?.isConnected) returnFocus.focus();
+  returnFocus = null;
 }
 
 function reset() {
@@ -52,6 +57,7 @@ function reset() {
   $('#fTagPick').querySelectorAll('.tagchip.on').forEach(c => c.classList.remove('on'));
   $('#fCat').selectedIndex = 0;
   $('#anon').classList.remove('on');
+  $('#anon').setAttribute('aria-checked', 'false');
   $('#dupe').classList.remove('on');
 }
 

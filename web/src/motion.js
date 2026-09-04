@@ -73,8 +73,12 @@ function movePill(bar, animate = true) {
   if (!pill || !tab) return;
 
   for (const button of bar.querySelectorAll(':scope > button')) {
-    button.setAttribute('aria-selected', String(button === tab));
+    const selected = button === tab;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
   }
+  const panel = document.getElementById(tab.getAttribute('aria-controls'));
+  if (panel) panel.setAttribute('aria-labelledby', tab.id);
 
   if (!animate) {
     const previous = pill.style.transition;
@@ -94,12 +98,50 @@ function enhanceTabs(bar) {
   wiredTabs.add(bar);
   bar.classList.add('t-tabs');
 
+  const owner = bar.closest('.view[id]');
+  const baseId = `${owner?.id || 'ideahub'}-${bar.classList.contains('learning-tabs') ? 'learning' : 'board'}`;
+  if (!bar.id) bar.id = `${baseId}-tabs`;
+  if (!bar.hasAttribute('aria-label')) {
+    const title = owner?.querySelector('h1')?.textContent.trim();
+    bar.setAttribute('aria-label', title ? `${title}分类` : '内容分类');
+  }
+
+  const panel = bar.classList.contains('learning-tabs')
+    ? owner?.querySelector('.learning-layout')
+    : owner?.querySelector('.bd-body');
+  if (panel) {
+    if (!panel.id) panel.id = `${baseId}-panel`;
+    panel.setAttribute('role', 'tabpanel');
+  }
+
   const pill = document.createElement('span');
   pill.className = 't-tabs-pill';
   pill.setAttribute('aria-hidden', 'true');
   bar.prepend(pill);
 
-  for (const tab of bar.querySelectorAll(':scope > button')) tab.classList.add('t-tab');
+  const tabs = [...bar.querySelectorAll(':scope > button')];
+  tabs.forEach((tab, index) => {
+    tab.classList.add('t-tab');
+    tab.setAttribute('role', 'tab');
+    if (!tab.id) tab.id = `${baseId}-tab-${index + 1}`;
+    if (panel) tab.setAttribute('aria-controls', panel.id);
+  });
+  bar.addEventListener('keydown', event => {
+    const currentTabs = [...bar.querySelectorAll(':scope > [role="tab"]')]
+      .filter(tab => !tab.disabled && !tab.hidden);
+    const current = currentTabs.indexOf(event.target.closest('[role="tab"]'));
+    if (current < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0
+      : event.key === 'End' ? currentTabs.length - 1
+      : (current + (event.key === 'ArrowRight' ? 1 : -1) + currentTabs.length) % currentTabs.length;
+    const nextTab = currentTabs[next];
+    const nextId = nextTab.id;
+    nextTab.focus();
+    nextTab.click();
+    // 学习中心切换分类时会重建 tab DOM；用稳定 ID 把焦点交给替换后的 tab。
+    requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(nextId)?.focus()));
+  });
   bar.addEventListener('click', () => requestAnimationFrame(() => movePill(bar, true)));
   requestAnimationFrame(() => movePill(bar, false));
 }

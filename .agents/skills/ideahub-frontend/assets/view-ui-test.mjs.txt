@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import { createUiHarness, settleDom } from '__PLACEHOLDER_HARNESS_IMPORT__';
+
+const harness = await createUiHarness({ outputDir: 'scripts/.uidiff/__PLACEHOLDER__' });
+try {
+  for (const [scene, viewport] of [
+    ['desktop', { width: 1440, height: 900 }],
+    ['mobile', { width: 390, height: 844, isMobile: true, hasTouch: true }],
+  ]) {
+    const page = await harness.newPage(scene, viewport);
+    // 通过真实导航入口进入，不直接给隐藏 view 加 .on。
+    __PLACEHOLDER_NAVIGATION_ACTION__
+    await page.waitForSelector('#v-__PLACEHOLDER__.on', { visible: true });
+    await settleDom(page);
+    const state = await page.evaluate(() => ({
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      activeViews: document.querySelectorAll('.view.on').length,
+      browserTitle: document.title,
+    }));
+    assert.ok(state.overflow <= 1, state);
+    assert.equal(state.activeViews, 1, state);
+    await harness.screenshot(page, `__PLACEHOLDER__-${scene}`);
+    await page.close();
+  }
+  assert.deepEqual(harness.report.browserErrors, []);
+  assert.deepEqual(harness.report.networkErrors, []);
+  await harness.writeReport();
+} catch (error) {
+  await harness.writeReport(error);
+  throw error;
+} finally {
+  await harness.close();
+}

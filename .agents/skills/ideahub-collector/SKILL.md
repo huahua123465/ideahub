@@ -2,6 +2,9 @@
 name: ideahub-collector
 description: IdeaHub 内容采集 Collector 的开发、审查与部署门禁。凡是修改 services/data-clean、/api/collector 代理、web/src/views/collector.js、Collector 登录/二维码/Cookie、采集任务、OCR/FFmpeg/Chromium、采集 AI、compose 资源限制或采集归档时必须使用，并同时按改动范围使用前端、后端、UI QA 或 release skill。
 compatibility: IdeaHub feat/content-collector workflow; Python 3.11, Chromium, FFmpeg, Docker, and a 4 GB VPS resource ceiling.
+metadata:
+  version: "1.0.0"
+  owner: "ideahub"
 ---
 
 # IdeaHub Collector
@@ -30,7 +33,7 @@ compatibility: IdeaHub feat/content-collector workflow; Python 3.11, Chromium, F
 
 ## Workflow
 
-1. 读 `AGENTS.md`、本 skill 和相关 subtree/代理/compose/前端文件。
+1. 读 `AGENTS.md`、本 skill 和相关 subtree/代理/compose/前端文件；当前分支不存在 `services/data-clean/` 时只做方案审查，不假设 Collector 已经合并。
 2. 标出信任边界：浏览器、IdeaHub、Collector、平台、持久目录与 AI 服务。
 3. 先写或更新权限、SSRF、任务状态、凭据脱敏和资源限制测试，再实现功能。
 4. 前端改动使用 `ideahub-frontend` 与 `ideahub-ui-qa`；代理改动使用 `ideahub-backend`。
