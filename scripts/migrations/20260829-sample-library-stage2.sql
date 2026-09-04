@@ -46,10 +46,10 @@ ON CONFLICT (dimension_key) DO NOTHING;
 
 -- 复合外键用于保证 capture / asset / version 确实属于同一篇 sample。
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sample_captures_sample_id_id_uk') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sample_captures_sample_id_id_uk' AND conrelid='sample_captures'::regclass) THEN
     ALTER TABLE sample_captures ADD CONSTRAINT sample_captures_sample_id_id_uk UNIQUE(sample_id,id);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sample_assets_sample_id_id_uk') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sample_assets_sample_id_id_uk' AND conrelid='sample_assets'::regclass) THEN
     ALTER TABLE sample_assets ADD CONSTRAINT sample_assets_sample_id_id_uk UNIQUE(sample_id,id);
   END IF;
 END $$;
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS sample_analysis_jobs (
   CONSTRAINT sample_analysis_jobs_input_sha256_chk CHECK (input_sha256 ~ '^[0-9a-f]{64}$')
 );
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sample_analysis_jobs_sample_capture_id_uk') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sample_analysis_jobs_sample_capture_id_uk' AND conrelid='sample_analysis_jobs'::regclass) THEN
     ALTER TABLE sample_analysis_jobs ADD CONSTRAINT sample_analysis_jobs_sample_capture_id_uk
       UNIQUE(sample_id,source_capture_id,id);
   END IF;
@@ -327,7 +327,7 @@ CREATE INDEX IF NOT EXISTS sample_element_tags_element_idx
 -- ---------- current 版本选择审计 ----------
 ALTER TABLE samples ADD COLUMN IF NOT EXISTS current_analysis_version_id BIGINT;
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='samples_current_analysis_version_fk') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='samples_current_analysis_version_fk' AND conrelid='samples'::regclass) THEN
     ALTER TABLE samples ADD CONSTRAINT samples_current_analysis_version_fk
       FOREIGN KEY(id,current_analysis_version_id)
       REFERENCES sample_analysis_versions(sample_id,id) ON DELETE RESTRICT;

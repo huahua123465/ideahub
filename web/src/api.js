@@ -307,6 +307,19 @@ export const api = {
   sampleEvaluationAi:   (id, payload) => call('POST', `/api/samples/${encodeURIComponent(id)}/evaluations/ai`, payload),
   sampleMetrics:        (id) => call('GET', `/api/samples/${encodeURIComponent(id)}/metrics`),
 
+  /* ---------- 账户研究 v3 ----------
+     与看板 /api/accounts 完全隔离。所有写入都是追加式运行或人工决定，
+     Idempotency-Key 防止慢网络下重复点击产生重复版本。 */
+  accountResearchConfig: () => call('GET', '/api/research-accounts/config'),
+  researchAccounts:     (opts = {}) => call('GET', '/api/research-accounts' + qs(opts)),
+  researchAccount:      (id, opts = {}) => call('GET', `/api/research-accounts/${encodeURIComponent(id)}` + qs(opts)),
+  researchAccountRunCreate:(id, payload, idempotencyKey = `account-${id}-${Date.now()}`) =>
+    call('POST', `/api/research-accounts/${encodeURIComponent(id)}/runs`, payload, { 'Idempotency-Key':idempotencyKey }),
+  researchAccountRerun: (id, runId, payload, idempotencyKey = `account-${id}-run-${runId}-${Date.now()}`) =>
+    call('POST', `/api/research-accounts/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}/rerun`, payload, { 'Idempotency-Key':idempotencyKey }),
+  researchAccountClaimDecision:(id, runId, claimId, payload, idempotencyKey = `account-${id}-claim-${claimId}-${Date.now()}`) =>
+    call('POST', `/api/research-accounts/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}/claims/${encodeURIComponent(claimId)}/decisions`, payload, { 'Idempotency-Key':idempotencyKey }),
+
   /* ---------- Sample library: stage 3 comparison and reusable components ---------- */
   sampleComparisons:    (opts = {}) => call('GET', '/api/sample-comparisons' + qs(opts)),
   sampleComparison:     (id) => call('GET', `/api/sample-comparisons/${encodeURIComponent(id)}`),

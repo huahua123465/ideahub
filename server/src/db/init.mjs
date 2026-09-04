@@ -46,9 +46,17 @@ try {
 /** 切分 SQL 语句，跳过 $$ 包裹的函数体和单引号字符串里的分号 */
 function splitStatements(sql) {
   const out = [];
-  let cur = '', inDollar = false, inQuote = false, i = 0;
+  let cur = '', inDollar = false, inQuote = false, inLineComment = false, i = 0;
   while (i < sql.length) {
     const two = sql.slice(i, i + 2);
+    if (!inDollar && !inQuote && !inLineComment && two === '--') {
+      inLineComment = true; cur += two; i += 2; continue;
+    }
+    if (inLineComment) {
+      const ch = sql[i]; cur += ch; i++;
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
     if (!inQuote && two === '$$') { inDollar = !inDollar; cur += two; i += 2; continue; }
     const ch = sql[i];
     if (!inDollar && ch === "'") inQuote = !inQuote;

@@ -60,7 +60,8 @@ try{
   await page.waitForSelector('.research-tabs');
   await page.focus('#sampleResearchTab-original');
   await page.keyboard.press('ArrowRight');
-  await page.waitForFunction(()=>document.querySelector('.research-tabs [aria-selected="true"]')?.dataset.researchTab==='elements');
+  await page.waitForFunction(()=>document.querySelector('.research-tabs [aria-selected="true"]')?.dataset.researchTab==='elements'
+    &&document.activeElement?.id==='sampleResearchTab-elements');
   await page.waitForFunction(()=>[...document.querySelectorAll('.element-review-filters button b')].reduce((sum,node)=>sum+Number(node.textContent||0),0)===30);
   state=await page.evaluate(()=>({
     dimensions:document.querySelectorAll('.dimension-card').length,
@@ -129,6 +130,7 @@ try{
   await page.click('#tab-samples');
   await page.waitForSelector('.research-tabs');
   await page.click('[data-research-tab="elements"]');
+  await page.waitForFunction(()=>document.querySelectorAll('.dimension-card').length===14);
   assert.equal(await page.$$eval('.dimension-card',nodes=>nodes.length),14);
 
   // Mobile uses an exclusive detail mode and all visible research controls are touch sized.

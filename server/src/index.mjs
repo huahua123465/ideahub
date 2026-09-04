@@ -38,6 +38,7 @@ import * as samples from './routes/samples.mjs';
 import * as sampleResearch from './routes/sample-research.mjs';
 import * as sampleComparison from './routes/sample-comparison.mjs';
 import * as sampleInsights from './routes/sample-insights.mjs';
+import * as accountResearch from './routes/account-research.mjs';
 import { archiveStaleIdeas } from './routes/status.mjs';
 import { publish, closeAll, clientCount } from './lib/bus.mjs';
 
@@ -107,6 +108,7 @@ samples.mount(router);
 sampleResearch.mount(router);
 sampleComparison.mount(router);
 sampleInsights.mount(router);
+accountResearch.mount(router);
 
 // 必须在开始监听前完成旧任务恢复，避免新请求与启动恢复同时改写同一个 attempt。
 await sampleResearch.recoverAnalysisJobs();
@@ -257,7 +259,8 @@ const server = http.createServer(async (req, res) => {
     if (await serveStatic(req, '/index.html', res)) return;
     throw new HttpError(404, '页面不存在');
   } catch (e) {
-    sendError(res, e);
+    if (url.pathname.startsWith('/api/research-accounts')) accountResearch.sendAccountResearchError(res, e);
+    else sendError(res, e);
     log(req, res, t0);
   }
 });

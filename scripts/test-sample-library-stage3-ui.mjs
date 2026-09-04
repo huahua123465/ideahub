@@ -35,7 +35,7 @@ try{
     nativeCheckbox:document.querySelector('[data-compare-toggle]')?.tagName,
     trayHidden:document.querySelector('#sampleComparisonTray')?.hidden,
   }));
-  assert.deepEqual(state,{overflow:0,modes:4,cards:24,nativeCheckbox:'INPUT',trayHidden:true});
+  assert.deepEqual(state,{overflow:0,modes:5,cards:24,nativeCheckbox:'INPUT',trayHidden:true});
 
   // One selection cannot start; two can. The second selection survives page changes.
   await selectSampleForComparison(page,1);

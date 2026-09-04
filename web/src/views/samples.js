@@ -7,6 +7,7 @@ import { openResearch, leaveResearch, updateResearchOptions } from './sample-res
 import { openComparisonLibrary, openComparisonWorkspace, leaveComparison } from './sample-comparison.js';
 import { openComponentLibrary, leaveComponents } from './sample-components.js';
 import { openSampleInsights, leaveSampleInsights } from './sample-insights.js';
+import { openAccountResearch, leaveAccountResearch } from './account-research.js';
 
 let active = false;
 let initialized = false;
@@ -58,6 +59,7 @@ export function leave() {
   leaveComparison();
   leaveComponents();
   leaveSampleInsights();
+  leaveAccountResearch();
   clearTimeout(linkTimer);
   linkTimer = null;
 }
@@ -96,6 +98,7 @@ function scaffold() {
       <button type="button" role="tab" aria-selected="false" tabindex="-1" data-library-mode="comparisons"><b>比较记录</b><span>冻结范围与横向研究</span></button>
       <button type="button" role="tab" aria-selected="false" tabindex="-1" data-library-mode="components"><b>组件库</b><span>审核与可复用白名单</span></button>
       <button type="button" role="tab" aria-selected="false" tabindex="-1" data-library-mode="insights"><b>检索与洞察</b><span>结构匹配与描述性观察</span></button>
+      <button type="button" role="tab" aria-selected="false" tabindex="-1" data-library-mode="account-research"><b>账户研究</b><span>冻结样本与跨作品证据</span></button>
     </nav>
     <section id="sampleLibrarySamples" class="sample-library-mode-panel" aria-label="样本">
     <div class="page-head samples-page-head"><div><div class="page-kicker">内容研究数据库</div><h1>样本库</h1>
@@ -130,6 +133,7 @@ function scaffold() {
     <section id="sampleLibraryComparisons" class="sample-library-mode-panel" aria-label="比较记录" hidden></section>
     <section id="sampleLibraryComponents" class="sample-library-mode-panel" aria-label="组件库" hidden></section>
     <section id="sampleLibraryInsights" class="sample-library-mode-panel" aria-label="检索与洞察" hidden></section>
+    <section id="sampleLibraryAccountResearch" class="sample-library-mode-panel" aria-label="账户研究" hidden></section>
     <aside id="sampleComparisonTray" class="sample-comparison-tray" aria-label="比较选择托盘"></aside>
     <dialog id="sampleComparisonCreateDialog" class="stage3-dialog sample-comparison-create-dialog">
       <form id="sampleComparisonCreateForm">
@@ -209,7 +213,7 @@ function bind() {
 }
 
 async function activateLibraryMode(resume=false){
-  root()?.querySelectorAll('.sample-library-mode-panel').forEach(panel=>{panel.hidden=panel.id!==(libraryMode==='samples'?'sampleLibrarySamples':libraryMode==='comparisons'?'sampleLibraryComparisons':libraryMode==='components'?'sampleLibraryComponents':'sampleLibraryInsights');});
+  root()?.querySelectorAll('.sample-library-mode-panel').forEach(panel=>{panel.hidden=panel.id!==(libraryMode==='samples'?'sampleLibrarySamples':libraryMode==='comparisons'?'sampleLibraryComparisons':libraryMode==='components'?'sampleLibraryComponents':libraryMode==='insights'?'sampleLibraryInsights':'sampleLibraryAccountResearch');});
   root()?.querySelectorAll('[data-library-mode]').forEach(button=>{const on=button.dataset.libraryMode===libraryMode;button.classList.toggle('on',on);button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;});
   root()?.classList.toggle('sample-library-stage3',libraryMode!=='samples');
   if(libraryMode==='samples'){
@@ -221,13 +225,14 @@ async function activateLibraryMode(resume=false){
   leaveResearch();root()?.classList.remove('samples-detail-mode','samples-nav-collapsed');paintComparisonTray();
   if(libraryMode==='comparisons')await openComparisonLibrary($('#sampleLibraryComparisons'),{onOpen:id=>openWorkspace(id),onNewFromSamples:()=>setLibraryMode('samples')});
   else if(libraryMode==='components')await openComponentLibrary($('#sampleLibraryComponents'),{});
-  else await openSampleInsights($('#sampleLibraryInsights'));
+  else if(libraryMode==='insights')await openSampleInsights($('#sampleLibraryInsights'));
+  else await openAccountResearch($('#sampleLibraryAccountResearch'));
 }
 
 async function setLibraryMode(next,focusTarget=null){
-  if(!['samples','comparisons','components','insights'].includes(next))return;
+  if(!['samples','comparisons','components','insights','account-research'].includes(next))return;
   if(next===libraryMode){focusTarget?.focus({preventScroll:true});return;}
-  leaveComparison();leaveComponents();leaveSampleInsights();libraryMode=next;await activateLibraryMode();requestAnimationFrame(()=>focusTarget?.focus({preventScroll:true}));
+  leaveComparison();leaveComponents();leaveSampleInsights();leaveAccountResearch();libraryMode=next;await activateLibraryMode();requestAnimationFrame(()=>focusTarget?.focus({preventScroll:true}));
 }
 
 async function openWorkspace(id){

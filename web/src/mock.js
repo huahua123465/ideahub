@@ -5,6 +5,7 @@
  * 只在浏览器内存里改动，刷新即还原 —— 演示场合正好合适。
  */
 import { logApi, logSql, logQueue } from './apilog.js';
+import { ACCOUNT_RESEARCH_DIMENSIONS, ACCOUNT_RESEARCH_DTO_VERSION, accountResearchError } from './account-research-contract.js';
 
 const hoursAgo = h => new Date(Date.now() - h * 3600e3).toISOString();
 function strictMockBody(body,allowed,required=[]){const value=body&&typeof body==='object'&&!Array.isArray(body)?body:{};const unknown=Object.keys(value).filter(key=>!allowed.includes(key));if(unknown.length)throw Object.assign(new Error(`不支持的字段：${unknown.join('、')}`),{status:400});const missing=required.filter(key=>value[key]==null||value[key]===''||(Array.isArray(value[key])&&!value[key].length));if(missing.length)throw Object.assign(new Error(`缺少必填字段：${missing.join('、')}`),{status:400});return value;}
@@ -442,11 +443,51 @@ const PEOPLE = [
 const hot = i => (i.voteCount + i.commentCount * 2) /
   Math.pow((Date.now() - new Date(i.createdAt)) / 3.6e6 + 2, 1.5);
 
+/* ---------- 账户研究 v3 版本化演示 DTO ---------- */
+const ACCOUNT_CLAIM_COPY={
+  identity_positioning:['observation','以“可观察的关系信号”作为核心承诺，并反复声明不替读者下判断。','正文或口播明确给出行为证据与边界提醒。'],
+  audience_needs:['interpretation','内容主要承接“关系不确定时如何判断”的需求，评论中也有同类自述。','只在召唤文案与评论自述同时出现时标记。'],
+  content_supply:['observation','案例拆解、判断清单和边界提醒构成三个稳定内容支柱。','作品需能归入三类之一且具有完整正文。'],
+  expression_mechanism:['observation','开头先给出具体场景，再用三步判断推进。','前 120 字出现场景和明确步骤。'],
+  trust_relationship:['interpretation','主动承认信息不足并告知判断边界，构成克制的专业信任。','同一作品同时有方法建议和限制语。'],
+  community_feedback:['insufficient',null,'需要可引用的评论和作者回复。'],
+  conversion_path:['hypothesis','清单型内容可能为咨询服务建立预期，但公开数据不能证明转化因果。','作品出现服务边界或软性行动引导。'],
+  temporal_evolution:['interpretation','观察窗口后半段从情境叙述转向可执行清单。','分别比较前后两个时间段的主导结构。'],
+};
+const ACCOUNT_SAMPLE_REFS=[
+  {sampleId:1,title:'关系降温后，先看这三个行动',publishedAt:'2026-02-18T08:00:00.000Z',contentType:'image_post',inclusionReasons:['pinned','time:2026-02']},
+  {sampleId:3,title:'别猜对方在想什么，先核对行为',publishedAt:'2026-04-09T08:00:00.000Z',contentType:'video',inclusionReasons:['format:video','performance:upper_middle']},
+  {sampleId:4,title:'一张表看懂关系里的有效回应',publishedAt:'2026-06-22T08:00:00.000Z',contentType:'image_post',inclusionReasons:['time:2026-06','performance:top']},
+  {sampleId:6,title:'不确定时，如何留住自己的边界',publishedAt:'2026-07-16T08:00:00.000Z',contentType:'article',inclusionReasons:['format:article','recent']},
+];
+function accountEvidence(dimensionKey){
+  if(dimensionKey!=='identity_positioning')return [{dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,evidenceId:`ev-${dimensionKey}-1`,direction:'support',sampleId:1,sampleTitle:ACCOUNT_SAMPLE_REFS[0].title,sourceKind:'body',quoteText:'先不要猜他的动机，把过去两周真正发生的行动写下来。',locator:{startOffset:18,endOffset:48}}];
+  return [
+    {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,evidenceId:'ev-text',direction:'support',sampleId:1,sampleTitle:ACCOUNT_SAMPLE_REFS[0].title,sourceKind:'body',quoteText:'先不要猜他的动机，把过去两周真正发生的行动写下来。',locator:{startOffset:18,endOffset:48}},
+    {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,evidenceId:'ev-image',direction:'support',sampleId:4,sampleTitle:ACCOUNT_SAMPLE_REFS[2].title,sourceKind:'image',quoteText:'第二页将“回复、邀约、承诺”列为三项可观察信号。',locator:{imageIndex:2,region:{x:.12,y:.2,width:.72,height:.44}}},
+    {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,evidenceId:'ev-video',direction:'support',sampleId:3,sampleTitle:ACCOUNT_SAMPLE_REFS[1].title,sourceKind:'video',quoteText:'判断只回到你能观察的事实。',locator:{timeStartMs:18400,timeEndMs:26700}},
+    {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,evidenceId:'ev-comment',direction:'challenge',sampleId:6,sampleTitle:ACCOUNT_SAMPLE_REFS[3].title,sourceKind:'comment',quoteText:'这种清单对我没用，我更想知道怎么开口沟通。',locator:{commentRef:'comment-208'}},
+  ];
+}
+function makeAccountDimensions(seed=0){return ACCOUNT_RESEARCH_DIMENSIONS.map((dimension,index)=>{const [claimType,claimText,definition]=ACCOUNT_CLAIM_COPY[dimension.dimensionKey];const make=(suffix,type=claimType,text=claimText,goal=null,present=ACCOUNT_SAMPLE_REFS.slice(0,2))=>{const eligible=type==='insufficient'?ACCOUNT_SAMPLE_REFS.slice(0,3):ACCOUNT_SAMPLE_REFS;return{dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,claimId:`claim-${seed+1}-${index+1}-${suffix}`,dimensionKey:dimension.dimensionKey,patternCode:`${dimension.dimensionKey}_${suffix}`,contentGoal:goal,claimType:type,claimText:text,operationalDefinition:definition,eligibleCount:eligible.length,presentCount:type==='insufficient'?0:present.length,prevalence:type==='insufficient'?0:present.length/eligible.length,stability:{level:type==='insufficient'?'insufficient':'recurring',label:type==='insufficient'?'数据不足':'重复出现'},timeCoverage:{start:'2026-01-01',end:'2026-08-01',buckets:['2026-02','2026-04','2026-06','2026-07'],label:'2026.01—2026.08'},limitations:type==='hypothesis'?'缺少曝光、私信和成交对照数据，只能作为待验证假设。':type==='insufficient'?'冻结样本只有 3 篇带可引用评论，且未取得稳定作者回复。':'结论仅适用于当前公开作品和冻结观察窗口。',representativeSamples:type==='insufficient'?[]:present.slice(0,1),counterexamples:type==='insufficient'?[]:eligible.filter(item=>!present.some(hit=>hit.sampleId===item.sampleId)).slice(0,1),sampleScope:{auditable:true,eligibleSamples:eligible,presentSamples:type==='insufficient'?[]:present},quality:{label:type==='hypothesis'?'hypothesis_only':type==='insufficient'?'insufficient':index%3===0?'evidence_sufficient':'evidence_moderate',formulaVersion:'account-quality/1.0',aiConfidenceIgnored:true},decision:{dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,status:index%3===0?'confirmed':index%3===1?'edited':'pending',note:index%3===0?'已核对精确证据':null,decidedBy:index%3===0?'周未':null,decidedAt:index%3===0?'2026-08-26T10:00:00.000Z':null},causalClaimsAllowed:false,evidence:accountEvidence(dimension.dimensionKey)};};const claims=[make('primary',claimType,claimText,dimension.dimensionKey==='content_supply'?'traffic':null)];if(dimension.dimensionKey==='content_supply')claims.push(make('persona','observation','判断清单形成独立内容支柱。','persona',ACCOUNT_SAMPLE_REFS.slice(1,3)),make('expertise','observation','边界提醒形成独立内容支柱。','expertise',ACCOUNT_SAMPLE_REFS.slice(2,4)));return{...dimension,claims};});}
+function makeAccountRun(id,version,seed=0){const dimensions=makeAccountDimensions(seed);const matrixRows=dimensions.find(item=>item.dimensionKey==='content_supply').claims.map(claim=>{const cells=claim.sampleScope.presentSamples.map(item=>({format:item.contentType||'unknown',period:item.publishedAt<'2026-03-12'?'early':item.publishedAt<'2026-05-22'?'middle':'recent',sampleIds:[item.sampleId],count:1}));return{patternCode:claim.patternCode,contentGoal:claim.contentGoal,sampleIds:claim.sampleScope.presentSamples.map(item=>item.sampleId),count:claim.presentCount,cells};});const batch={batch:1,codes:['identity_positioning/identity_positioning_primary'],codeCount:1,newCodeCount:1,cumulativeCodeCount:1,newCodeRatio:1,newCodes:['identity_positioning/identity_positioning_primary']};return {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,schemaVersion:'account-research/1.1',runId:id,version,status:'complete',createdAt:`2026-08-${String(20+version).padStart(2,'0')}T09:00:00.000Z`,completedAt:`2026-08-${String(20+version).padStart(2,'0')}T09:08:00.000Z`,observationWindow:{start:'2026-01-01',end:'2026-08-01',label:'2026.01—2026.08'},sampling:{mode:'stratified',eligibleCount:18,frozenSampleCount:4,maxSamples:60,coverage:{publishedAt:1,body:1,media:.81,comments:.44},items:ACCOUNT_SAMPLE_REFS,warnings:['评论覆盖不足，用户与社群结论已降级。','2 篇作品因无法判断不进入 n/N，但已计入覆盖缺口。']},quality:{label:'evidence_moderate',labelText:'证据一般',coverage:{sample:.89,exactEvidence:.83,time:1,media:.81,comments:.44},humanReview:{reviewed:5,total:10,confirmed:3,edited:2,rejected:0},risks:['评论与作者回复覆盖不足','不可观测的作品已从各结论 N 中排除']},contentMatrix:{status:'measured',periods:['early','middle','recent','unknown'],rows:matrixRows,membershipTotal:matrixRows.reduce((sum,row)=>sum+row.count,0),uniqueSampleCount:new Set(matrixRows.flatMap(row=>row.sampleIds)).size,limitations:['同一作品可属于多个内容支柱；成员总数不等于全矩阵去重作品数。']},saturation:{ruleVersion:'saturation/1.0',status:'insufficient',reached:false,threshold:.05,batchSize:5,totalCodes:1,batches:[batch],observations:[batch],limitations:['仅描述当前冻结样本的编码覆盖，不证明账户未来不会出现新模式。']},reproducibility:{samplingRuleVersion:'account-sampling/1.0',qualityFormulaVersion:'account-quality/1.0',modelVersion:'mock-evidence-model/2026-08',promptVersion:'account-research-evidence-first/2026-09-02',inputDigest:`mock-input-${id}`},dimensions};}
+let ACCOUNT_RESEARCH_RUN_SEQ=303;
+const ACCOUNT_RESEARCH_ACCOUNTS=[
+  {accountId:'xhs:5b2b7035',stableKey:'xiaohongshu:id:5b2b7035',platform:'xiaohongshu',platformLabel:'小红书',displayName:'小鹿关系实验室',handle:'xiaolu_lab',profileUrl:'https://www.xiaohongshu.com/user/profile/5b2b7035',identity:{quality:'platform_id',label:'稳定平台 ID',needsReview:false,source:'platform_account_id'},currentRunId:302,runs:[makeAccountRun(302,3,0),makeAccountRun(301,2,8)],updatedAt:'2026-08-29T09:00:00.000Z'},
+  {accountId:'xhs:name-candidate:8',stableKey:'xiaohongshu:name_candidate:mock:sample:8',platform:'xiaohongshu',platformLabel:'小红书',displayName:'山茶的成长笔记',handle:null,profileUrl:null,identity:{quality:'name_candidate',label:'名称回退，待确认',needsReview:true,source:'display_name'},currentRunId:303,runs:[makeAccountRun(303,1,16)],updatedAt:'2026-08-25T09:00:00.000Z'},
+];
+const accountPermissions=()=>({canRead:true,canCreateRun:ME.role==='admin',canRerun:ME.role==='admin',canReview:['reviewer','admin'].includes(ME.role)});
+const accountSummary=item=>({dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,accountId:item.accountId,stableKey:item.stableKey,platform:item.platform,platformLabel:item.platformLabel,displayName:item.displayName,handle:item.handle,identity:item.identity,currentRunId:item.currentRunId,versionCount:item.runs.length,frozenSampleCount:item.runs.find(run=>run.runId===item.currentRunId)?.sampling.frozenSampleCount||0,observationWindow:item.runs.find(run=>run.runId===item.currentRunId)?.observationWindow||null,quality:item.runs.find(run=>run.runId===item.currentRunId)?.quality||null,updatedAt:item.updatedAt});
+const accountDetail=item=>({dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,account:{accountId:item.accountId,stableKey:item.stableKey,platform:item.platform,platformLabel:item.platformLabel,displayName:item.displayName,handle:item.handle,profileUrl:item.profileUrl,identity:item.identity},currentRunId:item.currentRunId,runs:structuredClone(item.runs),permissions:accountPermissions()});
+
 /** 把 mock 当成一个假后端来用，路径和真接口完全一致 */
 export async function handle(method, path, body) {
   await new Promise(r => setTimeout(r, 90));   // 假装有网络延迟，动画才自然
   const [p, search] = path.split('?');
   const q = new URLSearchParams(search || '');
+  const accountDelay=globalThis.__IDEAHUB_ACCOUNT_RESEARCH_DELAYS__?.[`${method} ${p}`]
+    ?? globalThis.__IDEAHUB_ACCOUNT_RESEARCH_DELAYS__?.[p];
+  if(Number(accountDelay)>0)await new Promise(resolve=>setTimeout(resolve,Number(accountDelay)));
   logApi(method, path, 200);
 
   const faultMap=globalThis.__IDEAHUB_MOCK_FAILURES__;
@@ -464,6 +505,65 @@ export async function handle(method, path, body) {
   }
 
   if (p === '/api/me') return ME;
+
+  /* ---------- 账户研究 v3 ---------- */
+  if(p.startsWith('/api/research-accounts')){
+    (globalThis.__IDEAHUB_ACCOUNT_RESEARCH_REQUESTS__||=[]).push({method,path:p,query:Object.fromEntries(q),body:body==null?null:structuredClone(body)});
+  }
+  const accountScenario=globalThis.__IDEAHUB_ACCOUNT_RESEARCH_SCENARIO__||'';
+  if(p==='/api/research-accounts/config'&&method==='GET')return {
+    dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,dimensions:structuredClone(ACCOUNT_RESEARCH_DIMENSIONS),
+    claimTypes:['observation','interpretation','hypothesis','insufficient'],
+    qualityLabels:['evidence_sufficient','evidence_moderate','hypothesis_only','insufficient'],
+    permissions:accountPermissions(),causalClaimsAllowed:false,
+  };
+  if(p==='/api/research-accounts'&&method==='GET'){
+    const items=accountScenario==='empty'?[]:ACCOUNT_RESEARCH_ACCOUNTS.map(accountSummary);
+    return {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,items,total:items.length,page:1,pageSize:50,permissions:accountPermissions()};
+  }
+  const accountDecisionMatch=p.match(/^\/api\/research-accounts\/([^/]+)\/runs\/(\d+)\/claims\/([^/]+)\/decisions$/);
+  if(accountDecisionMatch&&method==='POST'){
+    if(!accountPermissions().canReview)throw accountResearchError(403,'FORBIDDEN','只有评审委员或管理员可以审核账户结论');
+    strictMockBody(body,['decision','claimText','operationalDefinition','limitations','note'],['decision']);
+    if(!['confirmed','edited','rejected'].includes(body.decision))throw accountResearchError(400,'INVALID_DECISION','人工决定不合法');
+    if(body.decision==='edited'&&!String(body.claimText||'').trim())throw accountResearchError(400,'CLAIM_TEXT_REQUIRED','修订时必须填写结论');
+    const accountId=decodeURIComponent(accountDecisionMatch[1]),runId=Number(accountDecisionMatch[2]),claimId=decodeURIComponent(accountDecisionMatch[3]);
+    const account=ACCOUNT_RESEARCH_ACCOUNTS.find(item=>item.accountId===accountId),run=account?.runs.find(item=>item.runId===runId),claim=run?.dimensions.flatMap(item=>item.claims).find(item=>item.claimId===claimId);
+    if(!claim)throw accountResearchError(404,'CLAIM_NOT_FOUND','账户结论不存在');
+    if(body.decision==='edited')Object.assign(claim,{claimText:String(body.claimText).trim(),operationalDefinition:String(body.operationalDefinition||claim.operationalDefinition||'').trim()||null,limitations:String(body.limitations||claim.limitations||'').trim()||null});
+    claim.decision={dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,status:body.decision,note:String(body.note||'').trim()||null,decidedBy:ME.name,decidedAt:new Date().toISOString()};
+    const reviewed=run.dimensions.flatMap(item=>item.claims).filter(item=>item.decision.status!=='pending');
+    run.quality.humanReview={reviewed:reviewed.length,total:run.dimensions.length,confirmed:reviewed.filter(item=>item.decision.status==='confirmed').length,edited:reviewed.filter(item=>item.decision.status==='edited').length,rejected:reviewed.filter(item=>item.decision.status==='rejected').length};
+    return {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,accountId,runId,claimId,decision:structuredClone(claim.decision),claim:structuredClone(claim)};
+  }
+  const accountRerunMatch=p.match(/^\/api\/research-accounts\/([^/]+)\/runs\/(\d+)\/rerun$/);
+  const accountRunMatch=p.match(/^\/api\/research-accounts\/([^/]+)\/runs$/);
+  if((accountRunMatch||accountRerunMatch)&&method==='POST'){
+    if(!accountPermissions().canCreateRun)throw accountResearchError(403,'FORBIDDEN','只有管理员可以创建或重跑账户研究');
+    strictMockBody(body,['windowStart','windowEnd','maxSamples','includeComments','source'],['windowStart','windowEnd']);
+    if(Date.parse(body.windowEnd)<=Date.parse(body.windowStart))throw accountResearchError(400,'INVALID_WINDOW','观察窗口不合法');
+    const accountId=decodeURIComponent((accountRunMatch||accountRerunMatch)[1]),account=ACCOUNT_RESEARCH_ACCOUNTS.find(item=>item.accountId===accountId);
+    if(!account)throw accountResearchError(404,'NOT_FOUND','研究账户不存在');
+    const sourceRun=account.runs.find(item=>item.runId===Number(accountRerunMatch?.[2]))||account.runs[0];
+    const next=structuredClone(sourceRun||makeAccountRun(++ACCOUNT_RESEARCH_RUN_SEQ,1,24));
+    next.dtoVersion=ACCOUNT_RESEARCH_DTO_VERSION;next.runId=++ACCOUNT_RESEARCH_RUN_SEQ;next.version=Math.max(0,...account.runs.map(item=>Number(item.version||0)))+1;next.status='complete';
+    next.createdAt=new Date().toISOString();next.completedAt=new Date().toISOString();next.observationWindow={start:body.windowStart,end:body.windowEnd,label:`${body.windowStart}—${body.windowEnd}`};next.sampling.maxSamples=Number(body.maxSamples||60);next.reproducibility.inputDigest=`mock-input-${next.runId}`;
+    next.dimensions.forEach(dimension=>dimension.claims.forEach(claim=>{claim.claimId=`claim-${next.runId}-${dimension.ordinal}`;claim.decision={dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,status:'pending',note:null,decidedBy:null,decidedAt:null};}));
+    next.quality.humanReview={reviewed:0,total:8,confirmed:0,edited:0,rejected:0};account.runs.unshift(next);account.currentRunId=next.runId;account.updatedAt=new Date().toISOString();
+    return {dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,accountId,run:structuredClone(next),currentRunId:next.runId};
+  }
+  const accountDetailMatch=p.match(/^\/api\/research-accounts\/([^/]+)$/);
+  if(accountDetailMatch&&method==='GET'){
+    const accountId=decodeURIComponent(accountDetailMatch[1]);
+    if(accountScenario==='missing')throw accountResearchError(404,'NOT_FOUND','研究账户不存在');
+    const account=ACCOUNT_RESEARCH_ACCOUNTS.find(item=>item.accountId===accountId);
+    if(!account)throw accountResearchError(404,'NOT_FOUND','研究账户不存在');
+    const value=accountDetail(account);
+    if(accountScenario==='no-version'){value.currentRunId=null;value.runs=[];}
+    if(accountScenario==='zero-codes'){for(const run of value.runs){const batches=[1,2,3].map(batch=>({batch,codes:[],codeCount:0,newCodeCount:0,cumulativeCodeCount:0,newCodeRatio:0,newCodes:[]}));run.saturation={ruleVersion:'saturation/1.0',status:'insufficient',reached:false,threshold:.05,batchSize:5,totalCodes:0,batches,observations:structuredClone(batches),limitations:['没有非不足结论在冻结作品中命中特征。','仅描述当前冻结样本的编码覆盖。']};}}
+    if(accountScenario==='version-mismatch')value.dtoVersion='account-research-dto/0.9';
+    return value;
+  }
 
   /* ---------- Sample library stage 4 ---------- */
   if(p==='/api/sample-insights/config'&&method==='GET')return {dimensions:SAMPLE_DIMENSIONS,targets:['traffic','persona','expertise','conversion'],metrics:Object.keys({likes:1,saves:1,comments:1,shares:1,views:1,likes_per_view:1,saves_per_view:1,comments_per_view:1,shares_per_view:1}),trustPolicies:['human_confirmed','reviewed_or_manual_tag','all_effective'],algorithms:{vector:'fh15-q15/1',tokenizer:'zhmix/1',mapping:'retrieve-map/1',cluster:'mutual-knn/1',insight:'descriptive-tags/1'},reliabilityRules:STAGE4_RELIABILITY,limits:STAGE4_LIMITS,causalClaimsAllowed:false};
