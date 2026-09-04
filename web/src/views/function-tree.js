@@ -183,7 +183,7 @@ function scaffold() {
     <div class="ft-module-status"><span>${ICON.bulb}</span><div><b>独立功能模块</b><small>从左侧“项目功能树”进入</small></div></div>
   </section>
   <section class="ft-panel">
-    <header class="ft-panel-head"><div><span>项目导航 · 当前全貌</span><h2>功能结构树</h2><p>从业务域找到功能入口，点击二级节点查看项目介绍与 AI 协作规划。</p></div><div><b>8 个功能域</b><b>19 个核心页面</b></div><label>${ICON.search}<input id="ftSearch" type="search" placeholder="搜索功能、用途或 AI 能力"></label></header>
+    <header class="ft-panel-head"><div><span>项目导航 · 当前全貌</span><h2>功能结构树</h2><p>从业务域找到功能入口，点击二级节点查看项目介绍与 AI 协作规划。</p></div><div><b>8 个功能域</b><b>19 个核心页面</b></div><label>${ICON.search}<input id="ftSearch" type="search" aria-label="搜索功能、用途或 AI 能力" placeholder="搜索功能、用途或 AI 能力"></label></header>
     <div class="ft-legend"><span><i></i>当前入口</span><span><b>二级</b>页面内能力</span><span><b class="ai">AI</b>包含 AI 协作介绍</span><span>介绍紧邻当前模块右侧展示</span></div>
     <div class="ft-tree"><div class="ft-root"><b>IdeaHub · 内容与经营研究室</b><span>团队内容、客户与研究资产的统一工作台</span></div><div class="ft-trunk"></div>
       <div class="ft-domains">${GROUPS.map(domainHtml).join('')}

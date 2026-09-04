@@ -108,7 +108,7 @@ function scaffold() {
     </section>
 
     <section class="samples-toolbar">
-      <label>${ICON.search}<input id="sampleQuery" placeholder="搜索标题、正文、账号或作品 ID"></label>
+      <label>${ICON.search}<input id="sampleQuery" aria-label="搜索样本标题、正文、账号或作品 ID" placeholder="搜索标题、正文、账号或作品 ID"></label>
       <select id="samplePlatform" aria-label="平台筛选"><option value="">全部平台</option><option value="xiaohongshu">小红书</option><option value="douyin">抖音</option><option value="manual">手动归档</option></select>
       <select id="sampleArchiveStatus" aria-label="完整度筛选"><option value="">全部完整度</option><option value="complete">完整归档</option><option value="usable">可用但有缺项</option><option value="partial">部分归档</option></select>
       <button type="button" id="sampleFiltersToggle" aria-expanded="false">组合筛选</button><button type="button" id="sampleReload">刷新</button>
