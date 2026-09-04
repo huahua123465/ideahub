@@ -1,0 +1,28 @@
+/** 最新意图获胜：用于搜索、筛选、详情与分页。 */
+let __PLACEHOLDER__Generation = 0;
+let __PLACEHOLDER__Controller = null;
+
+export async function load__PLACEHOLDER__(params) {
+  const own = ++__PLACEHOLDER__Generation;
+  __PLACEHOLDER__Controller?.abort();
+  const controller = new AbortController();
+  __PLACEHOLDER__Controller = controller;
+  paint__PLACEHOLDER__Loading(params);
+
+  try {
+    const data = await api.__PLACEHOLDER_API__(params, { signal: controller.signal });
+    if (own !== __PLACEHOLDER__Generation) return;
+    paint__PLACEHOLDER__Result(data, params);
+  } catch (error) {
+    if (own !== __PLACEHOLDER__Generation || error.name === 'AbortError') return;
+    paint__PLACEHOLDER__Error(error, params);
+  } finally {
+    if (own === __PLACEHOLDER__Generation) __PLACEHOLDER__Controller = null;
+  }
+}
+
+export function leave__PLACEHOLDER__() {
+  __PLACEHOLDER__Generation += 1;
+  __PLACEHOLDER__Controller?.abort();
+  __PLACEHOLDER__Controller = null;
+}

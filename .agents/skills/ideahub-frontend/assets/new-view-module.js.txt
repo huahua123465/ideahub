@@ -1,0 +1,72 @@
+/**
+ * IdeaHub 原生视图起点。
+ * 替换全部 __PLACEHOLDER__，删除不需要的分支，并按相邻视图校准。
+ */
+import { api } from '../api.js';
+import { $, esc } from '../util.js';
+import { toast } from '../toast.js';
+
+export const events = new EventTarget();
+
+let bound = false;
+let renderGeneration = 0;
+
+function bindOnce(root) {
+  if (bound) return;
+  bound = true;
+  root.addEventListener('click', event => {
+    const action = event.target.closest('[data-__PLACEHOLDER__-action]');
+    if (!action) return;
+    events.dispatchEvent(new CustomEvent('open', {
+      detail: { id: action.dataset.id },
+    }));
+  });
+}
+
+function paintLoading(root) {
+  root.innerHTML = `
+    <div class="page-head">
+      <div><div class="page-kicker">__PLACEHOLDER_KICKER__</div><h1>__PLACEHOLDER_TITLE__</h1></div>
+    </div>
+    <div class="__PLACEHOLDER__-state" role="status">正在读取__PLACEHOLDER_OBJECT__…</div>`;
+}
+
+function paint(root, data) {
+  const items = data.items || [];
+  root.innerHTML = `
+    <div class="page-head">
+      <div>
+        <div class="page-kicker">__PLACEHOLDER_KICKER__</div>
+        <h1>__PLACEHOLDER_TITLE__</h1>
+        <div class="sub">__PLACEHOLDER_PAGE_JOB__</div>
+      </div>
+    </div>
+    <div class="__PLACEHOLDER__-list">
+      ${items.length ? items.map(item => `
+        <article class="__PLACEHOLDER__-item">
+          <h2>${esc(item.title)}</h2>
+          <button class="btn btn-ghost" data-__PLACEHOLDER__-action data-id="${esc(item.id)}">查看详情</button>
+        </article>`).join('') : `
+        <div class="empty"><span>还没有__PLACEHOLDER_OBJECT__。__PLACEHOLDER_NEXT_STEP__</span></div>`}
+    </div>`;
+}
+
+export async function render() {
+  const own = ++renderGeneration;
+  const root = $('#v-__PLACEHOLDER__');
+  paintLoading(root);
+  bindOnce(root);
+  try {
+    const data = await api.__PLACEHOLDER_API__();
+    if (own !== renderGeneration) return;
+    paint(root, data);
+  } catch (error) {
+    if (own !== renderGeneration || error.message === '请先登录') return;
+    root.innerHTML = '<div class="__PLACEHOLDER__-state error">读取失败，请稍后重试。</div>';
+    toast('info', error.message || '读取失败');
+  }
+}
+
+export function leave() {
+  renderGeneration += 1;
+}

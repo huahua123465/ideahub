@@ -1,0 +1,96 @@
+name: Project quality (trusted pushes)
+
+# This private backup repository versions production configuration. Do not add a
+# pull_request trigger: PR-controlled code must never execute with access to the
+# repository object database. Branch pushes are restricted to trusted writers.
+on:
+  push:
+    paths-ignore:
+      - 'backup/**'
+      - 'data/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out testable source only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.agents/
+            /.github/
+            /docs/
+            /scripts/
+            /server/
+            /web/
+            /AGENTS.md
+            /README.md
+            /package.json
+            /package-lock.json
+
+      - name: Remove Git object database before executing repository code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${GITHUB_WORKSPACE:-}" && test "$GITHUB_WORKSPACE" != "/"
+          rm -rf -- "$GITHUB_WORKSPACE/.git"
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache Puppeteer browser
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/puppeteer
+          key: ${{ runner.os }}-puppeteer-${{ hashFiles('package-lock.json') }}
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint project Skills
+        run: npm run lint:skills
+
+      - name: Test Skill evaluation tooling
+        run: npm run test:skills-tooling
+
+      - name: Validate real-agent evaluation suite
+        run: npm run eval:skills -- --validate-only
+
+      - name: Test web build round trip
+        run: npm run test:web-build
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(find scripts server/src web/src -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
+
+      - name: Run isolated UI QA
+        run: npm run test:ui
+
+      - name: Upload UI failure evidence
+        if: ${{ failure() && hashFiles('scripts/.uidiff/**') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ui-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: scripts/.uidiff/
+          if-no-files-found: ignore
+          retention-days: 7

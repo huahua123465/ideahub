@@ -10,12 +10,49 @@
 <link rel="stylesheet" href="./account.css">
 <link rel="stylesheet" href="./soft.css?v=20260824-soft3">
 <!-- 提前并行拉取全部模块。
-     ES 模块是逐层发现的：浏览器先下 main.js，解析完才知道要下哪 19 个，
+     ES 模块是逐层发现的：浏览器先下 main.js，解析完才知道后续依赖，
      那些再解析完才知道下一层 —— 在有延迟的网络上这就是好几个来回的等待。
      modulepreload 让它一开始就全部并发拉，首屏快很多。
      这份清单由 scripts/gen-preload.mjs 生成，加了新模块记得重跑一次。 -->
-<!-- PRELOAD_OFF --><!-- 已打包成 dist/app.js，不需要逐个模块预加载 -->
-<!-- /modulepreload -->
+<!-- modulepreload:start -->
+<link rel="modulepreload" href="./src/anim.js">
+<link rel="modulepreload" href="./src/api.js">
+<link rel="modulepreload" href="./src/apilog.js">
+<link rel="modulepreload" href="./src/boards.js">
+<link rel="modulepreload" href="./src/confirm.js">
+<link rel="modulepreload" href="./src/icons.js">
+<link rel="modulepreload" href="./src/lightbox.js">
+<link rel="modulepreload" href="./src/live.js">
+<link rel="modulepreload" href="./src/login.js">
+<link rel="modulepreload" href="./src/main.js">
+<link rel="modulepreload" href="./src/motion.js">
+<link rel="modulepreload" href="./src/pdf-reader.js">
+<link rel="modulepreload" href="./src/tagstore.js">
+<link rel="modulepreload" href="./src/toast.js">
+<link rel="modulepreload" href="./src/util.js">
+<link rel="modulepreload" href="./src/views/account.js">
+<link rel="modulepreload" href="./src/views/alert.js">
+<link rel="modulepreload" href="./src/views/bench.js">
+<link rel="modulepreload" href="./src/views/board.js">
+<link rel="modulepreload" href="./src/views/celebrate.js">
+<link rel="modulepreload" href="./src/views/chat.js">
+<link rel="modulepreload" href="./src/views/client.js">
+<link rel="modulepreload" href="./src/views/dashboard.js">
+<link rel="modulepreload" href="./src/views/drawer.js">
+<link rel="modulepreload" href="./src/views/formal.js">
+<link rel="modulepreload" href="./src/views/funnel.js">
+<link rel="modulepreload" href="./src/views/importer.js">
+<link rel="modulepreload" href="./src/views/learning.js">
+<link rel="modulepreload" href="./src/views/links.js">
+<link rel="modulepreload" href="./src/views/modal.js">
+<link rel="modulepreload" href="./src/views/notify.js">
+<link rel="modulepreload" href="./src/views/pool.js">
+<link rel="modulepreload" href="./src/views/review.js">
+<link rel="modulepreload" href="./src/views/search.js">
+<link rel="modulepreload" href="./src/views/stats.js">
+<link rel="modulepreload" href="./src/views/tagadmin.js">
+<link rel="modulepreload" href="./src/views/tagfilter.js">
+<!-- modulepreload:end -->
 </head>
 <body>
 
@@ -102,6 +139,7 @@
   <div class="search">
     <span class="ico" data-ico="search"></span>
     <input id="q" type="search" name="ideahub_global_search"
+      aria-label="全局搜索"
       placeholder="全局搜索：灵感 / 需求 / 正式库 / 客户 / 案例…"
       autocomplete="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true">
     <button class="search-ai" id="smartSearchBtn" type="button" title="按意思智能搜索">
@@ -128,8 +166,8 @@
     </div>
   </div>
   <div class="usermenu">
-    <div class="avatar" id="meAvatar" style="background:#4a3aa7">–</div>
-    <div class="menupop" id="userMenu">
+    <button class="avatar" id="meAvatar" type="button" style="background:#4a3aa7" aria-label="打开账户操作" aria-controls="userMenu" aria-expanded="false">–</button>
+    <div class="menupop" id="userMenu" aria-label="账户操作">
       <div class="menuhead">
         <b id="umName">–</b>
         <span id="umMeta">–</span>
@@ -370,27 +408,27 @@
   </footer>
 </div>
 
-<div class="modal idea-submit-modal" id="modal">
+<div class="modal idea-submit-modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="ideaSubmitTitle">
   <header>
-    <h2>提交一个灵感</h2>
+    <h2 id="ideaSubmitTitle">提交一个灵感</h2>
     <div class="hint">不用打磨得多完整 —— 一句话的想法也值得被记下来。</div>
   </header>
   <div class="form">
     <div class="field">
-      <label>标题 <span>*</span></label>
+      <label for="fTitle">标题 <span>*</span></label>
       <input class="inp" id="fTitle" placeholder="用一句话说清楚这个想法" maxlength="80">
     </div>
     <div class="dupe" id="dupe"></div>
     <div class="row2">
       <div class="field">
-        <label>分类 <span>*</span></label>
+        <label for="fCat">分类 <span>*</span></label>
         <select class="inp" id="fCat">
           <option>产品</option><option>技术</option><option>运营</option>
           <option>流程</option><option>其他</option>
         </select>
       </div>
       <div class="field">
-        <label>自由标签 <span class="opt">（可选）</span></label>
+        <label for="fTags">自由标签 <span class="opt">（可选）</span></label>
         <input class="inp" id="fTags" placeholder="回车分隔，如：AI、降本">
       </div>
     </div>
@@ -412,7 +450,7 @@
       </div>
     </div>
     <div class="field">
-      <label>详细说明 <span>*</span></label>
+      <label for="fBody">详细说明 <span>*</span></label>
       <textarea class="inp" id="fBody" placeholder="想解决什么问题？大概怎么做？"></textarea>
     </div>
     <div class="field idea-submit-files">
@@ -426,7 +464,7 @@
     </div>
   </div>
   <footer>
-    <div class="check" id="anon"><div class="box"><span class="ico" data-ico="check"></span></div>匿名提交</div>
+    <div class="check" id="anon" role="checkbox" tabindex="0" aria-checked="false"><div class="box"><span class="ico" data-ico="check"></span></div>匿名提交</div>
     <div class="spacer"></div>
     <button class="btn btn-ghost" data-close>取消</button>
     <button class="btn btn-primary" id="btnSubmit">提交到灵感池</button>
@@ -434,9 +472,9 @@
 </div>
 
 <!-- ============ 采纳弹窗 ============ -->
-<div class="modal modal-sm" id="adoptModal">
+<div class="modal modal-sm" id="adoptModal" role="dialog" aria-modal="true" aria-labelledby="adoptModalTitle">
   <header>
-    <h2>采纳并立项</h2>
+    <h2 id="adoptModalTitle">采纳并立项</h2>
     <div class="hint">采纳后会生成正式编号，进入正式库，并播报到群机器人。</div>
   </header>
   <div class="form">
@@ -446,11 +484,11 @@
     </div>
     <div class="row2">
       <div class="field">
-        <label>负责人 <span>*</span></label>
+        <label for="adoptOwner">负责人 <span>*</span></label>
         <select class="inp" id="adoptOwner"></select>
       </div>
       <div class="field">
-        <label>初始进度 <span class="opt">（可选）</span></label>
+        <label for="adoptProgress">初始进度 <span class="opt">（可选）</span></label>
         <select class="inp" id="adoptProgress">
           <option value="0">0% · 刚立项</option>
           <option value="10">10% · 已排期</option>
@@ -467,9 +505,9 @@
 </div>
 
 <!-- ============ 否决弹窗 ============ -->
-<div class="modal modal-sm" id="rejectModal">
+<div class="modal modal-sm" id="rejectModal" role="dialog" aria-modal="true" aria-labelledby="rejectModalTitle">
   <header>
-    <h2>否决这条灵感</h2>
+    <h2 id="rejectModalTitle">否决这条灵感</h2>
     <div class="hint">理由会记进流转记录并播报到群 —— 石沉大海比被否决更伤人。</div>
   </header>
   <div class="form">
@@ -478,7 +516,7 @@
       <div class="inp" id="rejectTitle" style="background:var(--page);color:var(--ink2)"></div>
     </div>
     <div class="field">
-      <label>否决理由 <span>*</span></label>
+      <label for="rejectReason">否决理由 <span>*</span></label>
       <textarea class="inp" id="rejectReason" style="height:84px"
         placeholder="为什么现在不做？如果只是时机不对，也写清楚什么条件下可以重新提出。"></textarea>
     </div>
@@ -491,7 +529,7 @@
 </div>
 
 <!-- ============ 业务板块的通用编辑弹窗 ============ -->
-<div class="modal bd-modal" id="bdModal">
+<div class="modal bd-modal" id="bdModal" role="dialog" aria-modal="true" aria-labelledby="bdTitle">
   <header class="bd-modal-head">
     <div class="bd-modal-heading">
       <h2 id="bdTitle">新增</h2>
@@ -546,10 +584,10 @@
     <div class="chatat" id="chatAt" hidden></div>
     <div class="chatfoot" id="chatFoot" hidden>
       <label class="chatclip" title="发文件"><span class="ico" data-ico="clip"></span>
-        <input type="file" id="chatFile" multiple
+        <input type="file" id="chatFile" multiple aria-label="选择聊天附件"
           accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.avif,.heic,.heif,.html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md">
       </label>
-      <textarea class="inp" id="chatInput" rows="1" placeholder="说点什么…（Enter 发送，群里可以 @）"></textarea>
+      <textarea class="inp" id="chatInput" rows="1" aria-label="聊天消息" placeholder="说点什么…（Enter 发送，群里可以 @）"></textarea>
       <button class="btn btn-primary" id="chatSend">发送</button>
     </div>
   </div>
@@ -559,7 +597,7 @@
 <div class="chatmenu" id="chatMenu" hidden></div>
 
 <!-- 建群 / 拉人：一次勾完，不要一个个 confirm -->
-<div class="modal modal-sm" id="groupModal">
+<div class="modal modal-sm" id="groupModal" role="dialog" aria-modal="true" aria-labelledby="groupTitle">
   <header>
     <h2 id="groupTitle">建群</h2>
     <div class="hint">勾选要拉进来的同事，可以多选。</div>
@@ -642,8 +680,8 @@
   </div>
   <div class="dfoot">
     <div class="cmt-input">
-      <input class="inp" id="dCmtInput" placeholder="说点什么…">
-      <div class="check" id="cmtAnon"><div class="box"><span class="ico" data-ico="check"></span></div>匿名</div>
+      <input class="inp" id="dCmtInput" aria-label="讨论内容" placeholder="说点什么…">
+      <div class="check" id="cmtAnon" role="checkbox" tabindex="0" aria-checked="false"><div class="box"><span class="ico" data-ico="check"></span></div>匿名</div>
       <button class="btn btn-ghost" id="btnComment">发表</button>
     </div>
     <div class="review-bar" id="reviewBar">
@@ -662,9 +700,9 @@
 
 
 <!-- ============ 修改密码 ============ -->
-<div class="modal" id="pwModal">
+<div class="modal" id="pwModal" role="dialog" aria-modal="true" aria-labelledby="pwModalTitle">
   <header>
-    <h2>修改密码</h2>
+    <h2 id="pwModalTitle">修改密码</h2>
     <div class="hint">改完之后，其它设备上的登录状态都会失效，需要重新登录。</div>
   </header>
   <div class="form">
@@ -690,9 +728,9 @@
 </div>
 
 <!-- ============ 用户管理（仅管理员） ============ -->
-<div class="modal modal-wide" id="usersModal">
+<div class="modal modal-wide" id="usersModal" role="dialog" aria-modal="true" aria-labelledby="usersModalTitle">
   <header>
-    <h2>用户管理</h2>
+    <h2 id="usersModalTitle">用户管理</h2>
     <div class="hint">成员可以提交、投票和评论；评审委员可以采纳或否决；管理员还可以管理账号和撤销采纳。</div>
   </header>
   <div class="userlist" id="userList"></div>
@@ -710,6 +748,6 @@
   <div id="apilines"></div>
 </div>
 
-<script type="module" src="./dist/app.js?v=mtigs6ki"></script>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -2,6 +2,9 @@
 name: ideahub-ui-qa
 description: IdeaHub 前端与交互验收工作流。凡是修改 web/ 下的 HTML、CSS、JavaScript、页面结构、导航、表单、弹窗、抽屉、响应式布局或异步 UI 状态，完成前都应使用此 skill；用户说“检查界面”“跑一下前端测试”“看看手机端”“有没有回归”时也必须使用。不要用它替代后端、数据库或 Collector 的专项测试。
 compatibility: IdeaHub repository; Node.js 20+; esbuild and Puppeteer installed from package-lock.json.
+metadata:
+  version: "1.1.0"
+  owner: "ideahub"
 ---
 
 # IdeaHub UI QA
@@ -19,7 +22,7 @@ compatibility: IdeaHub repository; Node.js 20+; esbuild and Puppeteer installed 
 1. 读根目录 `AGENTS.md` 和本次改动差异，确定受影响页面、状态与部署类型。
 2. 对改过的 `.js`/`.mjs` 文件运行 `node --check`。
 3. 运行 `npm run test:ui`；Windows PowerShell 因执行策略拦截 npm 时使用 `npm.cmd run test:ui`。
-4. 查看 `scripts/.uidiff/report.json`，确认 bundle、检查数量、截图和浏览器错误字段，而不是只看退出码。
+4. 查看 `scripts/.uidiff/report.json`，确认 bundle、导航能力、检查数量、截图、浏览器错误和网络错误字段，而不是只看退出码。
 5. 实际查看受影响页面的桌面与手机截图。通用截图矩阵见 [验收矩阵](references/test-matrix.md)。
 6. 有专项脚本时继续运行最接近改动的测试，例如样本库、附件、Collector 或 API 套件；通用 UI QA 不替代业务断言。
 7. 若修改 CSS、布局或交互，至少手工复核一张受影响截图；视觉好坏不能完全交给 DOM 断言。
@@ -31,9 +34,9 @@ compatibility: IdeaHub repository; Node.js 20+; esbuild and Puppeteer installed 
 - **改 CSS 或结构**：通用 UI QA之外，检查受影响截图和相邻页面，防止全局选择器污染。
 - **改异步状态**：增加或运行针对快速切换、失败重试、旧响应覆盖的专项测试。
 - **改 API 字段**：通用 UI QA只证明 mock 页面；必须继续运行对应 API/DTO 测试。
-- **改样本库**：使用 `npm run test:samples` 或更精确的 stage 脚本。
-- **改附件**：使用 `npm run test:idea-files`。
-- **改 Collector**：使用 `ideahub-collector` 指定的代理、compose 和 VPS smoke gates。
+- **改样本库**：当前分支存在 `test:samples` 或对应 stage 脚本时运行；命令不存在时不得伪造通过记录。
+- **改附件**：当前分支存在 `test:idea-files` 时运行；否则运行实际存在的最近专项测试并说明缺口。
+- **改 Collector**：当前分支存在 Collector 时使用 `ideahub-collector` 指定的代理、compose 和 VPS smoke gates；尚未合并时只评审合同。
 - **只生成了截图**：截图是人工审美证据，不代表交互、console 或 API 合约通过。
 
 ## The Stable UI Contract
@@ -41,9 +44,10 @@ compatibility: IdeaHub repository; Node.js 20+; esbuild and Puppeteer installed 
 `scripts/ui-check.mjs` 应保持以下性质：
 
 - 只使用 package-lock 已安装的 esbuild 与 Puppeteer，不再依赖 Playwright/Sharp。
-- 在内存中构建生产 ESM bundle，不改写 Git 跟踪的 `web/index.html`。
+- 复用 `scripts/lib/web-build.mjs` 的生产编译合同在内存中构建 ESM bundle，不改写 Git 跟踪的 `web/index.html`。
 - 使用随机本地端口和内置 mock 数据，不连接生产环境或真实数据库。
-- 验证核心页面、桌面 1440×900、手机 390×844、页面级横向溢出、关键弹窗；未处理异常或 `console error` 必须失败。
+- 自动发现并遍历当前分支全部 `[data-go]` 页面，验证桌面 1440×900、手机 390×844、唯一活动视图、ARIA 当前态、页面级横向溢出、关键弹窗与键盘/触控合同。
+- 阻断外部请求；未处理异常、`console error`、请求失败、意外 HTTP 4xx/5xx 或越过本地 origin 必须失败。
 - 将截图和 `report.json` 写入被忽略的 `scripts/.uidiff/`。
 - 失败时保留报告和已生成截图，方便定位；退出码必须非零。
 
@@ -70,7 +74,7 @@ compatibility: IdeaHub repository; Node.js 20+; esbuild and Puppeteer installed 
 
 1. `npm run test:ui` 从干净依赖安装后可直接运行。
 2. 测试没有连接生产、写数据库或修改被跟踪文件。
-3. `scripts/.uidiff/report.json` 中 `browserErrors` 为空。
-4. 受影响页面在桌面和手机均无页面级横向溢出。
+3. `scripts/.uidiff/report.json` 中 `browserErrors` 与 `networkErrors` 都为空。
+4. 当前全部导航能力在桌面和手机均能成为唯一活动视图，且无页面级横向溢出。
 5. 至少查看一张与本次改动相关的截图。
 6. 专项业务测试已运行，或在交接中明确写出未运行原因。

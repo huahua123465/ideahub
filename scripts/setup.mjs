@@ -1,10 +1,10 @@
 /**
- * 一键启动：node scripts/setup.mjs（Windows 上双击 启动.bat 即可）
+ * 一键启动：npm run setup
  *
  * 按顺序做这些事，每一步失败都给出下一步该怎么办，而不是甩一段堆栈：
  *   1. 检查 Node 版本
  *   2. 准备 .env
- *   3. 装依赖（只有一个 pg）
+ *   3. 按 package-lock 安装运行、构建和验收依赖
  *   4. 连数据库；连不上就试着用 Docker 起一个
  *   5. 建表 + 灌种子数据（只在库是空的时候）
  *   6. 起前后端，打开浏览器
@@ -72,24 +72,27 @@ step('准备配置文件');
 step('检查依赖');
 let driver = 'pg';
 {
-  let hasPg = false;
-  try { await import('pg'); hasPg = true; } catch { /* 还没装 */ }
+  const packages = ['pg', 'pdfjs-dist', 'esbuild', 'puppeteer'];
+  const missing = () => packages.filter(name =>
+    !existsSync(join(ROOT, 'node_modules', name, 'package.json')));
+  let absent = missing();
 
-  if (hasPg) {
-    good('pg 已安装');
+  if (absent.length === 0) {
+    good('运行、构建和 UI 验收依赖已安装');
   } else {
-    info('正在安装 pg（全项目唯一的依赖，通常十几秒）…');
-    const r = run('npm', ['install', '--no-audit', '--no-fund'], { quiet: true });
-    try { await import('pg'); hasPg = true; } catch { /* 装失败 */ }
+    info(`缺少 ${absent.join('、')}，正在按 package-lock 安装依赖…`);
+    const npmCommand = existsSync(join(ROOT, 'package-lock.json')) ? 'ci' : 'install';
+    const r = run('npm', [npmCommand, '--no-audit', '--no-fund'], { quiet: true });
+    absent = missing();
 
-    if (hasPg) {
-      good('pg 安装完成');
-    } else {
-      warn('pg 装不上（可能是网络或镜像源问题）');
+    if (absent.length === 0) {
+      good('依赖安装完成');
+    } else if (absent.includes('pg')) {
+      warn(`依赖没有完整安装（仍缺 ${absent.join('、')}）`);
       const psql = run(isWin ? 'where' : 'which', ['psql'], { quiet: true });
       if (psql.status === 0) {
         driver = 'psql';
-        warn('检测到本机有 psql，改用免依赖的 psql 驱动继续');
+        warn('检测到本机有 psql，数据库连接改用 psql 驱动继续');
       } else {
         console.log(c.err('      ✗ 没有 pg 也没有 psql，连不了数据库。'));
         info(r.stderr?.split('\n').slice(-4).join('\n') || '');
@@ -97,6 +100,8 @@ let driver = 'pg';
         info('或换个 npm 镜像后重试：npm config set registry https://registry.npmmirror.com');
         process.exit(1);
       }
+    } else {
+      warn(`仍缺 ${absent.join('、')}；应用可以启动，但生产构建或 UI 验收不可用`);
     }
   }
   process.env.DB_DRIVER = driver;
@@ -124,9 +129,9 @@ let db = null;
     if (dk.status !== 0) {
       console.log(c.err('      ✗ 数据库连不上，Docker 也用不了。'));
       info('三条路，任选一条：');
-      info('  a) 装 Docker Desktop，然后重新双击 启动.bat');
+      info('  a) 装 Docker Desktop，然后重新运行 npm run setup');
       info('  b) 本机装 PostgreSQL 16，建一个叫 ideahub 的库，把连接串填进 .env');
-      info('  c) 只想看界面的话：node scripts/serve-web.mjs（零依赖，界面完整可点）');
+      info('  c) 只想看界面的话：node scripts/serve-web.mjs（无需数据库，使用内置演示数据）');
       process.exit(1);
     }
 
