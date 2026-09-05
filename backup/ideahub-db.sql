@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9Up4fuUqsDRbVORwSKauOVLtLkJlFXsrVdVQBvDoZ8FHMZG97Eegy2DbnXzkosx
+\restrict G9xbQZzoX8GD36cmfN0VUjnRjJ29Aba7DwL0gkXGXgkxth9PVHKdhmcD6CwaIZs
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -91,6 +91,262 @@ CREATE TYPE public.work_side AS ENUM (
     'own',
     'benchmark'
 );
+
+
+--
+-- Name: account_research_append_only_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.account_research_append_only_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  RAISE EXCEPTION '% is append-only', TG_TABLE_NAME USING ERRCODE='55000';
+END $$;
+
+
+--
+-- Name: account_research_child_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.account_research_child_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE rid BIGINT; parent_status TEXT;
+BEGIN
+  rid := CASE WHEN TG_OP='DELETE' THEN OLD.run_id ELSE NEW.run_id END;
+  -- Serialize child insertion with the parent's building -> complete transition.
+  SELECT status INTO parent_status FROM account_research_runs WHERE id=rid FOR UPDATE;
+  IF TG_OP IN ('UPDATE','DELETE') OR parent_status IS DISTINCT FROM 'building' THEN
+    RAISE EXCEPTION 'account research run children are append-only after creation' USING ERRCODE='55000';
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: account_research_decision_validate(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.account_research_decision_validate() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE actual_role TEXT; run_status TEXT;
+BEGIN
+  SELECT role::text INTO actual_role FROM users WHERE id=NEW.decided_by;
+  SELECT status INTO run_status FROM account_research_runs WHERE id=NEW.run_id AND account_id=NEW.account_id;
+  IF actual_role NOT IN ('reviewer','admin') OR actual_role IS DISTINCT FROM NEW.decided_by_role THEN
+    RAISE EXCEPTION 'account research decisions require a reviewer or admin' USING ERRCODE='42501';
+  END IF;
+  IF run_status IS DISTINCT FROM 'complete' THEN
+    RAISE EXCEPTION 'only complete account research runs can be reviewed' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: account_research_evidence_location_validate(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.account_research_evidence_location_validate() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE account_value BIGINT; field_value TEXT;
+BEGIN
+  SELECT account_id INTO account_value FROM account_research_evidence WHERE run_id=NEW.run_id AND id=NEW.evidence_id;
+  IF NEW.source_kind='profile' THEN
+    IF NOT (NEW.locator_json ? 'profileField') OR (NEW.locator_json->>'profileField') NOT IN
+      ('displayName','handle','profileUrl','bio','qualification','description') THEN
+      RAISE EXCEPTION 'profile evidence requires an allowed snapshot field' USING ERRCODE='23514';
+    END IF;
+    SELECT CASE NEW.locator_json->>'profileField' WHEN 'displayName' THEN display_name WHEN 'handle' THEN handle
+      WHEN 'profileUrl' THEN profile_url ELSE profile_json->>(NEW.locator_json->>'profileField') END INTO field_value
+      FROM research_account_profile_snapshots WHERE id=NEW.profile_snapshot_id AND account_id=account_value
+        AND source_sample_id=NEW.sample_id AND source_capture_id IS NOT DISTINCT FROM NEW.source_capture_id;
+    IF field_value IS NULL OR field_value IS DISTINCT FROM NEW.quote_text THEN
+      RAISE EXCEPTION 'profile evidence must equal an immutable snapshot field' USING ERRCODE='23514';
+    END IF;
+  ELSIF NOT EXISTS (
+    SELECT 1 FROM sample_element_evidence ee
+    JOIN sample_analysis_elements element ON element.id=ee.element_id AND element.version_id=ee.version_id
+    JOIN sample_analysis_versions version ON version.id=ee.version_id AND version.status='complete'
+    JOIN sample_evidence_sources source ON source.version_id=ee.version_id AND source.source_id=ee.source_id
+    LEFT JOIN sample_assets asset ON asset.id=source.asset_id AND asset.sample_id=version.sample_id AND asset.deleted_at IS NULL
+    WHERE ee.id=NEW.source_element_evidence_id AND ee.verification_status='verified'
+      AND version.sample_id=NEW.sample_id AND source.source_capture_id=NEW.source_capture_id
+      AND source.asset_id IS NOT DISTINCT FROM NEW.asset_id AND ee.quote_text=NEW.quote_text
+      AND ((NEW.source_kind='body' AND source.source_kind='body' AND NEW.asset_id IS NULL
+            AND ee.start_offset=(NEW.locator_json->>'startOffset')::INT AND ee.end_offset=(NEW.locator_json->>'endOffset')::INT)
+        OR (NEW.source_kind='comment' AND source.source_kind='comment' AND NEW.asset_id IS NULL
+            AND ee.comment_ref=NEW.locator_json->>'commentRef')
+        OR (NEW.source_kind='image' AND asset.kind IN ('cover','image')
+            AND (source.locator->>'imageIndex')::INT=(NEW.locator_json->>'imageIndex')::INT
+            AND (NEW.locator_json->>'imageIndex')::INT=1+(SELECT count(*) FROM sample_assets preceding
+              WHERE preceding.sample_id=NEW.sample_id AND preceding.deleted_at IS NULL AND preceding.kind IN ('cover','image')
+                AND (preceding.created_at,preceding.id)<(asset.created_at,asset.id))
+            AND (NOT (NEW.locator_json ? 'region') OR (jsonb_typeof(NEW.locator_json->'region')='object'
+              AND jsonb_typeof(NEW.locator_json#>'{region,x}')='number' AND jsonb_typeof(NEW.locator_json#>'{region,y}')='number'
+              AND jsonb_typeof(NEW.locator_json#>'{region,width}')='number' AND jsonb_typeof(NEW.locator_json#>'{region,height}')='number'
+              AND (NEW.locator_json#>>'{region,x}')::numeric BETWEEN 0 AND 1
+              AND (NEW.locator_json#>>'{region,y}')::numeric BETWEEN 0 AND 1
+              AND (NEW.locator_json#>>'{region,width}')::numeric>0 AND (NEW.locator_json#>>'{region,height}')::numeric>0
+              AND (NEW.locator_json#>>'{region,x}')::numeric+(NEW.locator_json#>>'{region,width}')::numeric<=1
+              AND (NEW.locator_json#>>'{region,y}')::numeric+(NEW.locator_json#>>'{region,height}')::numeric<=1))
+            AND COALESCE(source.locator->'region','null'::jsonb)=COALESCE(NEW.locator_json->'region','null'::jsonb))
+        OR (NEW.source_kind='video' AND asset.kind='video' AND asset.duration_ms IS NOT NULL
+            AND ee.time_start_ms=(NEW.locator_json->>'timeStartMs')::BIGINT
+            AND ee.time_end_ms=(NEW.locator_json->>'timeEndMs')::BIGINT
+            AND ee.time_end_ms<=asset.duration_ms))
+  ) THEN
+    RAISE EXCEPTION 'evidence must match immutable verified source, capture, asset, quote and locator' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: account_research_run_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.account_research_run_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE sample_count INT; sample_distinct_ordinals INT; sample_min_ordinal INT; sample_max_ordinal INT; claim_count INT; dimension_count INT; invalid_dimensions INT; invalid_memberships INT; outside_count INT; null_patterns INT;
+BEGIN
+  IF TG_OP='DELETE' OR OLD.status IN ('complete','failed') THEN
+    RAISE EXCEPTION 'terminal account research runs are immutable' USING ERRCODE='55000';
+  END IF;
+  IF (to_jsonb(NEW)-ARRAY['status','completed_at','content_matrix_json','saturation_json']) IS DISTINCT FROM
+     (to_jsonb(OLD)-ARRAY['status','completed_at','content_matrix_json','saturation_json']) THEN
+    RAISE EXCEPTION 'account research run inputs are immutable' USING ERRCODE='55000';
+  END IF;
+  IF NEW.status='complete' THEN
+    SELECT count(*),count(DISTINCT ordinal),min(ordinal),max(ordinal) INTO sample_count,sample_distinct_ordinals,sample_min_ordinal,sample_max_ordinal FROM account_research_run_samples WHERE run_id=NEW.id;
+    SELECT count(*),count(DISTINCT dimension_key) INTO claim_count,dimension_count FROM account_research_claims WHERE run_id=NEW.id;
+    IF sample_count<>NEW.frozen_sample_count OR (sample_count>0 AND (sample_distinct_ordinals<>sample_count OR sample_min_ordinal<>1 OR sample_max_ordinal<>sample_count)) THEN RAISE EXCEPTION 'complete account research run requires contiguous frozen sample ordinals' USING ERRCODE='23514'; END IF;
+    IF NEW.schema_version='account-research/1.1' THEN
+      SELECT count(*) INTO invalid_dimensions FROM (
+        SELECT dimension_key FROM account_research_claims WHERE run_id=NEW.id GROUP BY dimension_key HAVING count(*) NOT BETWEEN 1 AND 5
+      ) q;
+      SELECT count(*) INTO null_patterns FROM account_research_claims WHERE run_id=NEW.id AND pattern_code IS NULL;
+      IF claim_count NOT BETWEEN 8 AND 40 OR dimension_count<>8 OR invalid_dimensions<>0 OR null_patterns<>0 THEN
+        RAISE EXCEPTION 'complete account research 1.1 run requires 1-5 claims in all eight dimensions (claims %, dimensions %, invalid %, null patterns %)',claim_count,dimension_count,invalid_dimensions,null_patterns USING ERRCODE='23514';
+      END IF;
+      SELECT count(*) INTO invalid_memberships FROM account_research_claims c WHERE c.run_id=NEW.id AND (
+        c.eligible_count<>(SELECT count(*) FROM account_research_claim_samples cs WHERE cs.claim_id=c.id AND cs.role='eligible') OR
+        c.present_count<>(SELECT count(*) FROM account_research_claim_samples cs WHERE cs.claim_id=c.id AND cs.role='present') OR
+        EXISTS(SELECT 1 FROM account_research_claim_samples cs WHERE cs.claim_id=c.id AND cs.role IN ('present','representative','counterexample')
+          AND NOT EXISTS(SELECT 1 FROM account_research_claim_samples e WHERE e.claim_id=c.id AND e.sample_id=cs.sample_id AND e.role='eligible')) OR
+        EXISTS(SELECT 1 FROM account_research_claim_samples cs WHERE cs.claim_id=c.id AND cs.role='representative'
+          AND NOT EXISTS(SELECT 1 FROM account_research_claim_samples p WHERE p.claim_id=c.id AND p.sample_id=cs.sample_id AND p.role='present')) OR
+        EXISTS(SELECT 1 FROM account_research_claim_samples cs WHERE cs.claim_id=c.id AND cs.role='counterexample'
+          AND EXISTS(SELECT 1 FROM account_research_claim_samples p WHERE p.claim_id=c.id AND p.sample_id=cs.sample_id AND p.role='present')));
+      IF invalid_memberships<>0 THEN RAISE EXCEPTION 'claim sample counts or subset memberships invalid' USING ERRCODE='23514'; END IF;
+      SELECT count(*) INTO outside_count FROM account_research_run_samples s WHERE s.run_id=NEW.id AND s.published_at IS NOT NULL
+        AND (s.published_at<NEW.observation_start OR s.published_at>NEW.observation_end);
+      IF outside_count<>0 THEN RAISE EXCEPTION 'run sample outside observation window' USING ERRCODE='23514'; END IF;
+      IF NEW.content_matrix_json IS NULL OR jsonb_typeof(NEW.content_matrix_json)<>'object' OR
+         NEW.saturation_json IS NULL OR jsonb_typeof(NEW.saturation_json)<>'object' OR
+         NEW.saturation_json->>'ruleVersion'<>'saturation/1.0' THEN
+        RAISE EXCEPTION 'complete account research 1.1 run requires matrix and saturation' USING ERRCODE='23514';
+      END IF;
+      IF NOT account_research_validate_depth(NEW.id,NEW.content_matrix_json,NEW.saturation_json) THEN
+        RAISE EXCEPTION 'persisted matrix or saturation does not match frozen research members' USING ERRCODE='23514';
+      END IF;
+    ELSIF claim_count<>8 OR dimension_count<>8 THEN
+      RAISE EXCEPTION 'complete legacy account research run requires eight dimensions' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: account_research_validate_depth(bigint, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.account_research_validate_depth(p_run_id bigint, p_matrix jsonb, p_saturation jsonb) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  r account_research_runs%ROWTYPE; c RECORD; g RECORD; matrix_row JSONB; matrix_cell JSONB; batch_json JSONB;
+  expected_ids BIGINT[]; expected_codes TEXT[]; expected_new TEXT[]; seen_codes TEXT[]:=ARRAY[]::TEXT[];
+  match_count INT; row_count INT:=0; membership_total INT:=0; unique_total INT; cell_count INT;
+  batch_count INT; batch_no INT; expected_status TEXT; expected_reached BOOLEAN; ratio NUMERIC; current_code TEXT;
+BEGIN
+  SELECT * INTO r FROM account_research_runs WHERE id=p_run_id;
+  IF jsonb_typeof(p_matrix)<>'object' OR p_matrix->'periods'<>to_jsonb(ARRAY['early','middle','recent','unknown']::TEXT[])
+     OR jsonb_typeof(p_matrix->'rows')<>'array' OR jsonb_typeof(p_matrix->'limitations')<>'array' THEN RETURN false; END IF;
+  FOR c IN SELECT * FROM account_research_claims WHERE run_id=p_run_id AND dimension_key='content_supply' AND claim_type<>'insufficient' ORDER BY pattern_code LOOP
+    row_count:=row_count+1;
+    SELECT COALESCE(array_agg(DISTINCT cs.sample_id ORDER BY cs.sample_id),ARRAY[]::BIGINT[]) INTO expected_ids
+      FROM account_research_claim_samples cs WHERE cs.claim_id=c.id AND cs.role='present';
+    membership_total:=membership_total+cardinality(expected_ids);
+    SELECT count(*),(array_agg(value))[1] INTO match_count,matrix_row FROM jsonb_array_elements(p_matrix->'rows') x(value)
+      WHERE value->>'patternCode'=c.pattern_code;
+    IF match_count<>1 OR matrix_row->>'contentGoal' IS DISTINCT FROM c.content_goal OR
+       matrix_row->'sampleIds'<>to_jsonb(expected_ids) OR (matrix_row->>'count')::INT<>cardinality(expected_ids) OR
+       jsonb_typeof(matrix_row->'cells')<>'array' THEN RETURN false; END IF;
+    SELECT count(*) INTO cell_count FROM (
+      SELECT COALESCE(NULLIF(s.content_type,''),'unknown') format,
+        CASE WHEN s.published_at IS NULL THEN 'unknown'
+          WHEN s.published_at<r.observation_start+(r.observation_end-r.observation_start)/3 THEN 'early'
+          WHEN s.published_at<r.observation_start+2*(r.observation_end-r.observation_start)/3 THEN 'middle' ELSE 'recent' END period
+      FROM account_research_claim_samples cs JOIN account_research_run_samples s ON s.run_id=cs.run_id AND s.sample_id=cs.sample_id
+      WHERE cs.claim_id=c.id AND cs.role='present' GROUP BY 1,2) q;
+    IF jsonb_array_length(matrix_row->'cells')<>cell_count THEN RETURN false; END IF;
+    FOR g IN SELECT COALESCE(NULLIF(s.content_type,''),'unknown') format,
+        CASE WHEN s.published_at IS NULL THEN 'unknown'
+          WHEN s.published_at<r.observation_start+(r.observation_end-r.observation_start)/3 THEN 'early'
+          WHEN s.published_at<r.observation_start+2*(r.observation_end-r.observation_start)/3 THEN 'middle' ELSE 'recent' END period,
+        array_agg(DISTINCT s.sample_id ORDER BY s.sample_id) sample_ids
+      FROM account_research_claim_samples cs JOIN account_research_run_samples s ON s.run_id=cs.run_id AND s.sample_id=cs.sample_id
+      WHERE cs.claim_id=c.id AND cs.role='present' GROUP BY 1,2 LOOP
+      SELECT count(*),(array_agg(value))[1] INTO match_count,matrix_cell FROM jsonb_array_elements(matrix_row->'cells') x(value)
+        WHERE value->>'format'=g.format AND value->>'period'=g.period;
+      IF match_count<>1 OR matrix_cell->'sampleIds'<>to_jsonb(g.sample_ids) OR
+         (matrix_cell->>'count')::INT<>cardinality(g.sample_ids) THEN RETURN false; END IF;
+    END LOOP;
+  END LOOP;
+  SELECT count(DISTINCT cs.sample_id) INTO unique_total FROM account_research_claim_samples cs
+    JOIN account_research_claims cl ON cl.id=cs.claim_id
+    WHERE cl.run_id=p_run_id AND cl.dimension_key='content_supply' AND cl.claim_type<>'insufficient' AND cs.role='present';
+  IF jsonb_array_length(p_matrix->'rows')<>row_count OR (p_matrix->>'membershipTotal')::INT<>membership_total OR
+     (p_matrix->>'uniqueSampleCount')::INT<>unique_total OR
+     p_matrix->>'status' IS DISTINCT FROM (CASE WHEN row_count>0 THEN 'measured' ELSE 'insufficient' END) THEN RETURN false; END IF;
+  IF jsonb_typeof(p_saturation)<>'object' OR p_saturation->>'ruleVersion'<>'saturation/1.0' OR
+     (p_saturation->>'threshold')::NUMERIC<>0.05 OR (p_saturation->>'batchSize')::INT<>5 OR
+     jsonb_typeof(p_saturation->'batches')<>'array' OR p_saturation->'observations'<>p_saturation->'batches' OR
+     jsonb_typeof(p_saturation->'limitations')<>'array' THEN RETURN false; END IF;
+  SELECT CEIL(count(*)/5.0)::INT INTO batch_count FROM account_research_run_samples WHERE run_id=p_run_id;
+  IF jsonb_array_length(p_saturation->'batches')<>batch_count THEN RETURN false; END IF;
+  IF batch_count>0 THEN FOR batch_no IN 1..batch_count LOOP
+    SELECT COALESCE(array_agg(code ORDER BY ordinal),ARRAY[]::TEXT[]) INTO expected_codes FROM (
+      SELECT cl.ordinal,cl.dimension_key||'/'||cl.pattern_code code FROM account_research_claims cl
+      WHERE cl.run_id=p_run_id AND cl.claim_type<>'insufficient' AND EXISTS(
+        SELECT 1 FROM account_research_claim_samples cs JOIN account_research_run_samples s ON s.run_id=cs.run_id AND s.sample_id=cs.sample_id
+        WHERE cs.claim_id=cl.id AND cs.role='present' GROUP BY cs.claim_id HAVING min(s.ordinal) BETWEEN (batch_no-1)*5+1 AND batch_no*5)
+      ORDER BY cl.ordinal) q;
+    expected_new:=ARRAY[]::TEXT[];
+    FOREACH current_code IN ARRAY expected_codes LOOP IF NOT current_code=ANY(seen_codes) THEN expected_new:=array_append(expected_new,current_code);seen_codes:=array_append(seen_codes,current_code);END IF;END LOOP;
+    batch_json:=(p_saturation->'batches')->(batch_no-1);
+    ratio:=cardinality(expected_new)::NUMERIC/GREATEST(1,cardinality(seen_codes));
+    IF jsonb_typeof(batch_json)<>'object' OR (batch_json->>'batch')::INT<>batch_no OR batch_json->'codes'<>to_jsonb(expected_codes) OR
+       (batch_json->>'codeCount')::INT<>cardinality(expected_codes) OR batch_json->'newCodes'<>to_jsonb(expected_new) OR
+       (batch_json->>'newCodeCount')::INT<>cardinality(expected_new) OR
+       (batch_json->>'cumulativeCodeCount')::INT<>cardinality(seen_codes) OR
+       abs((batch_json->>'newCodeRatio')::NUMERIC-ratio)>0.000000000001 THEN RETURN false; END IF;
+  END LOOP; END IF;
+  expected_status:=CASE WHEN batch_count>=3 AND cardinality(seen_codes)>0 THEN 'measured' ELSE 'insufficient' END;
+  IF expected_status='measured' THEN expected_reached:=
+    ((p_saturation->'batches'->(batch_count-1)->>'newCodeRatio')::NUMERIC<=0.05) AND
+    ((p_saturation->'batches'->(batch_count-2)->>'newCodeRatio')::NUMERIC<=0.05); ELSE expected_reached:=false; END IF;
+  IF (p_saturation->>'totalCodes')::INT<>cardinality(seen_codes) OR p_saturation->>'status'<>expected_status OR
+     (p_saturation->>'reached')::BOOLEAN IS DISTINCT FROM expected_reached THEN RETURN false; END IF;
+  RETURN true;
+EXCEPTION WHEN OTHERS THEN RAISE EXCEPTION 'depth validation error: %',SQLERRM USING ERRCODE='23514';
+END $$;
 
 
 --
@@ -1089,6 +1345,474 @@ $$;
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: account_research_claim_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_claim_evidence (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    claim_id bigint NOT NULL,
+    evidence_id bigint NOT NULL,
+    direction text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_claim_evidence_direction_chk CHECK ((direction = ANY (ARRAY['support'::text, 'challenge'::text])))
+);
+
+
+--
+-- Name: account_research_claim_evidence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_claim_evidence_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_claim_evidence_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_claim_evidence_id_seq OWNED BY public.account_research_claim_evidence.id;
+
+
+--
+-- Name: account_research_claim_samples; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_claim_samples (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    claim_id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    sample_id bigint NOT NULL,
+    role text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_claim_samples_role_chk CHECK ((role = ANY (ARRAY['eligible'::text, 'present'::text, 'representative'::text, 'counterexample'::text])))
+);
+
+
+--
+-- Name: account_research_claim_samples_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_claim_samples_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_claim_samples_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_claim_samples_id_seq OWNED BY public.account_research_claim_samples.id;
+
+
+--
+-- Name: account_research_claims; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_claims (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    dimension_key text NOT NULL,
+    ordinal integer NOT NULL,
+    claim_type text NOT NULL,
+    claim_text text,
+    operational_definition text,
+    eligible_count integer NOT NULL,
+    present_count integer NOT NULL,
+    prevalence numeric(8,7),
+    time_buckets text[] DEFAULT '{}'::text[] NOT NULL,
+    limitations text,
+    quality_label text NOT NULL,
+    quality_formula_version text NOT NULL,
+    quality_reason_codes text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    pattern_code text,
+    content_goal text,
+    CONSTRAINT account_research_claims_content_goal_chk CHECK ((((dimension_key = 'content_supply'::text) AND (claim_type <> 'insufficient'::text) AND (content_goal = ANY (ARRAY['traffic'::text, 'persona'::text, 'expertise'::text, 'relationship'::text, 'conversion'::text, 'mixed'::text]))) OR (((dimension_key <> 'content_supply'::text) OR (claim_type = 'insufficient'::text)) AND (content_goal IS NULL)))),
+    CONSTRAINT account_research_claims_counts_chk CHECK (((eligible_count >= 0) AND (present_count >= 0) AND (present_count <= eligible_count) AND (((eligible_count = 0) AND (prevalence IS NULL)) OR ((eligible_count > 0) AND (prevalence IS NOT NULL) AND (abs((prevalence - ((present_count)::numeric / (eligible_count)::numeric))) < 0.0000001))))),
+    CONSTRAINT account_research_claims_dimension_chk CHECK ((dimension_key = ANY (ARRAY['identity_positioning'::text, 'audience_needs'::text, 'content_supply'::text, 'expression_mechanism'::text, 'trust_relationship'::text, 'community_feedback'::text, 'conversion_path'::text, 'temporal_evolution'::text]))),
+    CONSTRAINT account_research_claims_hypothesis_chk CHECK (((claim_type <> 'hypothesis'::text) OR ((limitations IS NOT NULL) AND (char_length(limitations) > 0)))),
+    CONSTRAINT account_research_claims_pattern_chk CHECK (((pattern_code IS NULL) OR (pattern_code ~ '^[a-z0-9_]{3,64}$'::text))),
+    CONSTRAINT account_research_claims_quality_chk CHECK ((quality_label = ANY (ARRAY['evidence_sufficient'::text, 'evidence_moderate'::text, 'hypothesis_only'::text, 'insufficient'::text]))),
+    CONSTRAINT account_research_claims_text_chk CHECK ((((claim_type = 'insufficient'::text) AND (claim_text IS NULL)) OR ((claim_type <> 'insufficient'::text) AND (claim_text IS NOT NULL) AND ((char_length(claim_text) >= 1) AND (char_length(claim_text) <= 4000))))),
+    CONSTRAINT account_research_claims_type_chk CHECK ((claim_type = ANY (ARRAY['observation'::text, 'interpretation'::text, 'hypothesis'::text, 'insufficient'::text])))
+);
+
+
+--
+-- Name: account_research_claims_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_claims_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_claims_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_claims_id_seq OWNED BY public.account_research_claims.id;
+
+
+--
+-- Name: account_research_decisions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_decisions (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    claim_id bigint NOT NULL,
+    decision text NOT NULL,
+    claim_text text,
+    operational_definition text,
+    limitations text,
+    note text,
+    idempotency_key text NOT NULL,
+    request_sha256 text NOT NULL,
+    decided_by bigint NOT NULL,
+    decided_by_role text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_decisions_decision_chk CHECK ((decision = ANY (ARRAY['confirmed'::text, 'edited'::text, 'rejected'::text]))),
+    CONSTRAINT account_research_decisions_edit_chk CHECK ((((decision = 'edited'::text) AND (claim_text IS NOT NULL) AND ((char_length(claim_text) >= 1) AND (char_length(claim_text) <= 4000)) AND (limitations IS NOT NULL) AND (char_length(limitations) > 0)) OR ((decision = ANY (ARRAY['confirmed'::text, 'rejected'::text])) AND (claim_text IS NULL) AND (operational_definition IS NULL) AND (limitations IS NULL)))),
+    CONSTRAINT account_research_decisions_key_chk CHECK (((char_length(idempotency_key) >= 1) AND (char_length(idempotency_key) <= 160))),
+    CONSTRAINT account_research_decisions_role_chk CHECK ((decided_by_role = ANY (ARRAY['reviewer'::text, 'admin'::text]))),
+    CONSTRAINT account_research_decisions_sha_chk CHECK ((request_sha256 ~ '^[0-9a-f]{64}$'::text))
+);
+
+
+--
+-- Name: account_research_decisions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_decisions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_decisions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_decisions_id_seq OWNED BY public.account_research_decisions.id;
+
+
+--
+-- Name: account_research_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_evidence (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    sample_id bigint NOT NULL,
+    canonical_text text NOT NULL,
+    content_sha256 text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_evidence_sha_chk CHECK ((content_sha256 ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT account_research_evidence_text_chk CHECK (((char_length(canonical_text) >= 1) AND (char_length(canonical_text) <= 20000)))
+);
+
+
+--
+-- Name: account_research_evidence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_evidence_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_evidence_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_evidence_id_seq OWNED BY public.account_research_evidence.id;
+
+
+--
+-- Name: account_research_evidence_locations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_evidence_locations (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    evidence_id bigint NOT NULL,
+    sample_id bigint NOT NULL,
+    source_capture_id bigint,
+    asset_id bigint,
+    source_element_evidence_id bigint,
+    profile_snapshot_id bigint,
+    source_id text NOT NULL,
+    source_kind text NOT NULL,
+    quote_text text NOT NULL,
+    locator_json jsonb NOT NULL,
+    locator_sha256 text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_evidence_locations_kind_chk CHECK ((source_kind = ANY (ARRAY['body'::text, 'image'::text, 'video'::text, 'comment'::text, 'profile'::text]))),
+    CONSTRAINT account_research_evidence_locations_locator_chk CHECK ((jsonb_typeof(locator_json) = 'object'::text)),
+    CONSTRAINT account_research_evidence_locations_provenance_chk CHECK ((((source_kind = 'profile'::text) AND (profile_snapshot_id IS NOT NULL) AND (source_element_evidence_id IS NULL) AND (asset_id IS NULL)) OR ((source_kind <> 'profile'::text) AND (profile_snapshot_id IS NULL) AND (source_element_evidence_id IS NOT NULL)))),
+    CONSTRAINT account_research_evidence_locations_quote_chk CHECK (((char_length(quote_text) >= 1) AND (char_length(quote_text) <= 20000))),
+    CONSTRAINT account_research_evidence_locations_sha_chk CHECK ((locator_sha256 ~ '^[0-9a-f]{64}$'::text))
+);
+
+
+--
+-- Name: account_research_evidence_locations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_evidence_locations_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_evidence_locations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_evidence_locations_id_seq OWNED BY public.account_research_evidence_locations.id;
+
+
+--
+-- Name: account_research_idempotency; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_idempotency (
+    id bigint NOT NULL,
+    aggregate_key text NOT NULL,
+    action text NOT NULL,
+    idempotency_key text NOT NULL,
+    request_sha256 text NOT NULL,
+    response_kind text,
+    response_id bigint,
+    response_status integer,
+    created_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_idempotency_lengths_chk CHECK ((((char_length(aggregate_key) >= 1) AND (char_length(aggregate_key) <= 700)) AND ((char_length(action) >= 1) AND (char_length(action) <= 40)) AND ((char_length(idempotency_key) >= 1) AND (char_length(idempotency_key) <= 160)))),
+    CONSTRAINT account_research_idempotency_sha_chk CHECK ((request_sha256 ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT account_research_idempotency_status_chk CHECK (((response_status IS NULL) OR ((response_status >= 200) AND (response_status <= 299))))
+);
+
+
+--
+-- Name: account_research_idempotency_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_idempotency_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_idempotency_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_idempotency_id_seq OWNED BY public.account_research_idempotency.id;
+
+
+--
+-- Name: account_research_quality_reports; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_quality_reports (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    revision integer NOT NULL,
+    formula_version text NOT NULL,
+    report_json jsonb NOT NULL,
+    created_by bigint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_quality_reports_json_chk CHECK ((jsonb_typeof(report_json) = 'object'::text)),
+    CONSTRAINT account_research_quality_reports_revision_chk CHECK ((revision > 0))
+);
+
+
+--
+-- Name: account_research_quality_reports_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_quality_reports_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_quality_reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_quality_reports_id_seq OWNED BY public.account_research_quality_reports.id;
+
+
+--
+-- Name: account_research_run_samples; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_run_samples (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    sample_id bigint NOT NULL,
+    ordinal integer NOT NULL,
+    title text,
+    published_at timestamp with time zone,
+    content_type text,
+    inclusion_reasons text[] NOT NULL,
+    time_bucket text NOT NULL,
+    performance_band text NOT NULL,
+    performance_basis text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_run_samples_ordinal_chk CHECK ((ordinal > 0)),
+    CONSTRAINT account_research_run_samples_reasons_chk CHECK ((cardinality(inclusion_reasons) > 0))
+);
+
+
+--
+-- Name: account_research_run_samples_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_run_samples_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_run_samples_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_run_samples_id_seq OWNED BY public.account_research_run_samples.id;
+
+
+--
+-- Name: account_research_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_runs (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    base_run_id bigint,
+    revision integer NOT NULL,
+    status text DEFAULT 'building'::text NOT NULL,
+    source text NOT NULL,
+    observation_start timestamp with time zone NOT NULL,
+    observation_end timestamp with time zone NOT NULL,
+    max_samples integer NOT NULL,
+    include_comments boolean DEFAULT true NOT NULL,
+    sampling_mode text,
+    eligible_count integer DEFAULT 0 NOT NULL,
+    frozen_sample_count integer DEFAULT 0 NOT NULL,
+    coverage_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    warnings_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    normalized_request jsonb NOT NULL,
+    input_sha256 text NOT NULL,
+    schema_version text NOT NULL,
+    dto_version text NOT NULL,
+    sampling_rule_version text NOT NULL,
+    quality_formula_version text NOT NULL,
+    prompt_version text,
+    model_provider text,
+    model_name text,
+    model_version text,
+    requested_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    content_matrix_json jsonb,
+    saturation_json jsonb,
+    CONSTRAINT account_research_runs_completion_chk CHECK ((((status = 'building'::text) AND (completed_at IS NULL)) OR ((status = 'complete'::text) AND (completed_at IS NOT NULL)) OR (status = 'failed'::text))),
+    CONSTRAINT account_research_runs_counts_chk CHECK (((revision > 0) AND ((max_samples >= 10) AND (max_samples <= 500)) AND (eligible_count >= 0) AND (frozen_sample_count >= 0) AND (frozen_sample_count <= max_samples))),
+    CONSTRAINT account_research_runs_json_chk CHECK (((jsonb_typeof(coverage_json) = 'object'::text) AND (jsonb_typeof(warnings_json) = 'array'::text) AND (jsonb_typeof(normalized_request) = 'object'::text))),
+    CONSTRAINT account_research_runs_sha_chk CHECK ((input_sha256 ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT account_research_runs_source_chk CHECK ((source = ANY (ARRAY['ai'::text, 'manual'::text]))),
+    CONSTRAINT account_research_runs_status_chk CHECK ((status = ANY (ARRAY['building'::text, 'complete'::text, 'failed'::text]))),
+    CONSTRAINT account_research_runs_window_chk CHECK ((observation_end > observation_start))
+);
+
+
+--
+-- Name: account_research_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_runs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_runs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_runs_id_seq OWNED BY public.account_research_runs.id;
+
+
+--
+-- Name: account_research_selections; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_research_selections (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    reason text NOT NULL,
+    selected_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT account_research_selections_reason_chk CHECK ((reason = ANY (ARRAY['run_complete'::text, 'rerun_complete'::text, 'explicit'::text])))
+);
+
+
+--
+-- Name: account_research_selections_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_research_selections_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: account_research_selections_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_research_selections_id_seq OWNED BY public.account_research_selections.id;
+
 
 --
 -- Name: api_keys; Type: TABLE; Schema: public; Owner: -
@@ -2152,6 +2876,165 @@ CREATE SEQUENCE public.playbook_items_id_seq
 --
 
 ALTER SEQUENCE public.playbook_items_id_seq OWNED BY public.playbook_items.id;
+
+
+--
+-- Name: research_account_aliases; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.research_account_aliases (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    platform text NOT NULL,
+    alias_type text NOT NULL,
+    alias_value text NOT NULL,
+    normalized_value text NOT NULL,
+    source_sample_id bigint,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT research_account_aliases_type_chk CHECK ((alias_type = ANY (ARRAY['platform_account_id'::text, 'profile_id'::text, 'handle'::text, 'display_name'::text, 'profile_url'::text]))),
+    CONSTRAINT research_account_aliases_value_chk CHECK ((((char_length(alias_value) >= 1) AND (char_length(alias_value) <= 2000)) AND ((char_length(normalized_value) >= 1) AND (char_length(normalized_value) <= 2000))))
+);
+
+
+--
+-- Name: research_account_aliases_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.research_account_aliases_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: research_account_aliases_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.research_account_aliases_id_seq OWNED BY public.research_account_aliases.id;
+
+
+--
+-- Name: research_account_profile_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.research_account_profile_snapshots (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    source_sample_id bigint,
+    source_capture_id bigint,
+    snapshot_key text NOT NULL,
+    captured_at timestamp with time zone NOT NULL,
+    display_name text,
+    handle text,
+    profile_url text,
+    profile_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    snapshot_sha256 text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT research_account_profile_snapshots_json_chk CHECK ((jsonb_typeof(profile_json) = 'object'::text)),
+    CONSTRAINT research_account_profile_snapshots_key_chk CHECK (((char_length(snapshot_key) >= 1) AND (char_length(snapshot_key) <= 240))),
+    CONSTRAINT research_account_profile_snapshots_sha_chk CHECK ((snapshot_sha256 ~ '^[0-9a-f]{64}$'::text))
+);
+
+
+--
+-- Name: research_account_profile_snapshots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.research_account_profile_snapshots_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: research_account_profile_snapshots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.research_account_profile_snapshots_id_seq OWNED BY public.research_account_profile_snapshots.id;
+
+
+--
+-- Name: research_account_sample_links; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.research_account_sample_links (
+    id bigint NOT NULL,
+    account_id bigint NOT NULL,
+    sample_id bigint NOT NULL,
+    identity_quality text NOT NULL,
+    identity_source text NOT NULL,
+    linked_by bigint,
+    linked_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT research_account_sample_links_quality_chk CHECK ((identity_quality = ANY (ARRAY['platform_id'::text, 'profile_id'::text, 'verified_handle'::text, 'name_candidate'::text, 'conflict'::text, 'missing'::text])))
+);
+
+
+--
+-- Name: research_account_sample_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.research_account_sample_links_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: research_account_sample_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.research_account_sample_links_id_seq OWNED BY public.research_account_sample_links.id;
+
+
+--
+-- Name: research_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.research_accounts (
+    id bigint NOT NULL,
+    stable_key text NOT NULL,
+    platform text NOT NULL,
+    platform_account_id text,
+    display_name text,
+    handle text,
+    profile_url text,
+    identity_quality text NOT NULL,
+    identity_source text NOT NULL,
+    needs_review boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    current_run_id bigint,
+    CONSTRAINT research_accounts_identity_quality_chk CHECK ((identity_quality = ANY (ARRAY['platform_id'::text, 'profile_id'::text, 'verified_handle'::text, 'name_candidate'::text, 'conflict'::text, 'missing'::text]))),
+    CONSTRAINT research_accounts_identity_shape_chk CHECK ((((identity_quality = ANY (ARRAY['platform_id'::text, 'profile_id'::text])) AND (platform_account_id IS NOT NULL) AND (NOT needs_review)) OR ((identity_quality = 'verified_handle'::text) AND (handle IS NOT NULL) AND (NOT needs_review)) OR ((identity_quality = ANY (ARRAY['name_candidate'::text, 'conflict'::text, 'missing'::text])) AND needs_review))),
+    CONSTRAINT research_accounts_platform_chk CHECK (((char_length(platform) >= 1) AND (char_length(platform) <= 80))),
+    CONSTRAINT research_accounts_stable_key_chk CHECK (((char_length(stable_key) >= 1) AND (char_length(stable_key) <= 640)))
+);
+
+
+--
+-- Name: research_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.research_accounts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: research_accounts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.research_accounts_id_seq OWNED BY public.research_accounts.id;
 
 
 --
@@ -4357,6 +5240,83 @@ ALTER SEQUENCE public.works_id_seq OWNED BY public.works.id;
 
 
 --
+-- Name: account_research_claim_evidence id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_evidence ALTER COLUMN id SET DEFAULT nextval('public.account_research_claim_evidence_id_seq'::regclass);
+
+
+--
+-- Name: account_research_claim_samples id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_samples ALTER COLUMN id SET DEFAULT nextval('public.account_research_claim_samples_id_seq'::regclass);
+
+
+--
+-- Name: account_research_claims id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claims ALTER COLUMN id SET DEFAULT nextval('public.account_research_claims_id_seq'::regclass);
+
+
+--
+-- Name: account_research_decisions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_decisions ALTER COLUMN id SET DEFAULT nextval('public.account_research_decisions_id_seq'::regclass);
+
+
+--
+-- Name: account_research_evidence id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence ALTER COLUMN id SET DEFAULT nextval('public.account_research_evidence_id_seq'::regclass);
+
+
+--
+-- Name: account_research_evidence_locations id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations ALTER COLUMN id SET DEFAULT nextval('public.account_research_evidence_locations_id_seq'::regclass);
+
+
+--
+-- Name: account_research_idempotency id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_idempotency ALTER COLUMN id SET DEFAULT nextval('public.account_research_idempotency_id_seq'::regclass);
+
+
+--
+-- Name: account_research_quality_reports id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_quality_reports ALTER COLUMN id SET DEFAULT nextval('public.account_research_quality_reports_id_seq'::regclass);
+
+
+--
+-- Name: account_research_run_samples id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples ALTER COLUMN id SET DEFAULT nextval('public.account_research_run_samples_id_seq'::regclass);
+
+
+--
+-- Name: account_research_runs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs ALTER COLUMN id SET DEFAULT nextval('public.account_research_runs_id_seq'::regclass);
+
+
+--
+-- Name: account_research_selections id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_selections ALTER COLUMN id SET DEFAULT nextval('public.account_research_selections_id_seq'::regclass);
+
+
+--
 -- Name: api_keys id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4529,6 +5489,34 @@ ALTER TABLE ONLY public.notifications ALTER COLUMN id SET DEFAULT nextval('publi
 --
 
 ALTER TABLE ONLY public.playbook_items ALTER COLUMN id SET DEFAULT nextval('public.playbook_items_id_seq'::regclass);
+
+
+--
+-- Name: research_account_aliases id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_aliases ALTER COLUMN id SET DEFAULT nextval('public.research_account_aliases_id_seq'::regclass);
+
+
+--
+-- Name: research_account_profile_snapshots id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_profile_snapshots ALTER COLUMN id SET DEFAULT nextval('public.research_account_profile_snapshots_id_seq'::regclass);
+
+
+--
+-- Name: research_account_sample_links id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_sample_links ALTER COLUMN id SET DEFAULT nextval('public.research_account_sample_links_id_seq'::regclass);
+
+
+--
+-- Name: research_accounts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_accounts ALTER COLUMN id SET DEFAULT nextval('public.research_accounts_id_seq'::regclass);
 
 
 --
@@ -4858,6 +5846,94 @@ ALTER TABLE ONLY public.work_reports ALTER COLUMN id SET DEFAULT nextval('public
 --
 
 ALTER TABLE ONLY public.works ALTER COLUMN id SET DEFAULT nextval('public.works_id_seq'::regclass);
+
+
+--
+-- Data for Name: account_research_claim_evidence; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_claim_evidence (id, run_id, claim_id, evidence_id, direction, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_claim_samples; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_claim_samples (id, run_id, claim_id, account_id, sample_id, role, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_claims; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_claims (id, run_id, account_id, dimension_key, ordinal, claim_type, claim_text, operational_definition, eligible_count, present_count, prevalence, time_buckets, limitations, quality_label, quality_formula_version, quality_reason_codes, created_at, pattern_code, content_goal) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_decisions; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_decisions (id, account_id, run_id, claim_id, decision, claim_text, operational_definition, limitations, note, idempotency_key, request_sha256, decided_by, decided_by_role, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_evidence; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_evidence (id, run_id, account_id, sample_id, canonical_text, content_sha256, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_evidence_locations; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_evidence_locations (id, run_id, evidence_id, sample_id, source_capture_id, asset_id, source_element_evidence_id, profile_snapshot_id, source_id, source_kind, quote_text, locator_json, locator_sha256, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_idempotency; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_idempotency (id, aggregate_key, action, idempotency_key, request_sha256, response_kind, response_id, response_status, created_by, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_quality_reports; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_quality_reports (id, account_id, run_id, revision, formula_version, report_json, created_by, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_run_samples; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_run_samples (id, run_id, account_id, sample_id, ordinal, title, published_at, content_type, inclusion_reasons, time_bucket, performance_band, performance_basis, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_runs; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_runs (id, account_id, base_run_id, revision, status, source, observation_start, observation_end, max_samples, include_comments, sampling_mode, eligible_count, frozen_sample_count, coverage_json, warnings_json, normalized_request, input_sha256, schema_version, dto_version, sampling_rule_version, quality_formula_version, prompt_version, model_provider, model_name, model_version, requested_by, created_at, completed_at, content_matrix_json, saturation_json) FROM stdin;
+\.
+
+
+--
+-- Data for Name: account_research_selections; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.account_research_selections (id, account_id, run_id, reason, selected_by, created_at) FROM stdin;
+\.
 
 
 --
@@ -5525,22 +6601,22 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 
 COPY public.ideas (id, code, title, content, category, tags, status, author_id, is_anonymous, vote_count, comment_count, view_count, hot_score, owner_id, adopted_at, adopted_by, progress, doc_url, created_at, updated_at, source_type, source_url, source_ref, deleted_at, promoted_at) FROM stdin;
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.019438094	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	164	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.021762634	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.046823688	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.46620846	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.21054578	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.042743444	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.4265049	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.19261512	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	18	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
 10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.021763464	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.072251484	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.046834305	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.13222767	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.019438783	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.05679481	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.04275256	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.11799593	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
 8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	10	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
 \.
@@ -5625,6 +6701,38 @@ COPY public.playbook_items (id, board, section, label, title, body, meta, sort, 
 35	delivery	flow	节点 7	进入下一节点	闭环，回到阶段判断。	{"负责人": "后端咨询师"}	70	\N	2026-08-21 04:19:32.32856+00	2026-08-21 04:19:32.32856+00	\N
 36	delivery	flow	交付原则	陪跑的价值必须从「代聊」中脱离	低价值形态：客户问一句咨询师回一句、高度依赖即时在线、可复制性差、容易陷入情绪劳动。\n高价值形态：先判断关系再决定动作、每个关键节点有目标与验证标准、根据反馈动态调整、客户逐渐获得自己的判断能力。	{"负责人": "—"}	80	\N	2026-08-21 04:19:32.330052+00	2026-08-21 04:19:32.330052+00	\N
 140	sales	rule	测试	智能导入全路径自测-1787555517124-规则	测试	{"sourceUrl": "", "importedBy": "smart-import"}	0	1	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.272671+00
+\.
+
+
+--
+-- Data for Name: research_account_aliases; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.research_account_aliases (id, account_id, platform, alias_type, alias_value, normalized_value, source_sample_id, observed_at, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: research_account_profile_snapshots; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.research_account_profile_snapshots (id, account_id, source_sample_id, source_capture_id, snapshot_key, captured_at, display_name, handle, profile_url, profile_json, snapshot_sha256, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: research_account_sample_links; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.research_account_sample_links (id, account_id, sample_id, identity_quality, identity_source, linked_by, linked_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: research_accounts; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.research_accounts (id, stable_key, platform, platform_account_id, display_name, handle, profile_url, identity_quality, identity_source, needs_review, created_at, updated_at, current_run_id) FROM stdin;
 \.
 
 
@@ -7700,6 +8808,83 @@ COPY public.works (id, channel, side, account_id, title, url, pillar, published_
 
 
 --
+-- Name: account_research_claim_evidence_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_claim_evidence_id_seq', 1, false);
+
+
+--
+-- Name: account_research_claim_samples_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_claim_samples_id_seq', 1, false);
+
+
+--
+-- Name: account_research_claims_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_claims_id_seq', 1, false);
+
+
+--
+-- Name: account_research_decisions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_decisions_id_seq', 1, false);
+
+
+--
+-- Name: account_research_evidence_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_evidence_id_seq', 1, false);
+
+
+--
+-- Name: account_research_evidence_locations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_evidence_locations_id_seq', 1, false);
+
+
+--
+-- Name: account_research_idempotency_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_idempotency_id_seq', 1, false);
+
+
+--
+-- Name: account_research_quality_reports_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_quality_reports_id_seq', 1, false);
+
+
+--
+-- Name: account_research_run_samples_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_run_samples_id_seq', 1, false);
+
+
+--
+-- Name: account_research_runs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_runs_id_seq', 1, false);
+
+
+--
+-- Name: account_research_selections_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.account_research_selections_id_seq', 1, false);
+
+
+--
 -- Name: api_keys_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
@@ -7879,6 +9064,34 @@ SELECT pg_catalog.setval('public.notifications_id_seq', 26, true);
 --
 
 SELECT pg_catalog.setval('public.playbook_items_id_seq', 140, true);
+
+
+--
+-- Name: research_account_aliases_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.research_account_aliases_id_seq', 1, false);
+
+
+--
+-- Name: research_account_profile_snapshots_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.research_account_profile_snapshots_id_seq', 1, false);
+
+
+--
+-- Name: research_account_sample_links_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.research_account_sample_links_id_seq', 1, false);
+
+
+--
+-- Name: research_accounts_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.research_accounts_id_seq', 1, false);
 
 
 --
@@ -8208,6 +9421,238 @@ SELECT pg_catalog.setval('public.work_reports_id_seq', 26, true);
 --
 
 SELECT pg_catalog.setval('public.works_id_seq', 226, true);
+
+
+--
+-- Name: account_research_claim_evidence account_research_claim_evidence_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_evidence
+    ADD CONSTRAINT account_research_claim_evidence_identity_uk UNIQUE (claim_id, evidence_id, direction);
+
+
+--
+-- Name: account_research_claim_evidence account_research_claim_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_evidence
+    ADD CONSTRAINT account_research_claim_evidence_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_claim_samples account_research_claim_samples_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_samples
+    ADD CONSTRAINT account_research_claim_samples_identity_uk UNIQUE (claim_id, sample_id, role);
+
+
+--
+-- Name: account_research_claim_samples account_research_claim_samples_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_samples
+    ADD CONSTRAINT account_research_claim_samples_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_claims account_research_claims_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claims
+    ADD CONSTRAINT account_research_claims_identity_uk UNIQUE (account_id, run_id, id);
+
+
+--
+-- Name: account_research_claims account_research_claims_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claims
+    ADD CONSTRAINT account_research_claims_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_claims account_research_claims_run_id_id_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claims
+    ADD CONSTRAINT account_research_claims_run_id_id_uk UNIQUE (run_id, id);
+
+
+--
+-- Name: account_research_claims account_research_claims_run_ordinal_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claims
+    ADD CONSTRAINT account_research_claims_run_ordinal_uk UNIQUE (run_id, ordinal);
+
+
+--
+-- Name: account_research_decisions account_research_decisions_claim_key_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_decisions
+    ADD CONSTRAINT account_research_decisions_claim_key_uk UNIQUE (claim_id, idempotency_key);
+
+
+--
+-- Name: account_research_decisions account_research_decisions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_decisions
+    ADD CONSTRAINT account_research_decisions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_evidence account_research_evidence_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence
+    ADD CONSTRAINT account_research_evidence_identity_uk UNIQUE (run_id, id);
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations
+    ADD CONSTRAINT account_research_evidence_locations_identity_uk UNIQUE (evidence_id, source_id, locator_sha256);
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations
+    ADD CONSTRAINT account_research_evidence_locations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_evidence account_research_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence
+    ADD CONSTRAINT account_research_evidence_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_evidence account_research_evidence_run_content_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence
+    ADD CONSTRAINT account_research_evidence_run_content_uk UNIQUE (run_id, sample_id, content_sha256);
+
+
+--
+-- Name: account_research_evidence account_research_evidence_sample_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence
+    ADD CONSTRAINT account_research_evidence_sample_identity_uk UNIQUE (run_id, id, sample_id);
+
+
+--
+-- Name: account_research_idempotency account_research_idempotency_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_idempotency
+    ADD CONSTRAINT account_research_idempotency_identity_uk UNIQUE (aggregate_key, action, idempotency_key);
+
+
+--
+-- Name: account_research_idempotency account_research_idempotency_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_idempotency
+    ADD CONSTRAINT account_research_idempotency_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_quality_reports account_research_quality_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_quality_reports
+    ADD CONSTRAINT account_research_quality_reports_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_quality_reports account_research_quality_reports_run_revision_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_quality_reports
+    ADD CONSTRAINT account_research_quality_reports_run_revision_uk UNIQUE (run_id, revision);
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_identity_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples
+    ADD CONSTRAINT account_research_run_samples_identity_uk UNIQUE (run_id, account_id, sample_id);
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples
+    ADD CONSTRAINT account_research_run_samples_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_run_ordinal_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples
+    ADD CONSTRAINT account_research_run_samples_run_ordinal_uk UNIQUE (run_id, ordinal);
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_run_sample_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples
+    ADD CONSTRAINT account_research_run_samples_run_sample_uk UNIQUE (run_id, sample_id);
+
+
+--
+-- Name: account_research_runs account_research_runs_account_id_id_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs
+    ADD CONSTRAINT account_research_runs_account_id_id_uk UNIQUE (account_id, id);
+
+
+--
+-- Name: account_research_runs account_research_runs_account_revision_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs
+    ADD CONSTRAINT account_research_runs_account_revision_uk UNIQUE (account_id, revision);
+
+
+--
+-- Name: account_research_runs account_research_runs_id_account_id_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs
+    ADD CONSTRAINT account_research_runs_id_account_id_uk UNIQUE (id, account_id);
+
+
+--
+-- Name: account_research_runs account_research_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs
+    ADD CONSTRAINT account_research_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: account_research_selections account_research_selections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_selections
+    ADD CONSTRAINT account_research_selections_pkey PRIMARY KEY (id);
 
 
 --
@@ -8576,6 +10021,70 @@ ALTER TABLE ONLY public.notifications
 
 ALTER TABLE ONLY public.playbook_items
     ADD CONSTRAINT playbook_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: research_account_aliases research_account_aliases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_aliases
+    ADD CONSTRAINT research_account_aliases_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: research_account_profile_snapshots research_account_profile_snapshots_account_key_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_profile_snapshots
+    ADD CONSTRAINT research_account_profile_snapshots_account_key_uk UNIQUE (account_id, snapshot_key);
+
+
+--
+-- Name: research_account_profile_snapshots research_account_profile_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_profile_snapshots
+    ADD CONSTRAINT research_account_profile_snapshots_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: research_account_sample_links research_account_sample_links_account_sample_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_sample_links
+    ADD CONSTRAINT research_account_sample_links_account_sample_uk UNIQUE (account_id, sample_id);
+
+
+--
+-- Name: research_account_sample_links research_account_sample_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_sample_links
+    ADD CONSTRAINT research_account_sample_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: research_account_sample_links research_account_sample_links_sample_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_sample_links
+    ADD CONSTRAINT research_account_sample_links_sample_uk UNIQUE (sample_id);
+
+
+--
+-- Name: research_accounts research_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_accounts
+    ADD CONSTRAINT research_accounts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: research_accounts research_accounts_stable_key_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_accounts
+    ADD CONSTRAINT research_accounts_stable_key_uk UNIQUE (stable_key);
 
 
 --
@@ -9507,6 +11016,34 @@ ALTER TABLE ONLY public.works
 
 
 --
+-- Name: account_research_claims_run_dimension_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX account_research_claims_run_dimension_idx ON public.account_research_claims USING btree (run_id, dimension_key, ordinal);
+
+
+--
+-- Name: account_research_claims_run_dimension_pattern_uk; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX account_research_claims_run_dimension_pattern_uk ON public.account_research_claims USING btree (run_id, dimension_key, pattern_code) WHERE (pattern_code IS NOT NULL);
+
+
+--
+-- Name: account_research_decisions_latest_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX account_research_decisions_latest_idx ON public.account_research_decisions USING btree (claim_id, created_at DESC, id DESC);
+
+
+--
+-- Name: account_research_runs_account_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX account_research_runs_account_time_idx ON public.account_research_runs USING btree (account_id, revision DESC, id DESC);
+
+
+--
 -- Name: component_retrieval_vectors_band0_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9868,6 +11405,62 @@ CREATE INDEX idx_works_channel ON public.works USING btree (channel, side, publi
 --
 
 CREATE UNIQUE INDEX idx_works_source_ref ON public.works USING btree (source_type, source_ref) WHERE (source_ref IS NOT NULL);
+
+
+--
+-- Name: research_account_aliases_account_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX research_account_aliases_account_time_idx ON public.research_account_aliases USING btree (account_id, observed_at DESC, id DESC);
+
+
+--
+-- Name: research_account_aliases_identity_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX research_account_aliases_identity_uidx ON public.research_account_aliases USING btree (account_id, alias_type, normalized_value, COALESCE(source_sample_id, (0)::bigint));
+
+
+--
+-- Name: research_account_aliases_stable_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX research_account_aliases_stable_uidx ON public.research_account_aliases USING btree (platform, alias_type, normalized_value) WHERE (alias_type = ANY (ARRAY['platform_account_id'::text, 'profile_id'::text]));
+
+
+--
+-- Name: research_account_profile_snapshots_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX research_account_profile_snapshots_time_idx ON public.research_account_profile_snapshots USING btree (account_id, captured_at DESC, id DESC);
+
+
+--
+-- Name: research_account_sample_links_account_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX research_account_sample_links_account_idx ON public.research_account_sample_links USING btree (account_id, sample_id);
+
+
+--
+-- Name: research_accounts_current_run_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX research_accounts_current_run_idx ON public.research_accounts USING btree (current_run_id) WHERE (current_run_id IS NOT NULL);
+
+
+--
+-- Name: research_accounts_platform_id_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX research_accounts_platform_id_uidx ON public.research_accounts USING btree (platform, platform_account_id) WHERE (platform_account_id IS NOT NULL);
+
+
+--
+-- Name: research_accounts_updated_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX research_accounts_updated_idx ON public.research_accounts USING btree (updated_at DESC, id DESC);
 
 
 --
@@ -10389,6 +11982,90 @@ CREATE INDEX works_sample_id_idx ON public.works USING btree (sample_id) WHERE (
 
 
 --
+-- Name: account_research_claim_evidence account_research_claim_evidence_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_claim_evidence_guard_trg BEFORE INSERT OR DELETE OR UPDATE ON public.account_research_claim_evidence FOR EACH ROW EXECUTE FUNCTION public.account_research_child_guard();
+
+
+--
+-- Name: account_research_claim_samples account_research_claim_samples_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_claim_samples_guard_trg BEFORE INSERT OR DELETE OR UPDATE ON public.account_research_claim_samples FOR EACH ROW EXECUTE FUNCTION public.account_research_child_guard();
+
+
+--
+-- Name: account_research_claims account_research_claims_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_claims_guard_trg BEFORE INSERT OR DELETE OR UPDATE ON public.account_research_claims FOR EACH ROW EXECUTE FUNCTION public.account_research_child_guard();
+
+
+--
+-- Name: account_research_decisions account_research_decisions_append_only_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_decisions_append_only_trg BEFORE DELETE OR UPDATE ON public.account_research_decisions FOR EACH ROW EXECUTE FUNCTION public.account_research_append_only_guard();
+
+
+--
+-- Name: account_research_decisions account_research_decisions_validate_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_decisions_validate_trg BEFORE INSERT ON public.account_research_decisions FOR EACH ROW EXECUTE FUNCTION public.account_research_decision_validate();
+
+
+--
+-- Name: account_research_evidence account_research_evidence_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_evidence_guard_trg BEFORE INSERT OR DELETE OR UPDATE ON public.account_research_evidence FOR EACH ROW EXECUTE FUNCTION public.account_research_child_guard();
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_evidence_locations_guard_trg BEFORE INSERT OR DELETE OR UPDATE ON public.account_research_evidence_locations FOR EACH ROW EXECUTE FUNCTION public.account_research_child_guard();
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_validate_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_evidence_locations_validate_trg BEFORE INSERT ON public.account_research_evidence_locations FOR EACH ROW EXECUTE FUNCTION public.account_research_evidence_location_validate();
+
+
+--
+-- Name: account_research_quality_reports account_research_quality_reports_append_only_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_quality_reports_append_only_trg BEFORE DELETE OR UPDATE ON public.account_research_quality_reports FOR EACH ROW EXECUTE FUNCTION public.account_research_append_only_guard();
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_run_samples_guard_trg BEFORE INSERT OR DELETE OR UPDATE ON public.account_research_run_samples FOR EACH ROW EXECUTE FUNCTION public.account_research_child_guard();
+
+
+--
+-- Name: account_research_runs account_research_runs_guard_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_runs_guard_trg BEFORE DELETE OR UPDATE ON public.account_research_runs FOR EACH ROW EXECUTE FUNCTION public.account_research_run_guard();
+
+
+--
+-- Name: account_research_selections account_research_selections_append_only_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_research_selections_append_only_trg BEFORE DELETE OR UPDATE ON public.account_research_selections FOR EACH ROW EXECUTE FUNCTION public.account_research_append_only_guard();
+
+
+--
 -- Name: component_retrieval_profiles component_retrieval_profiles_guard_trg; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -10477,6 +12154,27 @@ CREATE TRIGGER content_component_selections_validate_trg BEFORE INSERT ON public
 --
 
 CREATE TRIGGER content_components_guard_trg BEFORE DELETE OR UPDATE ON public.content_components FOR EACH ROW EXECUTE FUNCTION public.content_component_row_guard();
+
+
+--
+-- Name: research_account_aliases research_account_aliases_append_only_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER research_account_aliases_append_only_trg BEFORE DELETE OR UPDATE ON public.research_account_aliases FOR EACH ROW EXECUTE FUNCTION public.account_research_append_only_guard();
+
+
+--
+-- Name: research_account_profile_snapshots research_account_profile_snapshots_append_only_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER research_account_profile_snapshots_append_only_trg BEFORE DELETE OR UPDATE ON public.research_account_profile_snapshots FOR EACH ROW EXECUTE FUNCTION public.account_research_append_only_guard();
+
+
+--
+-- Name: research_account_sample_links research_account_sample_links_append_only_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER research_account_sample_links_append_only_trg BEFORE DELETE OR UPDATE ON public.research_account_sample_links FOR EACH ROW EXECUTE FUNCTION public.account_research_append_only_guard();
 
 
 --
@@ -10953,6 +12651,206 @@ CREATE TRIGGER trg_hot_score BEFORE INSERT OR UPDATE OF vote_count, comment_coun
 --
 
 CREATE TRIGGER trg_vote_count AFTER INSERT OR DELETE ON public.idea_votes FOR EACH ROW EXECUTE FUNCTION public.sync_vote_count();
+
+
+--
+-- Name: account_research_claim_evidence account_research_claim_evidence_claim_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_evidence
+    ADD CONSTRAINT account_research_claim_evidence_claim_fk FOREIGN KEY (run_id, claim_id) REFERENCES public.account_research_claims(run_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_claim_evidence account_research_claim_evidence_evidence_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_evidence
+    ADD CONSTRAINT account_research_claim_evidence_evidence_fk FOREIGN KEY (run_id, evidence_id) REFERENCES public.account_research_evidence(run_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_claim_samples account_research_claim_samples_claim_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_samples
+    ADD CONSTRAINT account_research_claim_samples_claim_fk FOREIGN KEY (account_id, run_id, claim_id) REFERENCES public.account_research_claims(account_id, run_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_claim_samples account_research_claim_samples_sample_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claim_samples
+    ADD CONSTRAINT account_research_claim_samples_sample_fk FOREIGN KEY (run_id, account_id, sample_id) REFERENCES public.account_research_run_samples(run_id, account_id, sample_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_claims account_research_claims_run_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_claims
+    ADD CONSTRAINT account_research_claims_run_fk FOREIGN KEY (account_id, run_id) REFERENCES public.account_research_runs(account_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_decisions account_research_decisions_claim_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_decisions
+    ADD CONSTRAINT account_research_decisions_claim_fk FOREIGN KEY (account_id, run_id, claim_id) REFERENCES public.account_research_claims(account_id, run_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_decisions account_research_decisions_decided_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_decisions
+    ADD CONSTRAINT account_research_decisions_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locat_source_element_evidence_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations
+    ADD CONSTRAINT account_research_evidence_locat_source_element_evidence_id_fkey FOREIGN KEY (source_element_evidence_id) REFERENCES public.sample_element_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_asset_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations
+    ADD CONSTRAINT account_research_evidence_locations_asset_fk FOREIGN KEY (sample_id, asset_id) REFERENCES public.sample_assets(sample_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_capture_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations
+    ADD CONSTRAINT account_research_evidence_locations_capture_fk FOREIGN KEY (sample_id, source_capture_id) REFERENCES public.sample_captures(sample_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_evidence_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations
+    ADD CONSTRAINT account_research_evidence_locations_evidence_fk FOREIGN KEY (run_id, evidence_id, sample_id) REFERENCES public.account_research_evidence(run_id, id, sample_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_evidence_locations account_research_evidence_locations_profile_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence_locations
+    ADD CONSTRAINT account_research_evidence_locations_profile_fk FOREIGN KEY (profile_snapshot_id) REFERENCES public.research_account_profile_snapshots(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_evidence account_research_evidence_run_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence
+    ADD CONSTRAINT account_research_evidence_run_fk FOREIGN KEY (account_id, run_id) REFERENCES public.account_research_runs(account_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_evidence account_research_evidence_sample_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_evidence
+    ADD CONSTRAINT account_research_evidence_sample_fk FOREIGN KEY (run_id, account_id, sample_id) REFERENCES public.account_research_run_samples(run_id, account_id, sample_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_idempotency account_research_idempotency_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_idempotency
+    ADD CONSTRAINT account_research_idempotency_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_quality_reports account_research_quality_reports_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_quality_reports
+    ADD CONSTRAINT account_research_quality_reports_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_quality_reports account_research_quality_reports_run_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_quality_reports
+    ADD CONSTRAINT account_research_quality_reports_run_fk FOREIGN KEY (account_id, run_id) REFERENCES public.account_research_runs(account_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_link_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples
+    ADD CONSTRAINT account_research_run_samples_link_fk FOREIGN KEY (account_id, sample_id) REFERENCES public.research_account_sample_links(account_id, sample_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_run_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples
+    ADD CONSTRAINT account_research_run_samples_run_fk FOREIGN KEY (account_id, run_id) REFERENCES public.account_research_runs(account_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_run_samples account_research_run_samples_sample_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_run_samples
+    ADD CONSTRAINT account_research_run_samples_sample_id_fkey FOREIGN KEY (sample_id) REFERENCES public.samples(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_runs account_research_runs_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs
+    ADD CONSTRAINT account_research_runs_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.research_accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_runs account_research_runs_base_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs
+    ADD CONSTRAINT account_research_runs_base_fk FOREIGN KEY (account_id, base_run_id) REFERENCES public.account_research_runs(account_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_runs account_research_runs_requested_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_runs
+    ADD CONSTRAINT account_research_runs_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_selections account_research_selections_run_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_selections
+    ADD CONSTRAINT account_research_selections_run_fk FOREIGN KEY (account_id, run_id) REFERENCES public.account_research_runs(account_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: account_research_selections account_research_selections_selected_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_research_selections
+    ADD CONSTRAINT account_research_selections_selected_by_fkey FOREIGN KEY (selected_by) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
@@ -11433,6 +13331,78 @@ ALTER TABLE ONLY public.notifications
 
 ALTER TABLE ONLY public.playbook_items
     ADD CONSTRAINT playbook_items_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+
+--
+-- Name: research_account_aliases research_account_aliases_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_aliases
+    ADD CONSTRAINT research_account_aliases_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.research_accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: research_account_aliases research_account_aliases_source_sample_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_aliases
+    ADD CONSTRAINT research_account_aliases_source_sample_id_fkey FOREIGN KEY (source_sample_id) REFERENCES public.samples(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: research_account_profile_snapshots research_account_profile_snapshots_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_profile_snapshots
+    ADD CONSTRAINT research_account_profile_snapshots_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.research_accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: research_account_profile_snapshots research_account_profile_snapshots_capture_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_profile_snapshots
+    ADD CONSTRAINT research_account_profile_snapshots_capture_fk FOREIGN KEY (source_sample_id, source_capture_id) REFERENCES public.sample_captures(sample_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: research_account_profile_snapshots research_account_profile_snapshots_source_sample_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_profile_snapshots
+    ADD CONSTRAINT research_account_profile_snapshots_source_sample_id_fkey FOREIGN KEY (source_sample_id) REFERENCES public.samples(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: research_account_sample_links research_account_sample_links_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_sample_links
+    ADD CONSTRAINT research_account_sample_links_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.research_accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: research_account_sample_links research_account_sample_links_linked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_sample_links
+    ADD CONSTRAINT research_account_sample_links_linked_by_fkey FOREIGN KEY (linked_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: research_account_sample_links research_account_sample_links_sample_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_account_sample_links
+    ADD CONSTRAINT research_account_sample_links_sample_id_fkey FOREIGN KEY (sample_id) REFERENCES public.samples(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: research_accounts research_accounts_current_run_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.research_accounts
+    ADD CONSTRAINT research_accounts_current_run_fk FOREIGN KEY (id, current_run_id) REFERENCES public.account_research_runs(account_id, id) ON DELETE RESTRICT;
 
 
 --
@@ -12543,5 +14513,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9Up4fuUqsDRbVORwSKauOVLtLkJlFXsrVdVQBvDoZ8FHMZG97Eegy2DbnXzkosx
+\unrestrict G9xbQZzoX8GD36cmfN0VUjnRjJ29Aba7DwL0gkXGXgkxth9PVHKdhmcD6CwaIZs
 
