@@ -121,23 +121,28 @@ html[data-ui="soft"] .board-tool{height:34px;border:1px solid #ddd5d0;border-rad
 html[data-ui="soft"] .board-tool:hover,html[data-ui="soft"] .board-tool.on{border-color:#d3c2cb;background:#f3eaee;color:#5d4857}
 
 /* ---------- 今日工作台 ---------- */
-html[data-ui="soft"] .dash-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:34px;margin:0 0 18px;padding:28px 30px;border:1px solid rgba(91,70,84,.08);border-radius:22px;background:linear-gradient(135deg,rgba(255,253,250,.96),rgba(244,237,241,.88));box-shadow:var(--shadow);overflow:hidden}
-html[data-ui="soft"] .dash-hero::after{content:"";display:block;position:absolute;right:-90px;top:-110px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(183,131,151,.1),transparent 68%);pointer-events:none}
-html[data-ui="soft"] .dash-hero h1{font-size:38px;line-height:1.12}
-html[data-ui="soft"] .dash-hero p{margin-top:10px;color:#797278;font-size:14px}
+html[data-ui="soft"] .dash-hero{display:grid;grid-template-columns:minmax(300px,.82fr) minmax(600px,1.18fr);align-items:center;gap:32px;margin:0 0 16px;padding:26px 28px;border:1px solid rgba(91,70,84,.09);border-radius:20px;background:rgba(255,253,250,.9);box-shadow:0 1px 2px rgba(48,41,47,.025),0 10px 30px rgba(48,41,47,.03);overflow:hidden}
+html[data-ui="soft"] .dash-hero::after{content:"";display:block;position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(180deg,#c47e78,#8c6d80);pointer-events:none}
+html[data-ui="soft"] .dash-hero h1{font-size:36px;line-height:1.1}
+html[data-ui="soft"] .dash-hero p{max-width:440px;margin-top:9px;color:#706970;font-size:13.5px;line-height:1.65}
 html[data-ui="soft"] .dash-quick{grid-template-columns:repeat(5,minmax(100px,1fr));gap:8px;border:0}
-html[data-ui="soft"] .dash-quick button{min-width:0;padding:10px 10px;border:1px solid rgba(83,68,78,.07);border-radius:13px;background:rgba(255,255,255,.68);box-shadow:none}
+html[data-ui="soft"] .dash-quick button{min-width:0;padding:11px 10px;border:1px solid rgba(83,68,78,.08);border-radius:12px;background:#faf7f5;box-shadow:none}
 html[data-ui="soft"] .dash-quick button:hover{transform:translateY(-2px);border-color:#dfd1d8;background:#fff;box-shadow:0 10px 22px rgba(70,55,65,.07)}
 html[data-ui="soft"] .dash-quick .ic{color:#8c6d80}
+html[data-ui="soft"] .dash-quick button:first-child{border-color:#dfcdd6;background:#f3e9ee;color:#594554}
+html[data-ui="soft"] .dash-quick button:first-child .ic{color:#75586a}
+html[data-ui="soft"] .dash-quick button:first-child small{color:#8d7784}
 html[data-ui="soft"] .learning-catalog,html[data-ui="soft"] .learning-reader{border-color:var(--line-soft);background:#fffdfa}
 html[data-ui="soft"] .learning-item.on{border-color:#dfd0d8;background:#f4ebef}
 html[data-ui="soft"] .learning-reader-head{background:linear-gradient(135deg,#fffdfa,#f6f1ee)}
 
-html[data-ui="soft"] .dash-action-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:0 0 22px}
-html[data-ui="soft"] .dash-action-grid>button{min-height:102px;padding:16px 17px;border:1px solid var(--line-soft);border-radius:16px;background:rgba(255,253,250,.78);box-shadow:0 4px 14px rgba(50,42,48,.025)}
-html[data-ui="soft"] .dash-action-grid>button:hover{transform:translateY(-2px);border-color:#ded0d7;background:#fffdfa;box-shadow:0 12px 28px rgba(55,43,51,.065)}
-html[data-ui="soft"] .dash-action-icon{width:34px;height:34px;border-radius:11px;box-shadow:none}
-html[data-ui="soft"] .dash-action-grid b{font-size:28px;letter-spacing:-.03em}
+html[data-ui="soft"] .dash-action-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:0 0 18px;padding:5px;border:1px solid var(--line-soft);border-radius:16px;background:rgba(255,253,250,.7);box-shadow:var(--shadow)}
+html[data-ui="soft"] .dash-action-grid>button{min-height:84px;padding:13px 15px;border:0;border-radius:11px;background:transparent;box-shadow:none}
+html[data-ui="soft"] .dash-action-grid>button+button::before{content:"";position:absolute;left:0;top:15px;bottom:15px;width:1px;background:var(--line-soft)}
+html[data-ui="soft"] .dash-action-grid>button:hover{transform:none;border-color:transparent;background:#fffdfa;box-shadow:0 6px 18px rgba(55,43,51,.05)}
+html[data-ui="soft"] .dash-action-icon{width:32px;height:32px;border-radius:10px;box-shadow:none}
+html[data-ui="soft"] .dash-action-grid b{font-size:26px;letter-spacing:-.03em}
+html[data-ui="soft"] .dash-action-grid em{color:#8c858b}
 
 html[data-ui="soft"] .dash-layout{grid-template-columns:minmax(0,1.25fr) minmax(330px,.75fr);gap:16px;margin-bottom:16px}
 html[data-ui="soft"] .dash-panel{border:1px solid var(--line-soft);border-radius:18px;background:rgba(255,253,250,.84);box-shadow:var(--shadow)}
@@ -145,7 +150,10 @@ html[data-ui="soft"] .dash-panel>header{padding:17px 19px 14px;border-bottom:1px
 html[data-ui="soft"] .dash-panel>header h2{font-size:17px}
 html[data-ui="soft"] .dash-focus-list{padding:4px 14px 9px}
 html[data-ui="soft"] .dash-focus-item{padding:13px 7px;border-radius:10px}
-html[data-ui="soft"] .dash-focus-item>i{width:3px;height:30px;border-radius:3px;background:#b38297!important}
+html[data-ui="soft"] .dash-focus-item>i{width:3px;height:30px;border-radius:3px;background:#8291ac}
+html[data-ui="soft"] .dash-focus-item.tone-amber>i{background:#c78a4f}
+html[data-ui="soft"] .dash-focus-item.tone-green>i{background:#6c9684}
+html[data-ui="soft"] .dash-focus-item.tone-violet>i{background:#9a7188}
 html[data-ui="soft"] .dash-focus-item:hover{background:#f7f2f4}
 html[data-ui="soft"] .dash-focus-item:hover b{color:#684f60}
 html[data-ui="soft"] .dash-pipeline-list{padding:10px 18px 16px}
@@ -424,12 +432,23 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
 }
 
 @media (max-width:700px){
+  html[data-ui="soft"] #v-home.on{display:flex;flex-direction:column}
+  html[data-ui="soft"] #v-home .dash-hero{order:1}
+  html[data-ui="soft"] #v-home .dash-layout{display:contents}
+  html[data-ui="soft"] #v-home .dash-focus{order:2;margin-bottom:12px}
+  html[data-ui="soft"] #v-home .dash-action-grid{order:3}
+  html[data-ui="soft"] #v-home .dash-pipeline{order:4;margin-bottom:12px}
+  html[data-ui="soft"] #v-home .dash-library{order:5}
   html[data-ui="soft"] .page-head h1{font-size:27px}
-  html[data-ui="soft"] .dash-hero{padding:22px 19px;border-radius:18px}
-  html[data-ui="soft"] .dash-hero h1{font-size:31px}
-  html[data-ui="soft"] .dash-quick{display:grid;width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}
-  html[data-ui="soft"] .dash-quick button{min-width:0}
-  html[data-ui="soft"] .dash-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  html[data-ui="soft"] .dash-hero{gap:18px;padding:20px 18px 17px;border-radius:18px}
+  html[data-ui="soft"] .dash-hero h1{font-size:30px}
+  html[data-ui="soft"] .dash-quick{display:grid;width:100%;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(104px,1fr);gap:7px;padding:0 1px 5px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:inline proximity;scrollbar-width:none}
+  html[data-ui="soft"] .dash-quick::-webkit-scrollbar{display:none}
+  html[data-ui="soft"] .dash-quick button{min-width:0;min-height:62px;scroll-snap-align:start}
+  html[data-ui="soft"] .dash-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+  html[data-ui="soft"] .dash-action-grid>button{min-height:88px}
+  html[data-ui="soft"] .dash-action-grid>button:nth-child(3)::before{display:none}
+  html[data-ui="soft"] .dash-action-grid>button:nth-child(n+3)::after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:var(--line-soft)}
   html[data-ui="soft"] .board-demands,
   html[data-ui="soft"] .board-sales,
   html[data-ui="soft"] .board-delivery,
