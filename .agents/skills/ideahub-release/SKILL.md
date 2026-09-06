@@ -2,6 +2,9 @@
 name: ideahub-release
 description: IdeaHub 提交、推送、VPS 部署与高风险配置工作流。凡是用户要求提交、上传仓库、推送、发布、部署、给 VPS 命令，或修改 .env、npm 依赖、Docker、Compose、Caddy、端口、域名、证书、健康检查时必须使用。VPS 上操作还必须完整读取 CLAUDE.md；涉及 Collector 或数据库时同时使用对应 skill。
 compatibility: Windows local Git workflow plus manual VPS deployment in /root/ideahub-deploy; GitHub private repository.
+metadata:
+  version: "1.1.0"
+  owner: "ideahub"
 ---
 
 # IdeaHub Release
@@ -21,11 +24,11 @@ compatibility: Windows local Git workflow plus manual VPS deployment in /root/id
 
 ## Local Commit And Push Workflow
 
-1. 确认改动前已经执行 `git status --short --branch` 和 `git pull --ff-only origin main`。
+1. 确认改动前已经执行 `git status --short --branch` 和 `git fetch origin --prune`。将预期 upstream 固定为 `origin/<当前分支>`：同名远端存在时 upstream 必须完全一致，再用无参数 `git pull --ff-only`；同名远端不存在时视为未发布新分支，不得把继承的 `origin/main` 当作当前分支远端。最后单独确认 `origin/main` 是当前 `HEAD` 的祖先。
 2. 查看完整 diff，排除 `.env`、备份、附件、生成 bundle、截图和临时文件。
 3. 运行与改动匹配的语法、构建、UI、API、数据库或 Collector 检查。
 4. 提交前再运行 `git diff --check`。
-5. 提交后、推送前执行 `git fetch origin main` 和当前远端分支，确认 VPS 自动备份没有让远端前进。
+5. 提交后、推送前再次执行 `git fetch origin --prune`，比较 `origin/<当前分支>` 与 `origin/main`；首次发布使用 `git push -u origin <当前分支>` 建立正确 upstream。确认 VPS 自动备份没有让远端前进。
 6. 远端已前进时安全接入新提交并逐项检查冲突；严禁 `git push --force` 或 `--force-with-lease`。
 7. 只推送明确的当前分支；未经 Collector 门禁或用户授权，不把功能分支合并进 main。
 

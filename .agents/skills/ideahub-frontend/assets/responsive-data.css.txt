@@ -1,0 +1,29 @@
+.__PLACEHOLDER__-table-scroll {
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.__PLACEHOLDER__-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .__PLACEHOLDER__-table-scroll {
+    display: none;
+  }
+
+  .__PLACEHOLDER__-mobile-cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .__PLACEHOLDER__-mobile-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+}

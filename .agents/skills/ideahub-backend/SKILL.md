@@ -2,6 +2,9 @@
 name: ideahub-backend
 description: IdeaHub Node.js 后端与 API 开发工作流。凡是修改 server/src/routes、server/src/lib、认证授权、会话、事件、上传、DTO、AI provider、服务端业务逻辑或 API 测试时都应使用；如果改动涉及表、字段、索引或迁移，还必须同时使用 ideahub-database。不要用它处理纯前端视觉或 VPS 网络配置。
 compatibility: IdeaHub repository; Node.js 20+; PostgreSQL 16 for database-backed tests.
+metadata:
+  version: "1.0.0"
+  owner: "ideahub"
 ---
 
 # IdeaHub Backend

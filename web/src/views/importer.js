@@ -75,6 +75,7 @@ let phase = 'compose';
 let provider = null;
 let providerLoaded = false;
 let providerModels = [];
+let returnFocus = null;
 
 const selectedItems = () => (result?.suggestions || []).filter(s => s.selected);
 
@@ -91,6 +92,7 @@ function show(next) {
 }
 
 export function open() {
+  returnFocus = document.activeElement;
   if (phase === 'done') reset();
   $('#mask').classList.add('on');
   $('#smartImportModal').classList.add('on');
@@ -99,13 +101,17 @@ export function open() {
 }
 
 export function close() {
-  $('#smartImportModal')?.classList.remove('on');
+  const modal = $('#smartImportModal');
+  const wasOpen = modal?.classList.contains('on');
+  modal?.classList.remove('on');
   $('#smartProviderKey').value = '';
   $('#smartProviderKey').type = 'password';
   $('#smartProviderKeyEye').textContent = '显示';
   toggleProviderPanel(false);
   // 其它弹窗或抽屉仍开着时不能把共用遮罩拿掉
   if (!document.querySelector('.modal.on,.drawer.on')) $('#mask')?.classList.remove('on');
+  if (wasOpen && returnFocus?.isConnected) returnFocus.focus();
+  returnFocus = null;
 }
 
 function reset() {

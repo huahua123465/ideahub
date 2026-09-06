@@ -2,6 +2,9 @@
 name: ideahub-database
 description: IdeaHub PostgreSQL 表结构、迁移与数据安全工作流。凡是涉及 server/src/schema.sql、表、字段、索引、约束、枚举、触发器、生产数据迁移、备份恢复或用户提到“改数据库”“加字段”“迁移线上数据”时必须使用。此类修改在动手前必须先向用户说明生产迁移不会随 Docker 重建自动生效并取得确认。
 compatibility: IdeaHub repository; PostgreSQL 16; production migration is manual and approval-gated.
+metadata:
+  version: "1.0.0"
+  owner: "ideahub"
 ---
 
 # IdeaHub Database

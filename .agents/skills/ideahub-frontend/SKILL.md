@@ -2,6 +2,9 @@
 name: ideahub-frontend
 description: IdeaHub 前端开发与改稿工作流。凡是新增或修改页面、视图模块、导航、弹窗、抽屉、表单、交互状态、响应式布局、CSS、动效、图标、前端 mock/API 对接，或用户笼统地说“改界面”“做一个页面”“手机端有问题”，都应使用此 skill。不要用它处理纯后端、数据库迁移或 VPS 发布。
 compatibility: IdeaHub repository; Node.js 20+; native ES modules, CSS, esbuild, and Puppeteer.
+metadata:
+  version: "1.1.0"
+  owner: "ideahub"
 ---
 
 # IdeaHub Frontend
@@ -23,13 +26,27 @@ compatibility: IdeaHub repository; Node.js 20+; native ES modules, CSS, esbuild,
 ## Workflow
 
 1. 先读仓库根目录 `AGENTS.md`，确认工作区、同步状态和禁止触碰的内容。
-2. 读取 [前端架构](references/architecture.md)。涉及样式或新页面时，再读 [视觉与交互规则](references/design-system.md)。
+2. 读取 [前端架构](references/architecture.md)，然后按下方“改动分级”选择小修、新页面或重设计分支。涉及视觉时再读 [视觉与交互规则](references/design-system.md)；新增视图或复杂交互时读取 [原生前端模式库](references/native-ui-patterns.md)。
 3. 定位现有入口、视图模块、API/mock 合约和相邻页面。优先延续现有模式，不凭想象新造一套。
-4. 明确任务属于现有视图修正、新视图、全局组件、样式系统还是数据状态修正，再选择最小但完整的改动面。
+4. 写下本次分级、受影响路径和验收范围，再选择最小但完整的改动面。
 5. 只编辑源文件。不要手改 `web/dist/`；生产 bundle 由 `scripts/build-web.mjs` 生成。
 6. 实现真实内容、完整状态和响应式行为。涉及异步请求时，处理旧响应覆盖、重复提交和失败后的输入保留。
 7. 使用 `ideahub-ui-qa` 完成语法、构建、桌面/手机、交互和浏览器错误检查。
 8. 复看实际截图和差异，删掉无意义装饰，确认层级、间距、文案和操作反馈都服务当前任务。
+
+## Change Branches
+
+### 小修
+
+适用于文案、间距、单个状态、局部响应式或明确 bug。直接沿用相邻代码和现有 tokens，只修根因与受影响状态；不创建设计提案，不借机重排整页，不引入新的全局抽象。验收至少覆盖被改组件、相邻状态、桌面和手机。
+
+### 新页面
+
+只有独立导航语义、页面状态和入口都成立时才走此分支。编码前先写一份紧凑设计说明，明确使用者、页面唯一任务、真实内容层级、一个可被记住且能解释的标志性元素，以及相对现有 tokens 的变化；先自查它是否像任意后台模板，再开始实现。使用 [原生前端模式库](references/native-ui-patterns.md) 和其中的 assets 作为接线起点，不把模板当成最终设计。
+
+### 重设计
+
+只在用户明确要求改变既有信息架构或视觉方向时使用。先盘点必须保留的业务路径、URL/导航语义、权限、API 状态和已确认交互，再提出边界清楚的前后对照。先完成设计说明与自我批评，再编码和截图复审；大胆变化集中在一个有业务依据的主元素，其余保持克制。需求只说“高级一点”时，默认按小修处理，不推断为整站重设计。
 
 ## Decision Rules
 
@@ -40,7 +57,9 @@ compatibility: IdeaHub repository; Node.js 20+; native ES modules, CSS, esbuild,
 - **数据状态**：前端字段必须同时核对真实 API 和 `web/src/mock.js`。本地 mock 通过不代表生产契约正确。
 - **动效**：复用 `motion.css` tokens，优先一次清楚的状态转换；遵守 `prefers-reduced-motion`，不靠大面积漂浮或延迟动画掩盖加载。
 - **依赖**：现有平台能力足够时不加依赖。确需新增 npm 包时同时更新 lockfile，并按 B 类上线交接。
-- **视觉变化**：`web/styles.css` 是已确认 UI 的主要样式真源。需求没有要求换视觉时，修功能不能顺手重做品牌和布局。
+- **视觉变化**：`web/styles.css` 提供基础结构与 tokens，`motion.css`、`account.css`、`soft.css` 会按加载顺序补充或覆盖。需求没有要求换视觉时，修功能不能顺手重做品牌和布局。
+- **界面文案**：从用户一侧命名动作；按钮、进行中状态和成功反馈使用同一个动词。空状态给下一步，错误状态说明如何恢复，不用系统内部名词冒充用户语言。
+- **选择器优先级**：新增样式前检查加载顺序和相邻选择器。页面样式使用页面前缀，避免用更高 specificity 掩盖冲突；确需覆盖时说明覆盖链路。
 
 ## Boundaries
 
@@ -69,3 +88,4 @@ compatibility: IdeaHub repository; Node.js 20+; native ES modules, CSS, esbuild,
 4. 键盘焦点、ARIA 当前态、触控尺寸和 reduced motion 没有退化。
 5. 改过的 JavaScript 通过语法检查，生产 bundle 和 `npm run test:ui` 通过。
 6. 没有把生成物、截图、密钥、备份或真实附件误加入提交。
+7. 已明确记录本次属于小修、新页面还是重设计，并执行了对应分支而非扩大范围。

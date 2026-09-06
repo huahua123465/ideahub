@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "skill_root": ".agents/skills",
+  "required_skills": [
+    "ideahub-backend",
+    "ideahub-collector",
+    "ideahub-database",
+    "ideahub-frontend",
+    "ideahub-release",
+    "ideahub-ui-qa"
+  ],
+  "contracts": [
+    {
+      "id": "global-safe-sync",
+      "files": ["AGENTS.md"],
+      "must_include": [
+        "git fetch origin --prune",
+        "git pull --ff-only",
+        "origin/<当前分支>",
+        "不得把创建分支时继承的 `origin/main` 当作当前分支 upstream",
+        "单独检查 `origin/main` 是否为当前 `HEAD` 的祖先",
+        "不连接、不修改生产环境"
+      ],
+      "must_not_include": [
+        "git pull --ff-only origin main"
+      ]
+    },
+    {
+      "id": "frontend-native-branches",
+      "files": [
+        ".agents/skills/ideahub-frontend/SKILL.md",
+        ".agents/skills/ideahub-frontend/references/native-ui-patterns.md"
+      ],
+      "must_include": [
+        "### 小修",
+        "### 新页面",
+        "### 重设计",
+        "原生 ES Module",
+        "assets/new-view-module.js.txt",
+        "390×844",
+        "最新请求获胜"
+      ],
+      "must_not_include": [
+        "npm create vite",
+        "直接引入 React",
+        "跳过移动端验收"
+      ]
+    },
+    {
+      "id": "ui-qa-isolated-contract",
+      "files": [".agents/skills/ideahub-ui-qa/SKILL.md"],
+      "must_include": [
+        "随机本地端口",
+        "内置 mock 数据",
+        "scripts/.uidiff/report.json",
+        "console error",
+        "不连接生产环境"
+      ],
+      "must_not_include": [
+        "连接生产环境进行 UI 验收",
+        "验收时自动更新历史视觉基准"
+      ]
+    },
+    {
+      "id": "database-migration-safety",
+      "files": [".agents/skills/ideahub-database/SKILL.md"],
+      "must_include": [
+        "独立迁移 SQL",
+        "不会自动执行 `server/src/schema.sql`",
+        "`npm run db:reset`"
+      ],
+      "must_not_include": [
+        "直接删除生产数据库再重建"
+      ]
+    },
+    {
+      "id": "collector-boundary",
+      "files": [".agents/skills/ideahub-collector/SKILL.md"],
+      "must_include": [
+        "`/api/collector/*`",
+        "`expose: 5000`",
+        "Cookie 永不返回浏览器",
+        "并发 1"
+      ],
+      "must_not_include": [
+        "浏览器直接访问 Collector"
+      ]
+    },
+    {
+      "id": "release-history-safety",
+      "files": [".agents/skills/ideahub-release/SKILL.md"],
+      "must_include": [
+        "`git fetch origin --prune`",
+        "`origin/<当前分支>`",
+        "无参数 `git pull --ff-only`",
+        "`git push --force`",
+        "`--force-with-lease`",
+        "check-neighbors.sh"
+      ],
+      "must_not_include": [
+        "建议使用 force-with-lease 覆盖远端"
+      ]
+    },
+    {
+      "id": "honest-tooling-labels",
+      "files": [
+        "scripts/lint-agent-skills.mjs",
+        "scripts/evaluate-agent-skills.mjs",
+        "docs/agent-skills-evaluation.md"
+      ],
+      "must_include": [
+        "structural lint",
+        "criterion",
+        "external runner",
+        "No agent behavior or model quality was measured"
+      ],
+      "must_not_include": [
+        "activated-skill contract must pass 100%",
+        "executor_model: 'deterministic-contract-check'",
+        "Agent skills benchmark: with"
+      ]
+    }
+  ],
+  "must_not_exist": [
+    ".agents/evals/project-skills-contract.json",
+    "scripts/benchmark-agent-skills.mjs",
+    "docs/agent-skills-benchmark.md",
+    "docs/agent-skills-benchmark.json"
+  ]
+}

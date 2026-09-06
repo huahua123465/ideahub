@@ -21,19 +21,28 @@ export function setMe(u) {
 /* ---------- 头像菜单 ---------- */
 export function bindMenu() {
   const pop = $('#userMenu');
+  const avatar = $('#meAvatar');
+  const setOpen = open => {
+    pop.classList.toggle('on', open);
+    avatar.setAttribute('aria-expanded', String(open));
+  };
 
-  $('#meAvatar').addEventListener('click', e => {
+  avatar.addEventListener('click', e => {
     e.stopPropagation();
-    pop.classList.toggle('on');
+    setOpen(!pop.classList.contains('on'));
   });
   // 点菜单里面不关，点外面才关
   pop.addEventListener('click', e => e.stopPropagation());
-  document.addEventListener('click', () => pop.classList.remove('on'));
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') pop.classList.remove('on'); });
+  document.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !pop.classList.contains('on')) return;
+    setOpen(false);
+    avatar.focus();
+  });
 
   $('#miLogout').addEventListener('click', logout);
-  $('#miPassword').addEventListener('click', () => { pop.classList.remove('on'); openPassword(); });
-  $('#miUsers').addEventListener('click', () => { pop.classList.remove('on'); openUsers(); });
+  $('#miPassword').addEventListener('click', () => { setOpen(false); avatar.focus(); openPassword(); });
+  $('#miUsers').addEventListener('click', () => { setOpen(false); avatar.focus(); openUsers(); });
 
   $('#btnPwSave').addEventListener('click', savePassword);
   $('#pwNew2').addEventListener('keydown', e => { if (e.key === 'Enter') savePassword(); });

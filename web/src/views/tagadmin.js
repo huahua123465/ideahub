@@ -55,7 +55,7 @@ async function paintTags() {
           </span>`).join('') || '<span class="dim">还没有标签</span>'}
       </div>
       ${admin ? `<div class="cdadd">
-        <input class="inp ta-new" data-kind="${kind}" placeholder="新增一个${esc(KIND_LABEL[kind])}标签，回车保存">
+        <input class="inp ta-new" data-kind="${kind}" aria-label="新增${esc(KIND_LABEL[kind])}标签" placeholder="新增一个${esc(KIND_LABEL[kind])}标签，回车保存">
       </div>` : ''}
     </section>`;
   }).join('');

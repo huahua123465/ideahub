@@ -1,0 +1,27 @@
+<div class="modal __PLACEHOLDER__-modal" id="__PLACEHOLDER__Modal"
+     role="dialog" aria-modal="true" aria-labelledby="__PLACEHOLDER__ModalTitle">
+  <header>
+    <h2 id="__PLACEHOLDER__ModalTitle">__PLACEHOLDER_TITLE__</h2>
+    <p class="hint">__PLACEHOLDER_PURPOSE__</p>
+  </header>
+  <div class="form">
+    <div class="field">
+      <label for="__PLACEHOLDER__Input">__PLACEHOLDER_FIELD_LABEL__</label>
+      <input class="inp" id="__PLACEHOLDER__Input" name="__PLACEHOLDER_FIELD_NAME__">
+    </div>
+    <div class="__PLACEHOLDER__-error" role="alert" aria-live="polite"></div>
+  </div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" type="button" data-close>取消</button>
+    <button class="btn btn-primary" type="button" id="__PLACEHOLDER__Submit">__PLACEHOLDER_ACTION__</button>
+  </footer>
+</div>
+
+<!--
+接线要求：
+1. 打开前保存 document.activeElement，打开后聚焦首个有效控件。
+2. Tab/Shift+Tab 留在最上层 dialog；Escape 关闭。
+3. 关闭后焦点回到仍然存在的触发按钮。
+4. 背景只保留一个活动 modal，确认层优先于普通 modal。
+-->

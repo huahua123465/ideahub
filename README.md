@@ -6,44 +6,26 @@
 
 ---
 
-## 技术栈（刻意选成零构建、极少依赖）
+## 技术栈（原生前端、生产构建、少依赖）
 
-| 层 | 选型 | 需要装什么 |
+| 层 | 选型 | 说明 |
 |---|---|---|
-| 前端 | 原生 ES Module + 原型同款 CSS | **什么都不用装**，没有构建步骤 |
-| 后端 | Node 内置 `http`（无框架） | Node 20+ |
+| 前端源码 | 原生 ES Module + 现有 CSS | 开发时可直接运行，不引入 React、Vite、Tailwind 或第二套组件系统 |
+| 生产前端 | esbuild 单 bundle | `scripts/build-web.mjs` 生成 `web/dist/app.js`，Docker 构建时执行 |
+| 后端 | Node 内置 `http`（无框架） | Node 20+；完整开发与 CI 推荐 Node 22.12+ |
 | 数据库 | PostgreSQL 16 | 生产必需；本地开发可先跳过 |
-| 数据库驱动 | `pg` | **全项目唯一的 npm 依赖** |
+| 运行依赖 | `pg`、`pdfjs-dist` | 分别用于 PostgreSQL 和浏览器 PDF 阅读器 |
+| 开发验收 | esbuild、Puppeteer | 由 lockfile 固定，用于打包、UI QA 和演示录制 |
 
-> 为什么不用 React + Vite：UI 要和给客户看过的演示原型**逐像素一致**。直接沿用原型的 CSS 和 DOM 结构，
-> 比重写成组件再对齐可靠得多，而且省掉整条构建链。
-
----
-
-## 最省事的启动方式：双击
-
-Windows 上直接双击项目根目录里的：
-
-| 文件 | 干什么 |
-|---|---|
-| **启动.bat** | 完整启动。自动装依赖、起数据库、建表、灌数据、开浏览器 |
-| **启动-仅看界面.bat** | 只跑前端，用内置演示数据。不需要数据库，不需要装任何东西 |
-
-`启动.bat` 会按 6 步走，每一步都会打印结果；任何一步出问题，它会直接告诉你下一步该做什么，
-而不是甩一段堆栈。数据库起不来时会自动提示改用「仅看界面」模式。
-
-macOS / Linux 上等价命令：
-
-```bash
-node scripts/setup.mjs        # 完整启动
-node scripts/serve-web.mjs    # 只看界面
-```
+> 为什么不用 React + Vite：现有业务页面已经围绕一套稳定的 DOM、CSS 和原生模块协作，
+> 为框架而重写会增加迁移回归与双架构成本。这里的“原生前端”指不引入前端框架；生产环境仍会用 esbuild
+> 把模块合并成一个文件，减少网络往返。
 
 ---
 
-## 手动启动（想知道每一步在做什么的话）
+## 启动方式
 
-### 1. 只看界面（零依赖，30 秒）
+### 1. 只看界面（无需数据库，30 秒）
 
 前端内置了一份 mock 数据。后端没起时会自动降级到 mock，界面完全可点。
 
@@ -52,7 +34,7 @@ node scripts/serve-web.mjs
 # 打开 http://localhost:5173
 ```
 
-不用装 Node 包，不用装数据库。
+这条路径只需要 Node.js，不需要 PostgreSQL；生产打包、UI 验收和演示录制仍需先安装 lockfile 中的依赖。
 
 ### 2. 完整开发（前端 + 后端 + 数据库）
 
@@ -68,7 +50,7 @@ docker compose -f docker-compose.dev.yml up -d
 ```bash
 copy .env.example .env      # Windows
 # cp .env.example .env      # Linux/macOS
-npm install                 # 只装一个包：pg
+npm ci                      # 安装 lockfile 固定的运行与开发依赖
 
 npm run db:init             # 建表
 npm run db:seed             # 灌入种子数据（含演示里那 9 条灵感）
@@ -79,11 +61,16 @@ npm run dev                 # 同时起后端 :3000 和前端 :5173
 
 ### 3. 部署到服务器
 
-```bash
-docker compose up -d --build
-```
+生产发布不是孤立的一条 Docker 命令。先完整阅读 `AGENTS.md`、`.agents/skills/ideahub-release/SKILL.md`
+和 VPS 上的 `CLAUDE.md`，确认工作区干净、目标提交已推送，并记录邻居服务基线。
 
-详见 `docs/架构设计.md` 第八节。
+- 仅文档、测试或 Agent 规则变化不需要重建运行容器。
+- HTML、CSS、前后端运行时代码变化在安全拉取后执行 `docker compose up -d --build`，再检查
+  `docker compose ps`、`/api/health`、受影响页面及邻居服务前后差异。
+- 数据库变化属于 C 类：必须先备份，再人工执行 `scripts/migrations/` 中对应的增量 SQL；重建镜像不会迁移已有数据库。
+- `.env`、端口、域名、Docker/Caddy 或 Collector 环境变化属于 D 类，执行前需要人工审核。
+
+详见 `docs/架构设计.md` 第八节和项目发布 Skill。
 
 ---
 
@@ -97,11 +84,13 @@ docker compose up -d --build
 │     ├─ db/            数据库驱动层（pg / psql 两种）
 │     ├─ routes/        各业务路由
 │     └─ schema.sql     建表 SQL
-├─ web/                 前端（无构建，直接被静态托管）
+├─ web/                 原生前端源码；生产时打包后静态托管
 │  ├─ index.html
-│  ├─ styles.css        ← 与演示原型完全一致，改动需跑 UI 比对
+│  ├─ styles.css        基础结构与 tokens；motion/account/soft.css 按顺序补充或覆盖
 │  └─ src/views/        各视图模块
-├─ scripts/             开发脚本、备份脚本、UI 比对脚本
+├─ scripts/             开发、构建、备份、UI QA 与 Agent 评测脚本
+├─ .agents/skills/      项目级开发工作流与原生前端模板
+├─ .github/workflows/   不读取生产秘密的自动质量检查
 └─ 进度记录.md          ← 每完成一个任务就往这里追加
 ```
 
@@ -158,10 +147,13 @@ AI_CONFIG_SECRET=           # 可选；页面配置的独立加密密钥
 
 ## 重要约定
 
-1. **`web/styles.css` 是 UI 的唯一真源**，来自客户已确认的演示原型。改它之前先想清楚。
+1. UI 的样式真源是一条明确的级联：`web/styles.css` 提供基础结构与 tokens，随后由
+   `web/motion.css`、`web/account.css` 和当前线上主题 `web/soft.css` 依次补充或覆盖。
+   修改基础值前必须检查后加载文件中的最终值。
 2. 每完成一个任务，往 `进度记录.md` 追加一段，写清楚：做了什么、动了哪些文件、怎么验证、下一步是什么。
    这样即使会话中断，接手的人（或下一次的我）能立刻续上。
-3. 数据库表结构变更走 `server/src/schema.sql`，不手改线上库。
+3. `server/src/schema.sql` 表示全新安装的最终结构；已有数据库的每次变更还必须提供
+   `scripts/migrations/` 下的增量 SQL、验证查询和回滚或前滚说明，绝不手改线上库或用 `db:reset` 代替迁移。
 
 ---
 
@@ -249,13 +241,19 @@ node scripts/cron.mjs
 - `ideahub-ui-qa`：生产 bundle、桌面/手机、关键路径、console 与截图验收。
 - `ideahub-backend`、`ideahub-database`、`ideahub-collector`、`ideahub-release`：分别约束 API、迁移、采集和发布。
 
-确定性契约对照可以随时重跑：
+质量系统把“结构检查”和“行为评测”明确分开：
 
 ```bash
-npm run benchmark:skills
+npm run lint:skills     # 离线检查目录、frontmatter、引用、路由和安全契约
+npm run eval:skills -- --validate-only  # 验证真实评测计划，不调用模型
+npm run eval:skills:codex -- --case frontend-new-page --runs 1  # 最小真实 A/B
 ```
 
-结果写入 `docs/agent-skills-benchmark.md` 与 JSON 明细。这个对照证明任务规则是否在激活 skill 后进入上下文，不冒充模型能力跑分；真实行为测试提示位于各 skill 的 `evals/evals.json`。
+`lint:skills` 只证明 Skill 包结构和确定性契约有效，不把关键词命中冒充模型质量。
+真实行为与触发评测使用 `.agents/evals/agent-evaluation-suite.json`，为每次调用保存来源、回答、
+耗时和路由结果；完整评测包含执行代理、独立盲评和触发路由等多类调用，准确数量以
+`npm run eval:skills -- --dry-run` 输出为准，应先使用 `--case` 控制范围。
+各 Skill 的 `evals/evals.json` 继续作为该 Skill 自身的可读验收案例。
 
 ## UI 验收
 
@@ -265,14 +263,37 @@ npm run benchmark:skills
 npm run test:ui
 ```
 
-验收脚本会在内存中构建生产 ESM bundle，并在随机本地端口使用内置 mock 数据检查：
+验收脚本会复用生产 bundle 的同一构建函数，并在随机本地端口使用内置 mock 数据检查：
 
-- 今日工作台、项目功能树、灵感池、正式库、统计、样本库、学习中心与内容采集。
+- 自动发现并遍历当前分支全部 `[data-go]` 导航能力，不把尚未合并的功能写死在通用测试里。
 - 1440×900 桌面和 390×844 手机视口。
-- 页面级横向溢出、移动导航、提交弹窗和 reduced motion。
-- 未处理脚本异常与 `console error`。
+- 页面级横向溢出、移动导航、ARIA 当前态、键盘操作、核心弹窗焦点、触控尺寸和 reduced motion。
+- 未处理脚本异常、`console error`、失败请求、意外 HTTP 错误和外部网络访问。
 
 截图和机器可读报告写入被忽略的 `scripts/.uidiff/`。`report.json` 记录 bundle 大小、每项测量、截图清单和浏览器错误；视觉改动仍需实际查看相关截图，通用 smoke test 也不能替代样本库、附件、Collector 或 API 的专项测试。
+
+这条命令验证 JavaScript bundle 和浏览器行为，不替代完整的 `scripts/build-web.mjs`。后者还负责
+切换生产 HTML、生成 sourcemap，以及同步 PDF.js 和公开对接资源。
+
+## 持续集成与演示录制
+
+GitHub Actions 只对可信成员推送和人工触发运行，不接受 `pull_request` 触发。原因是这个私有备份仓库
+的历史包含生产配置，不能让 PR 控制的代码接触 Git 对象库。工作流只检出源码、测试和文档路径，
+随后在执行任何仓库脚本前删除临时 runner 的 `.git`，并且不传入生产 secrets。
+
+质量任务执行 `npm ci`、Skill lint、评测工具自测、真实评测计划验证、JavaScript 语法检查和
+`npm run test:ui`；UI 检查失败时上传 `scripts/.uidiff/` 作为短期诊断证据。只改 `backup/`
+或 `data/` 的自动备份提交不会重复触发浏览器检查。若以后把生产秘密和备份彻底迁出代码仓库，
+再考虑恢复 PR 触发与 GitHub required-check 分支保护。
+
+需要录制完整业务演示时，先启动后端并确认本机已有 ffmpeg，再运行：
+
+```bash
+npm run demo
+```
+
+录制脚本复用项目已安装的 Puppeteer，原始 WebM 放在 `scripts/.uidiff/video/`，成功转码后在
+项目根目录生成 `IdeaHub演示.mp4`。演示会写入业务数据，只应在明确准备的演示环境运行。
 
 ---
 

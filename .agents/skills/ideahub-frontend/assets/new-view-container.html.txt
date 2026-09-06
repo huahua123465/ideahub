@@ -1,0 +1,5 @@
+<!-- 导航按钮放入有真实业务含义的现有 nav-group。 -->
+<button id="tab-__PLACEHOLDER__" data-go="__PLACEHOLDER__">__PLACEHOLDER_NAV_LABEL__</button>
+
+<!-- 视图容器放入 main 内，与相邻一级视图保持相同层级。 -->
+<section class="view __PLACEHOLDER__-page" id="v-__PLACEHOLDER__"></section>

@@ -148,6 +148,7 @@ function paint(d, { partial }) {
   if (partial) {
     $('#dCmtInput').value = '';
     $('#cmtAnon').classList.remove('on');
+    $('#cmtAnon').setAttribute('aria-checked', 'false');
     $('#dBody').scrollTop = 0;
   }
 }

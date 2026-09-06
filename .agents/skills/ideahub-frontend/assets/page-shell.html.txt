@@ -1,0 +1,18 @@
+<section class="__PLACEHOLDER__-page" aria-labelledby="__PLACEHOLDER__Title">
+  <header class="page-head">
+    <div>
+      <div class="page-kicker">__PLACEHOLDER_KICKER__</div>
+      <h1 id="__PLACEHOLDER__Title">__PLACEHOLDER_TITLE__</h1>
+      <p class="sub">__PLACEHOLDER_PAGE_JOB__</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-__PLACEHOLDER__-create>__PLACEHOLDER_ACTION__</button>
+  </header>
+
+  <form class="__PLACEHOLDER__-filters" aria-label="__PLACEHOLDER_FILTER_LABEL__">
+    <!-- 每个 input/select 都要有关联 label；次要操作不要挤掉核心筛选。 -->
+    __PLACEHOLDER_FILTER_CONTROLS__
+  </form>
+
+  <div class="__PLACEHOLDER__-state" role="status" aria-live="polite"></div>
+  <div class="__PLACEHOLDER__-content"></div>
+</section>

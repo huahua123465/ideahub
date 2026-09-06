@@ -310,6 +310,7 @@ async function openClient(id) {
 }
 
 function bind() {
+  initModalAccessibility();
   account.bindMenu();
   importer.bind();
 
@@ -482,7 +483,7 @@ function bind() {
   $('#btnNew').addEventListener('click', createForCurrentView);
   $('#btnSubmit').addEventListener('click', modal.submit);
   $('#fTitle').addEventListener('input', modal.onTitleInput);
-  $('#anon').addEventListener('click', e => e.currentTarget.classList.toggle('on'));
+  bindAccessibleCheck($('#anon'));
   $('#dupe').addEventListener('click', e => {
     const a = e.target.closest('[data-open]');
     if (a) { modal.close(); drawer.openDrawer(Number(a.dataset.open)); }
@@ -494,7 +495,7 @@ function bind() {
   // 抽屉
   $('#dVote').addEventListener('click', drawer.voteHere);
   $('#btnComment').addEventListener('click', drawer.postComment);
-  $('#cmtAnon').addEventListener('click', e => e.currentTarget.classList.toggle('on'));
+  bindAccessibleCheck($('#cmtAnon'));
   $('#dStages').addEventListener('click', drawer.onStageClick);
   $('#btnBdSave').addEventListener('click', board.saveEdit);
   $('#btnBdExpand').addEventListener('click', board.toggleEditSize);
@@ -520,6 +521,7 @@ function bind() {
   $('#mask').addEventListener('click', closeAll);
   document.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeAll(); });
   document.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && trapModalFocus(e)) return;
     if (e.key === 'Escape') closeAll();
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
@@ -565,6 +567,83 @@ function bind() {
     ]);
     toast('ok', `已采纳 · 编号 ${e.detail.code} · 负责人 ${e.detail.owner}`);
   });
+}
+
+function bindAccessibleCheck(node) {
+  const toggle = () => {
+    const checked = node.classList.toggle('on');
+    node.setAttribute('aria-checked', String(checked));
+  };
+  node.addEventListener('click', toggle);
+  node.addEventListener('keydown', event => {
+    if (event.key !== ' ' && event.key !== 'Enter') return;
+    event.preventDefault();
+    toggle();
+  });
+}
+
+function initModalAccessibility() {
+  let lastOutsideFocus = document.activeElement;
+  const returnFocus = new WeakMap();
+  document.addEventListener('focusin', event => {
+    if (!event.target.closest('.modal,.confirm-layer')) lastOutsideFocus = event.target;
+  });
+
+  for (const modalElement of document.querySelectorAll('.modal')) {
+    let wasOpen = modalElement.classList.contains('on');
+    new MutationObserver(() => {
+      const open = modalElement.classList.contains('on');
+      if (open === wasOpen) return;
+      wasOpen = open;
+      if (open) {
+        returnFocus.set(modalElement, lastOutsideFocus);
+        requestAnimationFrame(() => {
+          if (!modalElement.classList.contains('on') || modalElement.contains(document.activeElement)) return;
+          modalFocusable(modalElement)[0]?.focus();
+        });
+        return;
+      }
+      const target = returnFocus.get(modalElement);
+      returnFocus.delete(modalElement);
+      queueMicrotask(() => {
+        if (document.querySelector('.modal.on,.confirm-layer.on')) return;
+        if (target?.isConnected && target.getClientRects().length) target.focus();
+        else document.querySelector('#appNav [aria-current="page"],#btnNew')?.focus();
+      });
+    }).observe(modalElement, { attributes: true, attributeFilter: ['class'] });
+  }
+}
+
+function modalFocusable(dialog) {
+  return [...dialog.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+  )].filter(node => !node.hidden && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+}
+
+function trapModalFocus(event) {
+  if (document.querySelector('.confirm-layer.on')) return false;
+  const dialogs = [...document.querySelectorAll('.modal.on')];
+  const dialog = dialogs.at(-1);
+  if (!dialog) return false;
+  const focusable = modalFocusable(dialog);
+  if (!focusable.length) {
+    event.preventDefault();
+    dialog.focus();
+    return true;
+  }
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!dialog.contains(document.activeElement)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+  return true;
 }
 
 function closeAll() {

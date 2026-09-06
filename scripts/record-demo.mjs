@@ -5,28 +5,57 @@
  * 给非技术同事看的时候比截图有用得多 —— 一遍走完提交、投票、讨论、采纳、进正式库。
  */
 import '../server/src/lib/env.mjs';
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { join } from 'node:path';
 
 const APP = process.env.UI_BASE || `http://127.0.0.1:${process.env.PORT || 3000}`;
 const W = 1440, H = 900;
 const OUT = 'scripts/.uidiff/video';
+const RAW = join(OUT, 'IdeaHub-demo.webm');
+const MP4_TMP = join(OUT, 'IdeaHub-demo.mp4');
+const MP4 = 'IdeaHub演示.mp4';
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`IdeaHub demo recorder
+
+Usage:
+  node scripts/record-demo.mjs
+
+Requirements:
+  - The IdeaHub backend is already running (or UI_BASE points to a prepared demo environment)
+  - ffmpeg is available on PATH
+  - The target environment may be modified by the recorded workflow
+
+Outputs:
+  - scripts/.uidiff/video/IdeaHub-demo.webm
+  - IdeaHub演示.mp4`);
+  process.exit(0);
+}
+
+const ffmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+if (ffmpeg.status !== 0) {
+  throw new Error('录制演示需要 ffmpeg，请先安装并确认 ffmpeg 已加入 PATH。');
+}
 
 fs.rmSync(OUT, { recursive: true, force: true });
+fs.mkdirSync(OUT, { recursive: true });
 
-const browser = await chromium.launch({ args: ['--force-device-scale-factor=1'] });
-const ctx = await browser.newContext({
-  viewport: { width: W, height: H },
-  recordVideo: { dir: OUT, size: { width: W, height: H } },
+const browser = await puppeteer.launch({
+  headless: true,
+  args: ['--force-device-scale-factor=1'],
 });
+const ctx = await browser.createBrowserContext();
 const page = await ctx.newPage();
+await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
 // 录屏里看不到真实鼠标，画一个假的
-await page.addInitScript(() => {
+await page.evaluateOnNewDocument(() => {
   addEventListener('DOMContentLoaded', () => {
     const s = document.createElement('style');
     s.textContent = `#__cur{position:fixed;width:22px;height:22px;left:-40px;top:-40px;z-index:9999;
@@ -53,33 +82,43 @@ await page.addInitScript(() => {
   });
 });
 
-await page.goto(APP);
-await page.waitForSelector('.card');
-await page.waitForTimeout(600);
+let recorder;
+try {
+  await page.goto(APP, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.waitForSelector('.card', { visible: true, timeout: 20_000 });
+  await wait(600);
+  recorder = await page.screencast({ path: RAW, fps: 30, overwrite: true });
 
-let mx = W / 2, my = H / 2;
-await page.mouse.move(mx, my);
+  let mx = W / 2, my = H / 2;
+  await page.mouse.move(mx, my);
 
-async function moveTo(sel, dx = 0, dy = 0) {
-  const box = await page.locator(sel).first().boundingBox();
-  const tx = box.x + box.width / 2 + dx, ty = box.y + box.height / 2 + dy;
-  await page.mouse.move(tx, ty, { steps: Math.max(14, Math.round(Math.hypot(tx - mx, ty - my) / 22)) });
-  mx = tx; my = ty;
-  await page.waitForTimeout(220);
-}
-async function click(sel, dx = 0, dy = 0) {
-  await moveTo(sel, dx, dy);
-  await page.mouse.down(); await page.waitForTimeout(90); await page.mouse.up();
-}
-async function type(sel, text, ms = 46) {
-  await click(sel);
-  for (const ch of text) { await page.keyboard.type(ch); await page.waitForTimeout(ms); }
-}
-const wait = ms => page.waitForTimeout(ms);
+  async function moveTo(sel, dx = 0, dy = 0, index = 0) {
+    const elements = await page.$$(sel);
+    const element = elements[index];
+    if (!element) {
+      await Promise.all(elements.map(handle => handle.dispose()));
+      throw new Error(`找不到演示元素：${sel}（索引 ${index}）`);
+    }
+    const box = await element.boundingBox();
+    await Promise.all(elements.map(handle => handle.dispose()));
+    if (!box) throw new Error(`演示元素当前不可见：${sel}（索引 ${index}）`);
+    const tx = box.x + box.width / 2 + dx, ty = box.y + box.height / 2 + dy;
+    await page.mouse.move(tx, ty, { steps: Math.max(14, Math.round(Math.hypot(tx - mx, ty - my) / 22)) });
+    mx = tx; my = ty;
+    await wait(220);
+  }
+  async function click(sel, dx = 0, dy = 0, index = 0) {
+    await moveTo(sel, dx, dy, index);
+    await page.mouse.down(); await wait(90); await page.mouse.up();
+  }
+  async function type(sel, text, ms = 46) {
+    await click(sel);
+    for (const ch of text) { await page.keyboard.type(ch); await wait(ms); }
+  }
 
 /* 1. 灵感池全景 */
 await wait(1700);
-await moveTo('.card >> nth=3');
+await moveTo('.card', 0, 0, 3);
 await wait(900);
 
 /* 2. 按分类筛选，再点一次取消 */
@@ -113,11 +152,11 @@ await click('#btnSubmit');
 await wait(2600);
 
 /* 6. 卡片上直接投票 */
-await click('.card >> nth=2 >> .vote');
+await click('.card .vote', 0, 0, 2);
 await wait(1400);
 
 /* 7. 打开详情，看讨论，发一条 */
-await click('.card >> nth=1', 0, -30);
+await click('.card', 0, -30, 1);
 await wait(2100);
 await page.mouse.wheel(0, 260);
 await wait(1500);
@@ -137,7 +176,7 @@ await click('#btnRejectConfirm');
 await wait(2600);
 
 /* 9. 采纳另一条：指定负责人 */
-await click('.card >> nth=1', 0, -30);
+await click('.card', 0, -30, 1);
 await wait(1800);
 await click('#btnAdopt');
 await wait(1200);
@@ -158,16 +197,20 @@ await wait(1600);
 
 await wait(1000);
 console.log('页面报错：', errors.length ? errors : '无');
-await ctx.close();
-await browser.close();
+} finally {
+  if (recorder) await recorder.stop().catch(() => {});
+  await ctx.close().catch(() => {});
+  await browser.close().catch(() => {});
+}
 
-const raw = OUT + '/' + fs.readdirSync(OUT).find(f => f.endsWith('.webm'));
-const mp4 = 'IdeaHub演示.mp4';
-const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', raw,
+const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', RAW,
   '-vf', `scale=${W}:${H}:flags=lanczos,fps=30,format=yuv420p`,
-  '-c:v', 'libx264', '-preset', 'slow', '-crf', '22', '-movflags', '+faststart', mp4]);
+  '-c:v', 'libx264', '-preset', 'slow', '-crf', '22', '-movflags', '+faststart', MP4_TMP]);
 if (r.status !== 0) {
-  console.log('ffmpeg 没找到或转码失败，原始录像在：' + raw);
+  fs.rmSync(MP4_TMP, { force: true });
+  console.log('MP4 转码失败，原始 WebM 录像在：' + RAW);
 } else {
-  console.log('已生成 ' + mp4 + '（' + (fs.statSync(mp4).size / 1e6).toFixed(1) + ' MB）');
+  fs.rmSync(MP4, { force: true });
+  fs.renameSync(MP4_TMP, MP4);
+  console.log('已生成 ' + MP4 + '（' + (fs.statSync(MP4).size / 1e6).toFixed(1) + ' MB）');
 }

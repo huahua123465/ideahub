@@ -16,8 +16,10 @@ export const state = { mode: 'live' };   // live | mock
 
 /** 启动时探一次后端。探不到就整场用 mock。 */
 export async function probe() {
+  // 自动化验收使用随机本地端口，不能依赖固定的 5173。显式 mock 只允许回环
+  // 地址，避免生产域名被查询参数切换到演示数据。
   const requestedMock = new URLSearchParams(location.search).get('mock') === '1';
-  const localMockAllowed = ['127.0.0.1','localhost','::1'].includes(location.hostname);
+  const localMockAllowed = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
   if (requestedMock && localMockAllowed) {
     state.mode = 'mock';
     return state.mode;
