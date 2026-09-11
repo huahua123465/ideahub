@@ -202,6 +202,23 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.modal.on'));
 
+    // 还没配置过部门时，预填公司现有的三个部门，负责人留空等管理员选
+    if (!mobile) {
+      await page.click('#v-expenses .exp-config-btn');
+      await page.waitForSelector('#expConfigModal.on .exp-cfg-row', { visible: true });
+      for (let i = 0; i < 3; i++) await page.click('#expCfgDepts .exp-cfg-row [data-cfg-del]');
+      await page.click('#btnExpCfgSave');
+      await waitToast(page, /已保存/);
+      await page.waitForFunction(() => !document.querySelector('#expConfigModal.on'));
+      await page.click('#v-expenses .exp-config-btn');
+      await page.waitForFunction(() => document.querySelectorAll('#expCfgDepts .exp-cfg-row').length === 3);
+      const preset = await page.$$eval('#expCfgDepts .exp-cfg-row', rows => rows.map(r => [
+        r.querySelector('[data-cfg-dept]').value, r.querySelector('[data-cfg-leader]').value]));
+      assert.deepEqual(preset, [['运营部', ''], ['财务部', ''], ['行政部', '']]);
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('.modal.on'));
+    }
+
     harness.recordCheck(`${scene}-expenses-flow`, 'interaction', { approved: true, submitted: true, config: cfg });
     await page.close();
   }

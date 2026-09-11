@@ -665,6 +665,9 @@ function bindEditor() {
 /* ================= 审批设置（管理员） ================= */
 
 let people = [];
+/** 公司现有的部门。还没配置过时预填这几行，管理员只需要给每个部门选负责人；
+    以后有新部门用「添加部门」补。 */
+const DEFAULT_DEPTS = ['运营部', '财务部', '行政部'];
 
 function cfgRowHtml(d = { dept: '', leader: null }) {
   return `<div class="exp-cfg-row">
@@ -698,7 +701,8 @@ export async function openConfig() {
     const [cfg, users] = await Promise.all([api.expenseConfig(), api.people()]);
     state.config = cfg;
     people = users.items || [];
-    $('#expCfgDepts').innerHTML = (cfg.depts.length ? cfg.depts : [{ dept: '', leader: null }]).map(cfgRowHtml).join('');
+    $('#expCfgDepts').innerHTML = (cfg.depts.length ? cfg.depts : DEFAULT_DEPTS.map(dept => ({ dept, leader: null })))
+      .map(cfgRowHtml).join('');
     $('#expCfgGm').innerHTML = personOptions(cfg.roles.gm?.id, '选择总经理');
     $('#expCfgFinance').innerHTML = personOptions(cfg.roles.finance?.id, '选择财务');
     $('#expCfgCashier').innerHTML = personOptions(cfg.roles.cashier?.id, '选择出纳');
