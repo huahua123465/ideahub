@@ -329,6 +329,10 @@ async function exerciseIdeaModal(page, items, scene) {
   await page.waitForFunction(() => (
     document.querySelector('#modal')?.classList.contains('on') && document.activeElement?.id === 'fTitle'
   ), { timeout: 3_000 });
+  // 通用弹窗逻辑会立刻把焦点放进标题框，上面的条件马上成立；但 modal.js 的 open() 还有一个
+  // 240ms 后再聚焦标题框的定时器。不等它跑完，它偶尔会在下面按 Shift+Tab 之后把焦点抢回来。
+  await new Promise(resolve => setTimeout(resolve, 320));
+  await settleDom(page);
   const state = await page.$eval('#modal', dialog => {
     const labelledBy = dialog.getAttribute('aria-labelledby');
     const box = dialog.getBoundingClientRect();
