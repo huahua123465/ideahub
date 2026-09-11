@@ -109,13 +109,15 @@ export function mount(router) {
     const scope = q(url, 'scope', 'mine');
 
     const where = [];
-    const args = [me.id];
+    let args = [me.id];
     // 我自己写的：私密的也在里面，这一栏本来就是给自己回看的
     if (scope === 'mine') where.push('r.author_id = $1');
     // 别人交给我审的：他选了我当审核人，等于授权我看
     else if (scope === 'review') where.push('r.reviewer_id = $1');
-    // 公开墙：只认 visibility，跟是谁写的无关
-    else if (scope === 'team') where.push(`r.visibility = 'public'`);
+    // 公开墙：只认 visibility，跟是谁写的无关。
+    // SQL 里没有 $1，参数就必须清空 —— pg 按占位符数量校验，多传一个也会报
+    // 08P01（bind message supplies 1 parameters），这一栏就整个 500。
+    else if (scope === 'team') { where.push(`r.visibility = 'public'`); args = []; }
     // all：我看得到的一切 = 公开的 + 我写的 + 交给我审的
     else where.push(`(r.visibility = 'public' OR r.author_id = $1 OR r.reviewer_id = $1)`);
 

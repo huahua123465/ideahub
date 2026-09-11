@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dW1n00VUnwYtpsSdCfxOmDXZ8Ae2eeM1WwkLp7JjbbVfvZ8JfyrxBHj5cHN9Gms
+\restrict O3B8dePwrol3zoLcO0B0OG11O6EvQbPe6Ti31Fe5UnTznlZDgCDn5IUJglmCwed
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -5114,7 +5114,9 @@ CREATE TABLE public.users (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     username text,
     password_hash text,
-    last_login_at timestamp with time zone
+    last_login_at timestamp with time zone,
+    report_visibility_default text DEFAULT 'private'::text NOT NULL,
+    CONSTRAINT users_report_visibility_ck CHECK ((report_visibility_default = ANY (ARRAY['private'::text, 'public'::text])))
 );
 
 
@@ -5171,7 +5173,9 @@ CREATE TABLE public.work_reports (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     result_url text,
     blockers text,
-    need_help text
+    need_help text,
+    visibility text DEFAULT 'private'::text NOT NULL,
+    CONSTRAINT work_reports_visibility_ck CHECK ((visibility = ANY (ARRAY['private'::text, 'public'::text])))
 );
 
 
@@ -5977,10 +5981,6 @@ COPY public.attachments (id, scope, ref_id, side, orig_name, stored_name, mime, 
 55	report	19	submit	03_明天找你.png	00a9b6787ca71ea366a567afef7877c4.png	image/png	963239	\N	7	2026-08-25 08:27:39.291926+00	\N
 56	report	19	submit	04_整理衣领眼神.png	2edb9513d1f4b078348114f3dc1ec5b8.png	image/png	1152525	\N	7	2026-08-25 08:27:46.148907+00	\N
 57	report	19	submit	05_节奏总结.png	dd516bf18e3d1077adf375b0505c1a33.png	image/png	1059979	\N	7	2026-08-25 08:28:16.51547+00	\N
-58	report	20	submit	海绵宝宝工位壁纸_6_紫皮茄_来自小红书网页版.jpg	7f635556ae82336fa9fced534103d8b9.jpg	image/jpeg	557660	\N	1	2026-08-25 08:51:09.36666+00	\N
-59	report	20	submit	海绵宝宝工位壁纸_5_紫皮茄_来自小红书网页版.jpg	92a73a9c5567dc4e64db0eaad8305519.jpg	image/jpeg	639704	\N	1	2026-08-25 08:51:09.795388+00	\N
-60	report	20	submit	海绵宝宝工位壁纸_4_紫皮茄_来自小红书网页版.jpg	d7b89f51a6835b68f0c7a5a5dabceb6f.jpg	image/jpeg	570281	\N	1	2026-08-25 08:51:10.186114+00	\N
-61	report	20	submit	海绵宝宝工位壁纸_3_紫皮茄_来自小红书网页版.jpg	52f3fd0f69aac46c31393541f377b2fe.jpg	image/jpeg	486472	\N	1	2026-08-25 08:51:10.427019+00	\N
 63	report	22	submit	微信图片_20260825172425_140_20.png	c5a0694061b23a50df728f3478bbb559.png	image/png	859046	\N	10	2026-08-25 09:27:42.535778+00	\N
 64	report	22	submit	微信图片_20260825172425_139_20.png	1dd1a29accf08db80e7f826de59a0210.png	image/png	826602	\N	10	2026-08-25 09:27:42.78213+00	\N
 65	report	22	submit	微信图片_20260825172345_138_20.png	e93faddbd568bb5f6fdaa4f3b0d4c846.png	image/png	859072	\N	10	2026-08-25 09:27:43.04405+00	\N
@@ -5990,9 +5990,6 @@ COPY public.attachments (id, scope, ref_id, side, orig_name, stored_name, mime, 
 69	report	24	submit	03_明天找你.png	7c4d56a322979bd8b4f3afb6bf3d9946.png	image/png	811343	\N	7	2026-08-25 10:01:46.581652+00	\N
 70	report	24	submit	04_整理衣领眼神.png	521f321c8149489ac8ef446981a5f922.png	image/png	819917	\N	7	2026-08-25 10:01:47.402623+00	\N
 71	chat	120	submit	个人语言形成与人生经历反推系统_AI算法规范_V1.0.md	9ba0c63d06df53f029455c9a770ae35b.md	text/plain; charset=utf-8	59449	\N	4	2026-08-26 03:00:09.256741+00	\N
-72	report	26	submit	已生成图像 1 (2).png	2cad8883879107799709cd966e8cbde2.png	image/png	3302452	\N	1	2026-08-26 15:02:02.91601+00	\N
-73	report	26	submit	1be2de78-faf2-4033-87b0-6167fd474317.png	5a27ee2346e4b88e7279794f761fad53.png	image/png	2610809	\N	1	2026-08-26 15:02:03.640922+00	\N
-74	report	26	submit	b097f4de-ea5d-4ef7-bcb7-358bbe6ebe73.png	ddf8f4ed45c4ab71eaf752c692344828.png	image/png	4423993	\N	1	2026-08-26 15:02:04.923151+00	\N
 75	idea	31	submit	AI-Skills团队简明总表.xlsx	a3f6b106afa5fd84af0d19a3abd0e8c2.xlsx	application/vnd.openxmlformats-officedocument.spreadsheetml.sheet	21506	\N	3	2026-08-31 08:44:12.780027+00	\N
 76	chat	126	submit	账号搭建基础框架docx.docx	225d02e17e49130c5f5af70ca53e866c.docx	application/vnd.openxmlformats-officedocument.wordprocessingml.document	22295	\N	1	2026-09-02 06:36:43.57996+00	\N
 77	chat	127	submit	文案优化提示词.docx	d717fa05c7a97fdef62416f2e28878b1.docx	application/vnd.openxmlformats-officedocument.wordprocessingml.document	25116	\N	1	2026-09-02 08:16:07.607056+00	\N
@@ -6606,11 +6603,11 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 --
 
 COPY public.ideas (id, code, title, content, category, tags, status, author_id, is_anonymous, vote_count, comment_count, view_count, hot_score, owner_id, adopted_at, adopted_by, progress, doc_url, created_at, updated_at, source_type, source_url, source_ref, deleted_at, promoted_at) FROM stdin;
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.012230421	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.01132257	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.029031474	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.2919744	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.13185939	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.0271712	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.2735824	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.12355336	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	164	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
@@ -6619,10 +6616,10 @@ COPY public.ideas (id, code, title, content, category, tags, status, author_id, 
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	18	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
 10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.012230739	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.024752863	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.029036261	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.07401262	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.01132285	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.021919347	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.027175484	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.06848931	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
 8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	10	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
 \.
@@ -8712,19 +8709,19 @@ COPY public.tags (id, kind, name, sort, active, created_at) FROM stdin;
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.users (id, name, dept, role, avatar_hue, created_at, username, password_hash, last_login_at) FROM stdin;
-4	朱涛	\N	reviewer	\N	2026-08-21 02:53:08.628673+00	ZT123	scrypt$16384$8$1$729731c5d25da09a91af09928a28247e$490d0f6c15ada13e58714dd30bd6ba412ac6c224669c33ae80f72f7e1f1b558e	2026-08-25 07:24:42.140389+00
-11	李敏	\N	reviewer	\N	2026-08-21 07:50:55.686453+00	李敏	scrypt$16384$8$1$1a350d58d171ea3d76993b4d1e275955$3de4db9da0985e94c5e85970f5c036b5810d819e8b73c7d5a9723225d8905cce	2026-08-24 02:21:10.667228+00
-9	杨俊杰	运营	reviewer	\N	2026-08-21 07:21:38.171351+00	杨俊杰	scrypt$16384$8$1$742d62188e40a936f6cda838ef4d31c6$ef71a9d1f96f8b5e688fbcabc839b417c57683d9f5e7ef7348d79db52297cef7	2026-08-24 02:30:51.146294+00
-3	李鑫	\N	reviewer	\N	2026-08-21 01:09:55.486818+00	lixin	scrypt$16384$8$1$c70b42bdb7afb7f63c05e30a5fa1d102$623f0903627b08318dcbfd32893d49c4580700e518f81a31924f5a449a024941	2026-08-25 08:05:07.154927+00
-13	技术1-测试（系统）	外部系统	member	\N	2026-08-24 02:46:14.568649+00	\N	\N	\N
-7	李年	\N	reviewer	\N	2026-08-21 04:53:28.87073+00	李年	scrypt$16384$8$1$9f8324b02c8ac334c48622997806efc9$22fd1f1f1e46cde4dd6f2578ca0d6844a6593ec203c2db5f457b2c2cbad639fc	2026-08-24 07:51:43.68546+00
-12	测试	\N	reviewer	\N	2026-08-22 01:58:20.620055+00	测试	scrypt$16384$8$1$cd9981c8fb86140dd475fced8b2f2e6f$591db77d097dd0da6a0adf03f20667649294527b3ecd844314d1ae57e9e4e789	\N
-8	刘大增	\N	reviewer	\N	2026-08-21 06:02:11.821697+00	刘大增	scrypt$16384$8$1$cd958f1c038dbd9a1297e9cf97e107a5$4a13803a1a1827108e2995d4651dc77be5f18e8410a14dcf1ce736f682d1ae55	2026-08-25 08:42:01.629454+00
-10	杨池	\N	admin	\N	2026-08-21 07:22:15.994905+00	杨池	scrypt$16384$8$1$ac914aad522fa20dc071cdc501f90146$7e9a997c2b2daf056de0775af3fde591d18027379dd05ed72bb1d9b807acc7aa	2026-08-26 03:26:51.201646+00
-28	李总	\N	member	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-01 08:51:13.977175+00
-1	华俊杰	技术部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-09-03 08:35:17.376568+00
-29	花花	\N	member	\N	2026-09-03 08:35:49.21917+00	花花	scrypt$16384$8$1$87721f59891bd9d9f584a1e1aa1b93bb$7393411cd5550787bf4d0c852eedacc76ce83cb5b33dabd4ae150bf63f767a66	\N
+COPY public.users (id, name, dept, role, avatar_hue, created_at, username, password_hash, last_login_at, report_visibility_default) FROM stdin;
+4	朱涛	\N	reviewer	\N	2026-08-21 02:53:08.628673+00	ZT123	scrypt$16384$8$1$729731c5d25da09a91af09928a28247e$490d0f6c15ada13e58714dd30bd6ba412ac6c224669c33ae80f72f7e1f1b558e	2026-08-25 07:24:42.140389+00	private
+11	李敏	\N	reviewer	\N	2026-08-21 07:50:55.686453+00	李敏	scrypt$16384$8$1$1a350d58d171ea3d76993b4d1e275955$3de4db9da0985e94c5e85970f5c036b5810d819e8b73c7d5a9723225d8905cce	2026-08-24 02:21:10.667228+00	private
+9	杨俊杰	运营	reviewer	\N	2026-08-21 07:21:38.171351+00	杨俊杰	scrypt$16384$8$1$742d62188e40a936f6cda838ef4d31c6$ef71a9d1f96f8b5e688fbcabc839b417c57683d9f5e7ef7348d79db52297cef7	2026-08-24 02:30:51.146294+00	private
+3	李鑫	\N	reviewer	\N	2026-08-21 01:09:55.486818+00	lixin	scrypt$16384$8$1$c70b42bdb7afb7f63c05e30a5fa1d102$623f0903627b08318dcbfd32893d49c4580700e518f81a31924f5a449a024941	2026-08-25 08:05:07.154927+00	private
+13	技术1-测试（系统）	外部系统	member	\N	2026-08-24 02:46:14.568649+00	\N	\N	\N	private
+7	李年	\N	reviewer	\N	2026-08-21 04:53:28.87073+00	李年	scrypt$16384$8$1$9f8324b02c8ac334c48622997806efc9$22fd1f1f1e46cde4dd6f2578ca0d6844a6593ec203c2db5f457b2c2cbad639fc	2026-08-24 07:51:43.68546+00	private
+12	测试	\N	reviewer	\N	2026-08-22 01:58:20.620055+00	测试	scrypt$16384$8$1$cd9981c8fb86140dd475fced8b2f2e6f$591db77d097dd0da6a0adf03f20667649294527b3ecd844314d1ae57e9e4e789	\N	private
+8	刘大增	\N	reviewer	\N	2026-08-21 06:02:11.821697+00	刘大增	scrypt$16384$8$1$cd958f1c038dbd9a1297e9cf97e107a5$4a13803a1a1827108e2995d4651dc77be5f18e8410a14dcf1ce736f682d1ae55	2026-08-25 08:42:01.629454+00	private
+10	杨池	\N	admin	\N	2026-08-21 07:22:15.994905+00	杨池	scrypt$16384$8$1$ac914aad522fa20dc071cdc501f90146$7e9a997c2b2daf056de0775af3fde591d18027379dd05ed72bb1d9b807acc7aa	2026-08-26 03:26:51.201646+00	private
+28	李总	\N	member	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-01 08:51:13.977175+00	private
+1	华俊杰	技术部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-09-03 08:35:17.376568+00	private
+29	花花	\N	member	\N	2026-09-03 08:35:49.21917+00	花花	scrypt$16384$8$1$87721f59891bd9d9f584a1e1aa1b93bb$7393411cd5550787bf4d0c852eedacc76ce83cb5b33dabd4ae150bf63f767a66	\N	private
 \.
 
 
@@ -8756,19 +8753,19 @@ COPY public.work_analyses (work_id, task_id, platform, schema_ver, payload, dige
 -- Data for Name: work_reports; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.work_reports (id, author_id, reviewer_id, report_date, title, summary, feedback, reviewed_at, reviewed_by, created_at, updated_at, result_url, blockers, need_help) FROM stdin;
-3	7	1	2026-08-21	111	不错	可以看见不错，下次好好做，给你涨薪	2026-08-21 07:40:58.275016+00	1	2026-08-21 07:40:06.704883+00	2026-08-21 07:40:58.275016+00	\N	\N	\N
-4	1	4	2026-08-21	测试	测试	111111	2026-08-21 07:53:24.169062+00	4	2026-08-21 07:52:18.4251+00	2026-08-21 07:53:24.169062+00	\N	\N	\N
-5	11	7	2026-08-21	情感赛道	\N	\N	\N	\N	2026-08-21 07:59:20.103401+00	2026-08-21 07:59:20.103401+00	\N	\N	\N
-17	7	4	2026-08-25	表格	填表	1	2026-08-25 07:34:13.495692+00	4	2026-08-25 06:32:15.951365+00	2026-08-25 07:34:13.495692+00	\N	\N	\N
-16	10	4	2026-08-24	表格	\N	多找作品高收藏 500+，小于3000粉丝量的作品	2026-08-25 07:37:28.196293+00	4	2026-08-24 09:31:14.854367+00	2026-08-25 07:37:28.196293+00	\N	\N	\N
-15	7	4	2026-08-24	表格	填完了	1	2026-08-25 07:37:36.961506+00	4	2026-08-24 07:53:08.084396+00	2026-08-25 07:37:36.961506+00	\N	\N	\N
-19	7	1	2026-08-25	情感赛道	\N	\N	\N	\N	2026-08-25 08:27:16.794467+00	2026-08-25 08:27:16.794467+00	\N	\N	\N
-20	1	7	2026-08-25	测试	测试	\N	\N	\N	2026-08-25 08:51:08.355649+00	2026-08-25 08:51:08.355649+00	\N	错误	测试
-24	7	4	2026-08-25	图文	图文	依托答辩	2026-08-26 03:03:23.30422+00	4	2026-08-25 10:01:38.47731+00	2026-08-26 03:03:23.30422+00	\N	\N	\N
-26	1	\N	2026-08-26	测试	\N	\N	\N	\N	2026-08-26 15:02:01.097756+00	2026-08-26 15:02:01.097756+00	\N	\N	\N
-23	10	4	2026-08-25	表格	\N	1	2026-08-28 06:39:12.421778+00	4	2026-08-25 09:28:31.947848+00	2026-08-28 06:39:12.421778+00	\N	\N	\N
-22	10	4	2026-08-25	作品	标题：0-3岁没有被满足的安全感，会影响90%的亲密关系\n文案：有些女性并不是没有感情，而是不习惯面对和表达自己的恐惧、委屈、孤独、羞耻与愤怒。\n她可能关心伴侣的工作、生活和安排，却很少主动谈论彼此的感受。面对情绪时，她常说：\n“没事。”\n“别想太多。”\n“我自己消化一下就好。”\n“我也不知道自己怎么了。”\n这不一定代表冷漠，更可能是她长期习惯了压低、切断或隐藏情绪。\n常见表现\n- 很难说清自己真实的感受\n- 难过时习惯独自消化，不愿求助\n- 表达需求时感到羞耻，担心给别人添麻烦\n- 能处理现实问题，却不知道如何面对情绪\n- 被关心、安慰或拥抱时，反而僵硬、尴尬或想逃\n- 讲事情很清楚，却很少谈自己的感受\n- 发生冲突后沉默、转移话题或暂时退出关系\n在亲密关系中的复现\n她可能渴望被理解，却不知道怎样直接表达需要；期待伴侣主动看懂自己，但当对方真正靠近时，又会感到不自在。\n她也可能更容易被情绪不可得的人吸引，因为冷淡是熟悉的，而持续、稳定的温柔反而让她无所适从。\n关系中的核心矛盾是：\n渴望被看见，却不知道如何让别人看见；渴望靠近，又害怕靠近后的脆弱。\n如何判断是不是情感回避？\n不要因为一次沉默、冷淡或争吵就下结论，而要观察这种模式是否：\n- 在亲密关系中长期存在\n- 面对情绪和冲突时反复出现\n- 伴随僵硬、逃避、麻木或强颜欢笑等反应\n- 已经影响需求表达、接受安慰和建立亲密连接的能力\n可以试着观察：\n- 她难过时，会不会允许伴侣听她说完？\n- 发生冲突后，她是表达感受，还是立刻关闭自己？\n- 被关心时，她感到安心，还是尴尬、警惕甚至想逃？\n- 她能否直接说出“我需要你陪我”或“这件事让我受伤”？\n情感回避不等于她不爱，也不能仅凭几个表现给一个人贴标签。\n它更可能意味着：她有感受，也渴望连接，只是还没有学会识别、表达和接住自己的情绪。\n看见这种模式，不是为了责怪谁，而是为了让关系有机会从回避走向理解。	1	2026-08-28 06:39:22.497575+00	4	2026-08-25 09:27:41.47813+00	2026-08-28 06:39:22.497575+00	\N	\N	\N
+COPY public.work_reports (id, author_id, reviewer_id, report_date, title, summary, feedback, reviewed_at, reviewed_by, created_at, updated_at, result_url, blockers, need_help, visibility) FROM stdin;
+3	7	1	2026-08-21	111	不错	可以看见不错，下次好好做，给你涨薪	2026-08-21 07:40:58.275016+00	1	2026-08-21 07:40:06.704883+00	2026-08-21 07:40:58.275016+00	\N	\N	\N	private
+4	1	4	2026-08-21	测试	测试	111111	2026-08-21 07:53:24.169062+00	4	2026-08-21 07:52:18.4251+00	2026-08-21 07:53:24.169062+00	\N	\N	\N	private
+5	11	7	2026-08-21	情感赛道	\N	\N	\N	\N	2026-08-21 07:59:20.103401+00	2026-08-21 07:59:20.103401+00	\N	\N	\N	private
+17	7	4	2026-08-25	表格	填表	1	2026-08-25 07:34:13.495692+00	4	2026-08-25 06:32:15.951365+00	2026-08-25 07:34:13.495692+00	\N	\N	\N	private
+16	10	4	2026-08-24	表格	\N	多找作品高收藏 500+，小于3000粉丝量的作品	2026-08-25 07:37:28.196293+00	4	2026-08-24 09:31:14.854367+00	2026-08-25 07:37:28.196293+00	\N	\N	\N	private
+15	7	4	2026-08-24	表格	填完了	1	2026-08-25 07:37:36.961506+00	4	2026-08-24 07:53:08.084396+00	2026-08-25 07:37:36.961506+00	\N	\N	\N	private
+19	7	1	2026-08-25	情感赛道	\N	\N	\N	\N	2026-08-25 08:27:16.794467+00	2026-08-25 08:27:16.794467+00	\N	\N	\N	private
+24	7	4	2026-08-25	图文	图文	依托答辩	2026-08-26 03:03:23.30422+00	4	2026-08-25 10:01:38.47731+00	2026-08-26 03:03:23.30422+00	\N	\N	\N	private
+23	10	4	2026-08-25	表格	\N	1	2026-08-28 06:39:12.421778+00	4	2026-08-25 09:28:31.947848+00	2026-08-28 06:39:12.421778+00	\N	\N	\N	private
+22	10	4	2026-08-25	作品	标题：0-3岁没有被满足的安全感，会影响90%的亲密关系\n文案：有些女性并不是没有感情，而是不习惯面对和表达自己的恐惧、委屈、孤独、羞耻与愤怒。\n她可能关心伴侣的工作、生活和安排，却很少主动谈论彼此的感受。面对情绪时，她常说：\n“没事。”\n“别想太多。”\n“我自己消化一下就好。”\n“我也不知道自己怎么了。”\n这不一定代表冷漠，更可能是她长期习惯了压低、切断或隐藏情绪。\n常见表现\n- 很难说清自己真实的感受\n- 难过时习惯独自消化，不愿求助\n- 表达需求时感到羞耻，担心给别人添麻烦\n- 能处理现实问题，却不知道如何面对情绪\n- 被关心、安慰或拥抱时，反而僵硬、尴尬或想逃\n- 讲事情很清楚，却很少谈自己的感受\n- 发生冲突后沉默、转移话题或暂时退出关系\n在亲密关系中的复现\n她可能渴望被理解，却不知道怎样直接表达需要；期待伴侣主动看懂自己，但当对方真正靠近时，又会感到不自在。\n她也可能更容易被情绪不可得的人吸引，因为冷淡是熟悉的，而持续、稳定的温柔反而让她无所适从。\n关系中的核心矛盾是：\n渴望被看见，却不知道如何让别人看见；渴望靠近，又害怕靠近后的脆弱。\n如何判断是不是情感回避？\n不要因为一次沉默、冷淡或争吵就下结论，而要观察这种模式是否：\n- 在亲密关系中长期存在\n- 面对情绪和冲突时反复出现\n- 伴随僵硬、逃避、麻木或强颜欢笑等反应\n- 已经影响需求表达、接受安慰和建立亲密连接的能力\n可以试着观察：\n- 她难过时，会不会允许伴侣听她说完？\n- 发生冲突后，她是表达感受，还是立刻关闭自己？\n- 被关心时，她感到安心，还是尴尬、警惕甚至想逃？\n- 她能否直接说出“我需要你陪我”或“这件事让我受伤”？\n情感回避不等于她不爱，也不能仅凭几个表现给一个人贴标签。\n它更可能意味着：她有感受，也渴望连接，只是还没有学会识别、表达和接住自己的情绪。\n看见这种模式，不是为了责怪谁，而是为了让关系有机会从回避走向理解。	1	2026-08-28 06:39:22.497575+00	4	2026-08-25 09:27:41.47813+00	2026-08-28 06:39:22.497575+00	\N	\N	\N	private
+27	1	\N	2026-09-10	今天主要是针对ai生成视频的进行了调整，现在至少在画面上有了很大的提升，视频有吸睛的看点，明天继续要完善	\N	\N	\N	\N	2026-09-10 14:11:39.50483+00	2026-09-10 14:11:39.50483+00	\N	\N	\N	private
+28	1	\N	2026-09-11	9.11	\N	\N	\N	\N	2026-09-11 02:10:47.871555+00	2026-09-11 02:36:51.05578+00	\N	\N	\N	private
 \.
 
 
@@ -9419,7 +9416,7 @@ SELECT pg_catalog.setval('public.users_id_seq', 29, true);
 -- Name: work_reports_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.work_reports_id_seq', 26, true);
+SELECT pg_catalog.setval('public.work_reports_id_seq', 28, true);
 
 
 --
@@ -11383,6 +11380,13 @@ CREATE INDEX idx_work_analyses_task ON public.work_analyses USING btree (task_id
 --
 
 CREATE INDEX idx_work_author ON public.work_reports USING btree (author_id, report_date DESC);
+
+
+--
+-- Name: idx_work_public; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_work_public ON public.work_reports USING btree (report_date DESC, id DESC) WHERE (visibility = 'public'::text);
 
 
 --
@@ -14519,5 +14523,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dW1n00VUnwYtpsSdCfxOmDXZ8Ae2eeM1WwkLp7JjbbVfvZ8JfyrxBHj5cHN9Gms
+\unrestrict O3B8dePwrol3zoLcO0B0OG11O6EvQbPe6Ti31Fe5UnTznlZDgCDn5IUJglmCwed
 
