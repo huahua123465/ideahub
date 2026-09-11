@@ -183,9 +183,9 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
         <button data-goto="reports">看历史日报 →</button>
       </header>
       <div class="dash-today-body">
-        <input class="inp" id="dashTodayTitle" maxlength="120"
+        <input class="inp" id="dashTodayTitle" maxlength="120" aria-label="今天的重点"
           placeholder="一句话说清今天的重点" value="${esc(todayReport?.title || '')}">
-        <textarea class="inp" id="dashTodaySummary" rows="4"
+        <textarea class="inp" id="dashTodaySummary" rows="4" aria-label="今天的工作总结"
           placeholder="做了什么、卡在哪、需要谁搭把手">${esc(todayReport?.summary || '')}</textarea>
         <div class="dash-today-foot">
           <label for="dashTodayVis">谁能看</label>
