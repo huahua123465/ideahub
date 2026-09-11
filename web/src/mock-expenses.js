@@ -166,6 +166,20 @@ export function handleExpenses(method, p, q, body, me) {
     for (const s of STAGES.slice(1)) CFG.roles[s] = body[`${s}Id`] ? Number(body[`${s}Id`]) : null;
     return configDto(me);
   }
+  if (p === '/api/expenses/dept-leaders' && method === 'PATCH') {
+    if (me.role !== 'admin') throw fail('只有管理员可以做这个操作', 403);
+    const dept = String(body?.dept || '').trim();
+    if (!dept) throw fail('请先给这个人分配部门');
+    const row = CFG.depts.find(d => d[0] === dept);
+    if (body.leaderId == null) {
+      if (CLAIMS.some(c => c.status === 'pending' && c.stage === 'leader' && c.dept === dept)) {
+        throw fail(`「${dept}」还有报销单在等部门负责人审批，先指定新的负责人再取消`, 409);
+      }
+      CFG.depts = CFG.depts.filter(d => d[0] !== dept);
+    } else if (row) row[1] = Number(body.leaderId);
+    else CFG.depts.push([dept, Number(body.leaderId)]);
+    return configDto(me);
+  }
   if (p === '/api/expenses' && method === 'GET') {
     const scope = q.get('scope') || 'mine';
     const todo = c => c.status === 'pending' && handlerId(c, c.stage) === me.id;

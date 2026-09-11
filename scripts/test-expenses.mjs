@@ -341,6 +341,37 @@ test('自动跳过：申请人本人是负责人；同一人兼任连续两步',
   assert.equal((await call(CASH, 'GET', `/api/expenses/${cashOwn.id}`)).data.stage, 'cashier');
 });
 
+test('单独指定 / 取消部门负责人（用户管理里的开关）', async () => {
+  const lead = (dept, leaderId, as = ADMIN) => call(as, 'PATCH', '/api/expenses/dept-leaders', { dept, leaderId });
+  assert.equal((await setConfig()).status, 200);
+  assert.equal((await lead('产品部', LEAD_T, GM)).status, 403, '非管理员不能指定');
+  assert.equal((await lead('', LEAD_T)).status, 400);
+  assert.equal((await lead('产品部', 99999999)).status, 400);
+
+  // 新部门：直接启用；已有部门：替换负责人，在途单子立刻转给新的人
+  const added = await lead('市场部', CASH);
+  assert.equal(added.status, 200);
+  assert.deepEqual(added.data.depts.map(d => [d.dept, d.leader.id]),
+    [['产品部', LEAD_P], ['技术部', LEAD_T], ['市场部', CASH]]);
+  const c = await submitted(APP);
+  assert.equal(c.handler.id, LEAD_P);
+  const swapped = await lead('产品部', OUT);
+  assert.equal(swapped.status, 200);
+  assert.equal((await call(OUT, 'GET', `/api/expenses/${c.id}`)).data.handler.id, OUT);
+
+  // 还有单子在等部门负责人：不能取消
+  const stuck = await lead('产品部', null);
+  assert.equal(stuck.status, 409);
+  assert.match(stuck.data.error, /先指定新的负责人/);
+  // 没有在途单子的部门可以取消，取消后这个部门暂不启用
+  const removed = await lead('市场部', null);
+  assert.equal(removed.status, 200);
+  assert.ok(!removed.data.depts.some(d => d.dept === '市场部'));
+
+  assert.equal((await call(OUT, 'POST', `/api/expenses/${c.id}/approve`, { stage: 'leader' })).status, 200);
+  assert.equal((await setConfig()).status, 200);
+});
+
 test('并发：同一步同时点两次，只记一次', async () => {
   const c = await submitted(APP);
   const rs = await Promise.all([

@@ -253,6 +253,39 @@ try {
     // 「（未设负责人）」标记跟着实时审批配置走（桌面这轮前面刚改过配置），这里只核对部门名称齐全
     const names = users.options.map(o => o.replace('（未设负责人）', ''));
     assert.ok(['运营部', '财务部', '行政部', '产品部'].every(o => names.includes(o)), JSON.stringify(users.options));
+    // 部门负责人开关：设为负责人 → 按下并出现标签；再点一次确认取消
+    const leadSel = '#usersModal [data-lead-user]';
+    assert.equal(await page.$eval(leadSel, b => b.disabled), false);
+    if (!mobile) {
+      const pressed = () => page.$eval(leadSel, b => b.getAttribute('aria-pressed'));
+      if (await pressed() === 'true') {
+        await page.click(leadSel);
+        await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
+        await page.click('#confirmSubmit');
+        await page.waitForFunction(s => document.querySelector(s)?.getAttribute('aria-pressed') === 'false', {}, leadSel);
+      }
+      await page.click(leadSel);
+      // 产品部原来若有别的负责人，会先确认是否更换
+      await page.waitForFunction(s => document.querySelector('#confirmLayer.on')
+        || document.querySelector(s)?.getAttribute('aria-pressed') === 'true', { timeout: 5_000 }, leadSel);
+      if (await page.$('#confirmLayer.on')) {
+        assert.match(await page.$eval('#confirmTitle', n => n.textContent).catch(() => '更换'), /更换|换成/);
+        await page.click('#confirmSubmit');
+      }
+      await page.waitForFunction(s => document.querySelector(s)?.getAttribute('aria-pressed') === 'true', { timeout: 5_000 }, leadSel);
+      assert.match(await page.$eval('#usersModal .urow .uduties', n => n.textContent), /产品部负责人/);
+      await harness.screenshot(page, 'expenses-users-leader-desktop');
+      // 前面刚提交的「界面测试·出租车费」还在等产品部负责人：取消要被拦下，开关保持按下
+      await page.click(leadSel);
+      await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
+      await page.click('#confirmSubmit');
+      await waitToast(page, /先指定新的负责人/);
+      await page.waitForFunction(s => document.querySelector(s)?.getAttribute('aria-pressed') === 'true'
+        && !document.querySelector(s).disabled, { timeout: 5_000 }, leadSel);
+    } else {
+      const h = await page.$eval(leadSel, n => n.getBoundingClientRect().height);
+      assert.ok(h >= 44, `手机上负责人开关高度 ${h}`);
+    }
     await modalInViewport(page, 'usersModal');
     st = await pageState(page);
     assert.ok(st.overflow <= 1, `用户管理横向溢出 ${JSON.stringify(st)}`);

@@ -448,6 +448,44 @@ export function mount(router) {
     publish('expense:updated', {});
   });
 
+  /* ---------- 单独指定 / 取消某个部门的负责人 ----------
+     给「用户管理」里每个人旁边那个「部门负责人」开关用，和上面整表保存改的是同一份配置。
+     路径必须注册在 PATCH /api/expenses/:id 之前，否则 dept-leaders 会被当成单据 id。 */
+  router.patch('/api/expenses/dept-leaders', async (req, res) => {
+    const me = await currentUser(req);
+    assertAdmin(me);
+    const b = await readJson(req);
+    const dept = String(b.dept ?? '').trim();
+    if (!dept) throw badRequest('请先给这个人分配部门');
+    if (dept.length > 40) throw badRequest('部门名称最多 40 个字');
+    const leaderId = b.leaderId === null || b.leaderId === undefined || b.leaderId === '' ? null : Number(b.leaderId);
+    if (leaderId !== null && (!Number.isInteger(leaderId) || leaderId <= 0)) throw badRequest('负责人选得不对');
+
+    await tx(async db => {
+      await db.query(`SELECT pg_advisory_xact_lock(hashtextextended('expense-config', 0))`);
+      if (leaderId === null) {
+        // 取消负责人 = 这个部门暂不启用；还有单子在等部门负责人时不能取消，否则那些单子没人批
+        const { rows } = await db.query(
+          `SELECT count(*)::int AS n FROM expense_claims
+            WHERE status = 'pending' AND stage = 'leader' AND dept = $1`, [dept]);
+        if (rows[0].n) {
+          throw conflict(`「${dept}」还有 ${rows[0].n} 张报销单在等部门负责人审批，先指定新的负责人再取消`);
+        }
+        await db.query('DELETE FROM expense_dept_leaders WHERE dept = $1', [dept]);
+        return;
+      }
+      const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [leaderId]);
+      if (!rows[0]) throw badRequest('这个账号已经不存在了，刷新后重试');
+      await db.query(`
+        INSERT INTO expense_dept_leaders(dept, leader_id, sort)
+        VALUES($1, $2, (SELECT coalesce(max(sort), -1) + 1 FROM expense_dept_leaders))
+        ON CONFLICT (dept) DO UPDATE SET leader_id = EXCLUDED.leader_id, updated_at = now()`,
+        [dept, leaderId]);
+    });
+    sendJson(res, 200, await configResponse(me));
+    publish('expense:updated', {});
+  });
+
   /* ---------- 列表 ----------
      scope: mine 我发起的 | todo 待我处理 | all 我能看见的全部 */
   router.get('/api/expenses', async (req, res, _p, url) => {

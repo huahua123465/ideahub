@@ -28,7 +28,7 @@
 .menusep{height:1px;background:var(--line-soft);margin:5px 0}
 
 /* ---------- 用户管理 ---------- */
-.modal-wide{width:720px}
+.modal-wide{width:min(900px,calc(100vw - 32px))}
 
 .userlist{max-height:60vh;overflow-y:auto;padding:4px 22px 0}
 
@@ -55,12 +55,28 @@
 
 /* 部门：报销单按它找部门负责人审批。手机上挤不下就换到第二行 */
 .urow .udept{flex:none;width:176px;height:32px;padding:0 8px;font-size:12.5px}
+/* 部门负责人开关：按下 = 这个人是他所在部门的负责人 */
+.urow .ulead{flex:none;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);
+  color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap;transition:.12s}
+.urow .ulead:hover:not([disabled]){color:var(--ink2);border-color:var(--blue-200)}
+.urow .ulead.on{border-color:var(--good-line);background:var(--good-bg);color:var(--good)}
+.urow .ulead.on::before{content:"✓ "}
+.urow .ulead[disabled]{cursor:not-allowed;opacity:.45}
+/* styles.css 里有一条给灵感卡片用的通用 .who{display:flex}，会把姓名、账号、身份标签挤成一横排 */
+.urow:not(.sk) .who{display:block;min-width:170px}
+/* 下面 .urow .who span{display:block} 是给账号那行用的，标签要保持行内小胶囊 */
+.urow .who .utag{display:inline-block;margin-top:0}
+.uduties{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.uduties .utag.duty{margin-left:0;background:var(--good-bg);color:var(--good)}
 @media (max-width:560px){
   /* .modal-wide 写死 720px，这个文件又在 styles.css 之后加载，会盖掉手机端的弹窗宽度 */
   .modal-wide{width:calc(100vw - 16px)}
   .urow{flex-wrap:wrap}
   .urow .who{flex-basis:calc(100% - 44px)}
-  .urow .udept{order:3;flex:1 1 100%;width:auto;height:44px}
+  .urow .who{min-width:0}
+  /* 部门 + 负责人开关独占一行，角色和重置密码换到下一行，下拉框不会被挤没 */
+  .urow .udept{order:3;flex:1 1 calc(100% - 132px);width:auto;min-width:0;height:44px}
+  .urow .ulead{order:3;flex:0 0 120px;height:44px}
   .urow .roles{order:4}
   .urow .more{order:5;min-height:44px}
 }

@@ -244,6 +244,8 @@ export const api = {
   /* ---------- 报销审批 ---------- */
   expenseConfig:     ()            => call('GET',    '/api/expenses/config'),
   expenseConfigSave: (payload)     => call('PATCH',  '/api/expenses/config', payload),
+  /** 指定某个部门的负责人；leaderId 传 null = 取消（部门暂不启用） */
+  expenseDeptLeader: (dept, leaderId) => call('PATCH', '/api/expenses/dept-leaders', { dept, leaderId }),
   /** scope: mine 我发起的 | todo 待我处理 | all 我能看见的全部 */
   expenses:          (opts = {})   => call('GET',    '/api/expenses' + qs(opts)),
   expense:           (id)          => call('GET',    `/api/expenses/${id}`),

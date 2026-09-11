@@ -6,8 +6,10 @@ import { $, avatarColor, initial, esc } from '../util.js';
 import { toast } from '../toast.js';
 import { clearCache as clearDashboardCache } from './dashboard.js';
 import { DEFAULT_DEPTS } from './expenses.js';
+import { confirmAction } from '../confirm.js';
 
 const ROLE_CN = { admin: '管理员', reviewer: '评审委员', member: '成员' };
+const EXPENSE_ROLE_CN = { gm: '总经理', finance: '财务', cashier: '出纳' };
 
 let me = null;
 
@@ -185,6 +187,13 @@ async function renderUsers() {
     // 最后一个管理员不能降级，否则没人能再任命管理员，系统会锁死。
     // 后端也拦着这条，这里禁用按钮只是为了别让人白点一次。
     const lockAdmin = u.role === 'admin' && adminCount <= 1;
+    // 报销审批里的身份：负责哪些部门、是不是总经理 / 财务 / 出纳。都来自同一份审批配置
+    const leads = (cfg?.depts || []).filter(d => d.leader?.id === u.id).map(d => d.dept);
+    const isLeader = !!u.dept && leads.includes(u.dept);
+    const duties = [
+      ...leads.map(d => `${d}负责人`),
+      ...Object.entries(EXPENSE_ROLE_CN).filter(([k]) => cfg?.roles?.[k]?.id === u.id).map(([, v]) => v),
+    ];
     return `
     <div class="urow" data-id="${u.id}">
       <div class="av" style="background:${avatarColor(u.name)}">${esc(initial(u.name))}</div>
@@ -192,9 +201,13 @@ async function renderUsers() {
         <b>${esc(u.name)}${isMe ? '<span class="utag">你自己</span>' : ''}</b>
         <span>@${esc(u.username || '')}${u.dept ? ' · ' + esc(u.dept) : ''} · 提过 ${u.ideaCount} 条灵感${
           u.lastLoginAt ? '' : ' · 从没登录过'}</span>
+        ${duties.length ? `<div class="uduties">${duties.map(t => `<span class="utag duty">${esc(t)}</span>`).join('')}</div>` : ''}
       </div>
       <select class="inp udept" data-dept-user="${u.id}" aria-label="${esc(u.name)}的部门"
         title="报销单按这个部门找负责人审批">${deptOptions(u.dept, cfg)}</select>
+      <button type="button" class="ulead${isLeader ? ' on' : ''}" data-lead-user="${u.id}" aria-pressed="${isLeader}"${
+        u.dept ? ` title="${isLeader ? `点击取消${esc(u.name)}的${esc(u.dept)}负责人` : `设为${esc(u.dept)}的负责人`}"`
+          : ' disabled title="先给这个人选部门"'}>部门负责人</button>
       <div class="roles">
         ${['member', 'reviewer', 'admin'].map(r => `
           <button data-role="${r}" class="${u.role === r ? 'on' : ''}"${
@@ -210,11 +223,42 @@ async function renderUsers() {
     if (sel) changeDept(sel);
   };
   $('#userList').onclick = async e => {
+    const leadBtn = e.target.closest('[data-lead-user]');
+    if (leadBtn && !leadBtn.disabled) return changeLeader(leadBtn, items, cfg);
     const roleBtn = e.target.closest('[data-role]');
     if (roleBtn && !roleBtn.disabled) return changeRole(roleBtn);
     const resetBtn = e.target.closest('[data-reset]');
     if (resetBtn) return resetPassword(Number(resetBtn.dataset.reset), items);
   };
+}
+
+/** 用户管理里的「部门负责人」开关：设为 / 取消这个人所在部门的负责人 */
+async function changeLeader(btn, items, cfg) {
+  const id = Number(btn.dataset.leadUser);
+  const u = items.find(x => x.id === id);
+  if (!u?.dept) return;
+  const current = (cfg?.depts || []).find(d => d.dept === u.dept)?.leader || null;
+  const on = btn.getAttribute('aria-pressed') === 'true';
+  const ok = on
+    ? await confirmAction({
+      eyebrow: '取消部门负责人', title: `取消${u.name}的「${u.dept}」负责人？`,
+      message: '取消后这个部门暂不启用：部门里的人提交报销会被拦下，直到指定新的负责人。',
+      confirmLabel: '取消负责人',
+    })
+    : !current || current.id === id || await confirmAction({
+      eyebrow: '更换部门负责人', title: `把「${u.dept}」的负责人从${current.name}换成${u.name}？`,
+      message: '正在等部门负责人审批的报销单会转给新负责人。', confirmLabel: '更换',
+    });
+  if (!ok) return;
+  btn.disabled = true;
+  try {
+    await api.expenseDeptLeader(u.dept, on ? null : id);
+    toast('ok', on ? `已取消 ${u.name} 的${u.dept}负责人` : `${u.name} 现在是${u.dept}负责人`);
+  } catch (e) {
+    toast('info', e.message || '保存失败');
+  }
+  await renderUsers();
+  $(`#userList [data-lead-user="${id}"]`)?.focus();
 }
 
 async function changeDept(sel) {
