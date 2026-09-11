@@ -274,6 +274,11 @@ async function exerciseSmartImport(page, scene) {
     const dialog = document.querySelector('#smartImportModal.on');
     return dialog?.contains(document.activeElement);
   }, { timeout: 3_000 });
+  // 弹窗打开后还有两件异步的事：拉 AI 接口配置（决定「接口设置」按钮出不出现），
+  // 以及 220ms 后把焦点放进输入框。等它们落定再数可聚焦控件，
+  // 否则数到的是半成品，下面的焦点环断言会随机在不同位置失败。
+  await page.waitForFunction(() => document.activeElement?.id === 'smartImportText', { timeout: 3_000 });
+  await settleDom(page);
 
   const state = await page.$eval('#smartImportModal', dialog => {
     const labelledBy = dialog.getAttribute('aria-labelledby');
