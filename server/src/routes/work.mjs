@@ -1,11 +1,18 @@
 /**
  * 工作提交：同事把当天的成果（Excel 等文件）交给自己选定的审核人。
  *
- * 三条规则贯穿整个文件，改的时候留意：
- *  1. 可见范围 = 提交人 + 审核人 + 管理员。别人连列表都看不到，
- *     附件也拿不到（那道检查在 routes/files.mjs 里）。
- *  2. 审核人由提交人自己选，选完还能改。
- *  3. 附件是双向的：提交人传成果，审核人可以传文件回去（side = submit / review）。
+ * 它同时是「个人每日总结」——所以每条记录由作者自己决定给不给别人看。
+ *
+ * 四条规则贯穿整个文件，改的时候留意：
+ *  1. 可见范围由 visibility 决定：
+ *       private（默认）→ 只有提交人本人，加上他自己指定的审核人
+ *       public         → 全站登录用户
+ *     **管理员不是例外**：private 的日报管理员也看不到、改不了、删不掉。
+ *     附件那道对应的检查在 routes/files.mjs 里，两边必须一起改。
+ *  2. 「看得见」不等于「能动手」。公开只放开读，写操作（改字段、传附件、删除）
+ *     另判一次 canWrite —— 否则一条日报一公开，全公司都能往里塞文件。
+ *  3. 审核人由提交人自己选，选完还能改。
+ *  4. 附件是双向的：提交人传成果，审核人可以传文件回去（side = submit / review）。
  */
 import { unlink } from 'node:fs/promises';
 import { join, basename } from 'node:path';
@@ -32,10 +39,14 @@ function reportRow(r) {
     resultUrl: r.result_url || null,
     blockers: r.blockers || null,
     needHelp: r.need_help || null,
+    visibility: r.visibility || 'private',
     feedback: r.feedback,
     reviewedAt: r.reviewed_at,
     reviewedByName: r.reviewed_by_name || null,
-    status: r.feedback ? '已反馈' : '待审核',
+    // 状态有三档，不是两档。没选审核人 = 作者压根没打算送审（日常的个人日报
+    // 绝大多数是这种），给它盖「待审核」等于逼人对着自己写的东西等审批 ——
+    // 审核是「工作提交」那条流程的语义，不该外溢到每天记一笔上。
+    status: r.feedback ? '已反馈' : (r.reviewer_id ? '待审核' : '个人记录'),
     fileCount: Number(r.file_count) || 0,
     // 只随列表带轻量元数据，不带文件本体。打开编辑/审核弹窗时可以立即画附件，
     // 不必为了几个文件名再跨洋等一个请求；图片字节仍由 /api/files/:id 懒加载。
@@ -57,9 +68,20 @@ const reportFilesJoin = alias => `
      WHERE f.scope='report' AND f.ref_id=${alias}.id
   ) rf ON TRUE`;
 
-/** 能不能看这一条 */
-const canSee = (r, me) =>
-  me.role === 'admin' || Number(r.author_id) === me.id || Number(r.reviewer_id) === me.id;
+/** 合法的可见性取值只有两个，任何外来输入都收敛到这两个上（默认从严）。 */
+const vis = v => (String(v) === 'public' ? 'public' : 'private');
+
+/** 提交人本人，或他自己指定的审核人 —— 选审核人这个动作本身就是「我愿意给他看」。 */
+const isParty = (r, me) =>
+  Number(r.author_id) === me.id
+  || (r.reviewer_id != null && Number(r.reviewer_id) === me.id);
+
+/** 能不能看这一条。管理员在这里没有特权，见文件头规则 1。 */
+const canSee = (r, me) => r.visibility === 'public' || isParty(r, me);
+
+/** 能不能往这一条里写东西（改字段 / 传附件 / 删）。
+    管理员只管得到他本来就看得见的那些，即公开的和与他自己有关的。 */
+const canWrite = (r, me) => isParty(r, me) || (me.role === 'admin' && canSee(r, me));
 
 async function loadReport(id) {
   const { rows } = await query(`
@@ -77,20 +99,25 @@ async function loadReport(id) {
 export function mount(router) {
 
   /* ---------- 列表 ----------
-     scope: mine（我提交的）| review（待我审核）| all（管理员看全部） */
+     scope: mine（我写的，含私密）| review（待我审核）| team（全员公开的）| all（我看得到的全部）
+
+     这里每一条分支都必须自带可见性约束。**没有「管理员看全部」这一档了** ——
+     以前 all 对管理员是 TRUE，现在私密日报对谁都是私密的，
+     把这行改回 TRUE 就等于悄悄废掉整个功能。 */
   router.get('/api/reports', async (req, res, _p, url) => {
     const me = await currentUser(req);
     const scope = q(url, 'scope', 'mine');
 
     const where = [];
     const args = [me.id];
+    // 我自己写的：私密的也在里面，这一栏本来就是给自己回看的
     if (scope === 'mine') where.push('r.author_id = $1');
+    // 别人交给我审的：他选了我当审核人，等于授权我看
     else if (scope === 'review') where.push('r.reviewer_id = $1');
-    else {
-      // all：管理员看全部，其他人只看得到和自己有关的 ——
-      // 不加这一层的话，把 scope 改成 all 就能翻别人的提交
-      where.push(me.role === 'admin' ? 'TRUE' : '(r.author_id = $1 OR r.reviewer_id = $1)');
-    }
+    // 公开墙：只认 visibility，跟是谁写的无关
+    else if (scope === 'team') where.push(`r.visibility = 'public'`);
+    // all：我看得到的一切 = 公开的 + 我写的 + 交给我审的
+    else where.push(`(r.visibility = 'public' OR r.author_id = $1 OR r.reviewer_id = $1)`);
 
     const { rows } = await query(`
       SELECT r.*, a.name AS author_name, v.name AS reviewer_name, b.name AS reviewed_by_name,
@@ -109,13 +136,17 @@ export function mount(router) {
   router.post('/api/reports', async (req, res) => {
     const me = await currentUser(req);
     const b = await readJson(req);
+    // 前端没显式给可见性，就落到这个人自己在个人设置里定的默认值上；
+    // 那一列也是 private 兜底，所以任何一环缺失的结果都是「更保守」而不是「更公开」。
+    const visibility = b.visibility !== undefined
+      ? vis(b.visibility) : vis(me.report_visibility_default);
     const { rows } = await query(
       `INSERT INTO work_reports(author_id, reviewer_id, report_date, title, summary,
-                                result_url, blockers, need_help)
-       VALUES($1,$2,coalesce($3::date, current_date),$4,$5,$6,$7,$8) RETURNING id`,
+                                result_url, blockers, need_help, visibility)
+       VALUES($1,$2,coalesce($3::date, current_date),$4,$5,$6,$7,$8,$9) RETURNING id`,
       [me.id, b.reviewerId ? Number(b.reviewerId) : null, str(b.reportDate),
        need(b, 'title', { max: 120, label: '标题' }), str(b.summary),
-       str(b.resultUrl), str(b.blockers), str(b.needHelp)]);
+       str(b.resultUrl), str(b.blockers), str(b.needHelp), visibility]);
     const nid = Number(rows[0].id);
     const created = await loadReport(nid);
     sendJson(res, 201, reportRow(created));
@@ -130,14 +161,33 @@ export function mount(router) {
     }
   });
 
+  /* ---------- 一键改掉我全部日报的可见性 ----------
+     「以后都公开」在个人设置里改默认值就行，那只管新写的；
+     这个接口管的是已经写过的那些。范围永远锁死在 author_id = 自己，
+     所以它不需要、也不该有任何管理员分支。
+
+     路径不会和 PATCH /api/reports/:id 打架：那条是 PATCH，这条是 POST，
+     而 POST /api/reports/:id 这个组合本来就不存在。 */
+  router.post('/api/reports/visibility', async (req, res) => {
+    const me = await currentUser(req);
+    const b = await readJson(req);
+    const to = vis(b.visibility);
+    const { rowCount } = await query(
+      'UPDATE work_reports SET visibility = $1, updated_at = now() WHERE author_id = $2 AND visibility <> $1',
+      [to, me.id]);
+    sendJson(res, 200, { ok: true, visibility: to, changed: rowCount });
+    if (rowCount) publish('board:updated', { board: 'reports' });
+  });
+
   /* ---------- 修改 ----------
-     提交人能改自己的内容和审核人；审核人只能写反馈。管理员都能改。 */
+     提交人能改自己的内容、审核人和可见性；审核人只能写反馈。
+     管理员能改的只是他本来就看得见的那些（canSee 已经在下面拦过一道）。 */
   router.patch('/api/reports/:id', async (req, res, params) => {
     const me = await currentUser(req);
     const id = Number(params.id);
     const cur = await loadReport(id);
     if (!cur) throw notFound('没有这条提交');
-    if (!canSee(cur, me)) throw forbidden('这是别人的工作提交');
+    if (!canSee(cur, me)) throw notFound('没有这条提交');
 
     const isAuthor = Number(cur.author_id) === me.id;
     const isReviewer = Number(cur.reviewer_id) === me.id;
@@ -169,6 +219,9 @@ export function mount(router) {
     if (b.feedback !== undefined && !isReviewer && !isAdmin) {
       throw forbidden('只有审核人能写反馈');
     }
+    // 可见性是作者对自己内容的处置权，管理员也不能替他决定公开或收回
+    const changesVis = b.visibility !== undefined && vis(b.visibility) !== cur.visibility;
+    if (changesVis && !isAuthor) throw forbidden('只有本人能改自己日报的可见范围');
 
     if (b.title !== undefined) set('title', need(b, 'title', { max: 120, label: '标题' }));
     if (b.summary !== undefined) set('summary', str(b.summary));
@@ -177,6 +230,7 @@ export function mount(router) {
     if (b.resultUrl !== undefined) set('result_url', str(b.resultUrl));
     if (b.blockers !== undefined) set('blockers', str(b.blockers));
     if (b.needHelp !== undefined) set('need_help', str(b.needHelp));
+    if (changesVis) set('visibility', vis(b.visibility));
     if (b.feedback !== undefined) {
       set('feedback', str(b.feedback));
       sets.push('reviewed_at = now()');
@@ -210,12 +264,15 @@ export function mount(router) {
     }
   });
 
-  /* ---------- 删除：本人或管理员 ---------- */
+  /* ---------- 删除：本人，或管理员（仅限他看得见的那些） ---------- */
   router.del('/api/reports/:id', async (req, res, params) => {
     const me = await currentUser(req);
     const cur = await loadReport(Number(params.id));
     if (!cur) throw notFound('没有这条提交');
-    if (me.role !== 'admin' && Number(cur.author_id) !== me.id) {
+    // 先按「看不见就等于不存在」处理：私密日报对管理员连存在性都不该泄露，
+    // 所以这里回 404 而不是 403 —— 403 等于承认「有这么一条，只是不给你」。
+    if (!canSee(cur, me)) throw notFound('没有这条提交');
+    if (Number(cur.author_id) !== me.id && !canWrite(cur, me)) {
       throw forbidden('只有提交人本人和管理员能删除');
     }
     // 附件跟着一起清，磁盘上的也要删 —— 只删数据库行会攒出一堆没人认领的文件
@@ -232,7 +289,7 @@ export function mount(router) {
     const me = await currentUser(req);
     const cur = await loadReport(Number(params.id));
     if (!cur) throw notFound('没有这条提交');
-    if (!canSee(cur, me)) throw forbidden('这是别人的工作提交');
+    if (!canSee(cur, me)) throw notFound('没有这条提交');
 
     const { rows } = await query(`
       SELECT f.*, u.name AS uploader_name
@@ -248,7 +305,10 @@ export function mount(router) {
     const me = await currentUser(req);
     const cur = await loadReport(Number(params.id));
     if (!cur) throw notFound('没有这条提交');
-    if (!canSee(cur, me)) throw forbidden('这是别人的工作提交');
+    if (!canSee(cur, me)) throw notFound('没有这条提交');
+    // 这里必须是 canWrite 不是 canSee：日报一旦公开，canSee 对全公司都成立，
+    // 用它把关等于谁都能往别人的日报里传文件。
+    if (!canWrite(cur, me)) throw forbidden('只有提交人和审核人能往这条里传文件');
 
     const origName = String(q(url, 'name', '') || '').trim();
     if (!origName) throw badRequest('缺少文件名');

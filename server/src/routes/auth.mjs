@@ -41,6 +41,9 @@ function publicUser(r) {
   return {
     id: Number(r.id), username: r.username, name: r.name,
     dept: r.dept, role: r.role,
+    // 日报默认可见性：前端新建日报时拿它当预选值，见 views/board.js 的 fieldDefault
+    reportVisibilityDefault:
+      r.report_visibility_default === 'public' ? 'public' : 'private',
     createdAt: r.created_at, lastLoginAt: r.last_login_at,
   };
 }
@@ -159,6 +162,22 @@ export function mount(router) {
     const sid = await createSession(me.id, req.headers['user-agent']);
     setSessionCookie(req, res, sid);
     sendJson(res, 200, { ok: true });
+  });
+
+  /* ---------- 个人偏好 ----------
+     目前只有一项：新写的日报默认给谁看。只能改自己的，没有管理员分支 ——
+     「我的日报默认公开吗」这件事轮不到别人替我定。 */
+  router.patch('/api/auth/me/prefs', async (req, res) => {
+    const me = await currentUser(req);
+    const b = await readJson(req);
+    if (b.reportVisibilityDefault === undefined) throw badRequest('没有要修改的偏好');
+    const v = String(b.reportVisibilityDefault) === 'public' ? 'public' : 'private';
+    const { rows } = await query(
+      `UPDATE users SET report_visibility_default = $1 WHERE id = $2
+       RETURNING id, username, name, dept, role::text AS role,
+                 report_visibility_default, created_at, last_login_at`,
+      [v, me.id]);
+    sendJson(res, 200, publicUser(rows[0]));
   });
 
   /* ---------- 注册是否开放 / 是否首个账号（登录页要用，不需要登录） ---------- */

@@ -15,6 +15,7 @@
      modulepreload 让它一开始就全部并发拉，首屏快很多。
      这份清单由 scripts/gen-preload.mjs 生成，加了新模块记得重跑一次。 -->
 <!-- modulepreload:start -->
+<link rel="modulepreload" href="./src/account-research-contract.js">
 <link rel="modulepreload" href="./src/anim.js">
 <link rel="modulepreload" href="./src/api.js">
 <link rel="modulepreload" href="./src/apilog.js">
@@ -30,6 +31,7 @@
 <link rel="modulepreload" href="./src/tagstore.js">
 <link rel="modulepreload" href="./src/toast.js">
 <link rel="modulepreload" href="./src/util.js">
+<link rel="modulepreload" href="./src/views/account-research.js">
 <link rel="modulepreload" href="./src/views/account.js">
 <link rel="modulepreload" href="./src/views/alert.js">
 <link rel="modulepreload" href="./src/views/bench.js">
@@ -181,6 +183,7 @@
       </div>
       <button class="menuitem" id="miUsers" hidden>用户管理</button>
       <button class="menuitem mobile-notifications" id="miNotifications">消息通知</button>
+      <button class="menuitem" id="miReportPrefs">日报可见性</button>
       <button class="menuitem" id="miPassword">修改密码</button>
       <div class="menusep"></div>
       <button class="menuitem danger" id="miLogout">退出登录</button>
@@ -707,6 +710,37 @@
 
 
 <!-- ============ 修改密码 ============ -->
+<div class="modal" id="visModal" role="dialog" aria-modal="true" aria-labelledby="visModalTitle">
+  <header>
+    <h2 id="visModalTitle">日报可见性</h2>
+    <div class="hint">「仅自己可见」是真的只有你自己 —— 管理员也看不到。<br>
+      你指定了审核人的那些日报，审核人始终能看到（选他这个动作本身就是给他看）。</div>
+  </header>
+  <div class="form">
+    <div class="field">
+      <label for="visDefault">以后新写的日报，默认给谁看</label>
+      <select class="inp" id="visDefault">
+        <option value="private">仅自己可见</option>
+        <option value="public">全员可见</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>已经写过的那些</label>
+      <div class="vis-bulk">
+        <button class="btn btn-ghost" type="button" id="btnVisAllPublic">全部改为全员可见</button>
+        <button class="btn btn-ghost" type="button" id="btnVisAllPrivate">全部收回为仅自己</button>
+      </div>
+      <div class="hint">这两个按钮只作用于你自己写的日报，一次改完全部历史记录。</div>
+    </div>
+    <div class="autherr" id="visErr"></div>
+  </div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-primary" id="btnVisSave">保存默认值</button>
+  </footer>
+</div>
+
 <div class="modal" id="pwModal" role="dialog" aria-modal="true" aria-labelledby="pwModalTitle">
   <header>
     <h2 id="pwModalTitle">修改密码</h2>

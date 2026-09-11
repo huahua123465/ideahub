@@ -1774,7 +1774,37 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 /* 工作提交：用审核收件箱的语言，不再是密集周报行。 */
 .report-card{display:flex;flex-direction:column;padding:20px;min-height:290px}
 .report-card time{color:#8d95a4;font-size:11.5px;font-variant-numeric:tabular-nums}
+/* ---------- 工作台「今天的总结」 ---------- */
+/* 这块是首屏唯一要打字的地方，输入区给足高度，别做成一行小输入框 —— */
+/* 写日报的阻力主要来自「看起来要花时间」，界面上先把这件事显得轻一点。 */
+.dash-today .dash-today-body{display:flex;flex-direction:column;gap:10px;padding:2px 0 4px}
+.dash-today textarea.inp{resize:vertical;min-height:88px;line-height:1.65}
+.dash-today-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dash-today-foot label{font-size:12px;color:var(--muted);flex:none}
+.dash-today-foot select.inp{width:auto;min-width:118px;flex:none}
+/* 提示文字占住中间的伸缩位，保存按钮因此始终贴右边 */
+.dash-today-hint{flex:1 1 auto;font-size:12px;color:var(--muted);min-height:1em}
+.dash-today-foot .btn{flex:none}
+@media (max-width:520px){
+  .dash-today-hint{order:3;flex-basis:100%}
+  .dash-today-foot .btn{margin-left:auto}
+}
+
+/* 日报可见性徽章。用描边+浅底而不是实心色块：它是一条状态说明，
+   不该比旁边的审核状态更抢眼，但必须一眼分得出公开和私密。 */
+/* 「已经写过的那些」下面两个批量按钮：窄屏时换行，别把弹窗撑出横向滚动条 */
+.vis-bulk{display:flex;gap:8px;flex-wrap:wrap}
+.vis-bulk .btn{flex:1 1 auto}
+.report-vis{padding:4px 9px;border-radius:9px;font-size:11px;font-weight:680;
+  border:1px solid var(--line);color:var(--ink2);background:var(--page)}
+.report-vis.is-public{background:var(--good-bg);color:var(--good);border-color:var(--good-line)}
+.report-vis.is-private{background:var(--surface);color:var(--muted)}
 .report-status{padding:4px 9px;border-radius:9px;font-size:11px;font-weight:680}.report-status.wait{background:var(--warn-bg);color:#a66c27}.report-status.done{background:var(--good-bg);color:var(--good)}
+/* 个人记录：不欠任何人，用中性灰。它跟「待审核」的琥珀色必须一眼分得开，
+   否则自己记的一笔看起来像一条挂在那儿没人管的待办。 */
+.report-status.plain{background:var(--page);color:var(--muted);border:1px solid var(--line)}
+/* 没请人点评时那行没有箭头，「没请人点评」四个字只是补充说明，压低存在感 */
+.report-route.solo span{color:var(--muted);font-weight:400}
 .report-card h3{margin:13px 0 7px;font-size:17px;font-weight:710;line-height:1.5}
 .report-route{display:flex;align-items:center;gap:8px;color:#9098a5;font-size:12px}.report-route b{color:#4f5664}.report-route i{font-style:normal;color:#b4bac4}
 .report-summary{margin:14px 0;color:#68707f;font-size:13.5px;line-height:1.65}

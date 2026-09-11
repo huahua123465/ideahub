@@ -66,8 +66,22 @@ function focusItem({ tone = 'blue', eyebrow, title, meta, board, entity, id }) {
   </button>`;
 }
 
+/**
+ * 「今天的总结」是首屏上唯一一个用户会往里打字的地方，而这个视图是整块
+ * innerHTML 重绘的：SSE 推一条别人的更新过来，正在写的半句话就没了。
+ * 所以只要框里有没保存的内容（或者光标还在里面），本轮重绘直接跳过 ——
+ * 首页的统计数字晚 30 秒更新没有任何代价，丢掉用户写了一半的日报有。
+ */
+function composerBusy() {
+  const box = document.querySelector('.dash-today');
+  if (!box) return false;
+  if (box.contains(document.activeElement)) return true;
+  return box.dataset.dirty === '1';
+}
+
 export async function render({ force = false } = {}) {
   if (!force && lastAt && Date.now() - lastAt < 30_000) return;
+  if (composerBusy()) return;
   const root = $('#v-home');
   const cached = root.querySelector('.dash-hero') ? null : readCache();
   if (cached) paintDashboard(root, cached);
@@ -76,11 +90,11 @@ export async function render({ force = false } = {}) {
   }
   const requestId = ++loadSeq;
 
-  let stats, ideas, clients, reports, demands;
+  let stats, ideas, clients, reports, demands, mine;
   try {
-    [stats, ideas, clients, reports, demands] = await Promise.all([
+    [stats, ideas, clients, reports, demands, mine] = await Promise.all([
       api.stats(), api.ideas({ status: 'pool', sort: 'hot' }), api.clients(),
-      api.reports({ scope: 'review' }), api.demands(),
+      api.reports({ scope: 'review' }), api.demands(), api.reports({ scope: 'mine' }),
     ]);
   } catch (e) {
     if (requestId !== loadSeq) return;
@@ -95,12 +109,15 @@ export async function render({ force = false } = {}) {
   }
   if (requestId !== loadSeq) return;
   lastAt = Date.now();
-  const data = { stats, ideas, clients, reports, demands };
+  const data = { stats, ideas, clients, reports, demands, mine };
   writeCache(data);
+  // 请求飞在路上的这几百毫秒里用户可能已经开始写了 —— 进函数时查过一次不算数，
+  // 真正动 innerHTML 之前必须再查一次。
+  if (composerBusy()) return;
   paintDashboard(root, data);
 }
 
-function paintDashboard(root, { stats, ideas, clients, reports, demands }) {
+function paintDashboard(root, { stats, ideas, clients, reports, demands, mine }) {
   const ideaItems = ideas.items || [];
   const clientItems = clients.items || [];
   const reportItems = reports.items || [];
@@ -135,6 +152,15 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands }) {
   const sales = stats.salesFunnel || [];
   const maxSales = Math.max(1, ...sales.map(x => Number(x.value || 0)));
 
+  const today = new Date();
+  const todayYmd = new Date(today.getTime() - today.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 10);
+  // 一天一条：同一天写第二次是接着改，不是再开一条。列表本来就是日期倒序，
+  // 取第一条命中的即可。
+  const todayReport = (mine?.items || []).find(r => r.reportDate === todayYmd) || null;
+  const defaultVis = me?.reportVisibilityDefault === 'public' ? 'public' : 'private';
+  const curVis = todayReport ? todayReport.visibility : defaultVis;
+
   root.innerHTML = `
     <section class="dash-hero">
       <div>
@@ -148,6 +174,28 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands }) {
         <button data-dash-create="clients">${ICON.users}<span><b>新增客户</b><small>跟进信息</small></span></button>
         <button data-dash-learning="framework">${ICON.layers}<span><b>框架学习</b><small>判断链路</small></span></button>
         <button data-dash-learning="detail">${ICON.book}<span><b>详细学习</b><small>专业详解</small></span></button>
+      </div>
+    </section>
+
+    <section class="dash-panel dash-today" data-report-id="${todayReport ? Number(todayReport.id) : ''}">
+      <header>
+        <div><span>每日总结</span><h2>今天做了什么</h2></div>
+        <button data-goto="reports">看历史日报 →</button>
+      </header>
+      <div class="dash-today-body">
+        <input class="inp" id="dashTodayTitle" maxlength="120"
+          placeholder="一句话说清今天的重点" value="${esc(todayReport?.title || '')}">
+        <textarea class="inp" id="dashTodaySummary" rows="4"
+          placeholder="做了什么、卡在哪、需要谁搭把手">${esc(todayReport?.summary || '')}</textarea>
+        <div class="dash-today-foot">
+          <label for="dashTodayVis">谁能看</label>
+          <select class="inp" id="dashTodayVis">
+            <option value="private"${curVis === 'private' ? ' selected' : ''}>仅自己可见</option>
+            <option value="public"${curVis === 'public' ? ' selected' : ''}>全员可见</option>
+          </select>
+          <span class="dash-today-hint" id="dashTodayHint"></span>
+          <button class="btn btn-primary" id="dashTodaySave">${todayReport ? '更新今天的总结' : '保存'}</button>
+        </div>
       </div>
     </section>
 
@@ -181,6 +229,56 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands }) {
       <header><div><span>团队资产</span><h2>持续沉淀，而不是散落在聊天里</h2></div><button data-goto="stats">查看统计 →</button></header>
       <div>${library.map(item => `<button data-goto="${esc(item.board)}"><small>${esc(item.name)}</small><b>${Number(item.value || 0)}</b><em>${esc(item.note || '')}</em><span>打开 →</span></button>`).join('')}</div>
     </section>`;
+
+  bindToday(root, todayYmd);
+}
+
+/** 「今天的总结」的交互。每次重绘都要重新绑一次 —— 上一批节点已经被 innerHTML 换掉了。 */
+function bindToday(root, todayYmd) {
+  const box = root.querySelector('.dash-today');
+  if (!box) return;
+  const title = box.querySelector('#dashTodayTitle');
+  const summary = box.querySelector('#dashTodaySummary');
+  const visSel = box.querySelector('#dashTodayVis');
+  const btn = box.querySelector('#dashTodaySave');
+  const hint = box.querySelector('#dashTodayHint');
+
+  const markDirty = () => { box.dataset.dirty = '1'; };
+  title.addEventListener('input', markDirty);
+  summary.addEventListener('input', markDirty);
+  visSel.addEventListener('change', markDirty);
+
+  const showHint = m => { hint.textContent = m; };
+
+  btn.addEventListener('click', async () => {
+    const t = title.value.trim();
+    if (!t) { showHint('先写一句今天的重点'); title.focus(); return; }
+
+    const payload = { title: t, summary: summary.value.trim(), visibility: visSel.value };
+    const id = box.dataset.reportId;
+    btn.disabled = true;
+    showHint('保存中…');
+    try {
+      const saved = id
+        ? await api.reportsPatch(Number(id), payload)
+        : await api.reportsCreate({ ...payload, reportDate: todayYmd });
+      // 新建完把 id 记回去，同一次停留里再点保存就是改这一条，不会攒出两条
+      box.dataset.reportId = String(saved.id);
+      box.dataset.dirty = '0';
+      btn.textContent = '更新今天的总结';
+      showHint('');
+      // 首页的「待我审核」等数字跟这条无关，但缓存里得留下新内容，
+      // 否则切走再切回来会看到保存前的样子
+      clearCache();
+      toast('ok', payload.visibility === 'public'
+        ? '今天的总结已保存，全员可见' : '今天的总结已保存，只有你自己看得到');
+    } catch (e) {
+      showHint(e.message || '没保存上，再试一次');
+      toast('info', e.message || '保存失败');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 export async function refresh() {

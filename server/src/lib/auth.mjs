@@ -32,7 +32,8 @@ export async function currentUserOrNull(req) {
     const id = Number(req.headers['x-user-id']);
     if (Number.isFinite(id)) {
       const { rows } = await query(
-        'SELECT id, name, dept, role::text AS role, username FROM users WHERE id = $1', [id]);
+        'SELECT id, name, dept, role::text AS role, username, report_visibility_default'
+        + ' FROM users WHERE id = $1', [id]);
       if (rows[0]) return { ...rows[0], id: Number(rows[0].id) };
     }
     return null;

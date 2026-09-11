@@ -130,6 +130,9 @@ function playbookBoard({ key, title, board, tabs, tabExtra = {} }) {
   };
 }
 
+/** 可见性的中文说法只此一份，列表徽章、工作台卡片、个人设置都从这里取。 */
+export const VISIBILITY_LABEL = { private: '仅自己', public: '全员可见' };
+
 export const BOARDS = {
   /* ---------- 前端获客（PDF 02） ---------- */
   persona: worksBoard({
@@ -361,12 +364,17 @@ export const BOARDS = {
     title: '工作提交',
     api: 'reports',
     query: {},
-    /** 三个视角：我交的 / 等我看的 / 全部（管理员才看得全，
-        普通人选「全部」也只会看到和自己有关的，后端兜着） */
+    /** 四个视角：
+        我的日报 —— 自己写的全部，私密的也在这里，这一栏是给自己回看的
+        待我审核 —— 别人指定我当审核人的
+        全员公开 —— 所有人主动设成公开的那些，团队的公开墙
+        全部     —— 我看得到的一切（公开的 + 我写的 + 交给我审的）
+        没有「管理员看全部」这一档：私密日报对管理员也是私密的，后端兜着。 */
     tabParam: 'scope',
     tabs: [
-      { key: 'mine', label: '我提交的' },
+      { key: 'mine', label: '我的日报' },
       { key: 'review', label: '待我审核' },
+      { key: 'team', label: '全员公开' },
       { key: 'all', label: '全部' },
     ],
     jsonGroups: [],
@@ -386,7 +394,20 @@ export const BOARDS = {
     fields: [
       { key: 'title', label: '工作内容', type: 'text', required: true },
       { key: 'reportDate', label: '日期', type: 'date' },
-      { key: 'reviewerId', label: '给谁看（审核人）', type: 'person' },
+      /** 可见性没有「—」这一档（noEmpty），因为「不确定给谁看」不是一个合法状态。
+          新建时的预选值来自本人在个人设置里定的默认值，见 board.js 的 fieldDefault。 */
+      {
+        key: 'visibility', label: '谁能看', type: 'select', noEmpty: true,
+        authorOnly: true,
+        default: me => (me?.reportVisibilityDefault === 'public' ? 'public' : 'private'),
+        options: [
+          { value: 'private', label: '仅自己可见' },
+          { value: 'public', label: '全员可见' },
+        ],
+      },
+      /** 原来叫「给谁看（审核人）」。有了「谁能看」之后那个说法会跟可见性打架，
+          而且它真正的含义从来就不是「谁能看见」，是「我想请谁点评」—— 不填是常态。 */
+      { key: 'reviewerId', label: '想请谁点评（不填就是自己记一笔）', type: 'person' },
       { key: 'summary', label: '做了什么', type: 'textarea' },
       { key: 'resultUrl', label: '结果链接 / 产物', type: 'url', placeholder: 'https://… 或说明产物在哪（附件也可以直接传下面）' },
       { key: 'blockers', label: '遇到的问题', type: 'textarea' },

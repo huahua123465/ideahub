@@ -61,7 +61,15 @@ router.get('/api/health', async (req, res) => {
 });
 
 router.get('/api/me', async (req, res) => {
-  sendJson(res, 200, await currentUser(req));
+  const me = await currentUser(req);
+  // 这个接口一直是把 currentUser 原样吐出去的，所以字段是数据库的蛇形命名。
+  // 日报默认可见性给前端补一个驼峰别名，跟 /api/auth/me/prefs 的返回对齐，
+  // 免得前端要按来源分两种写法。
+  sendJson(res, 200, {
+    ...me,
+    reportVisibilityDefault:
+      me.report_visibility_default === 'public' ? 'public' : 'private',
+  });
 });
 
 /**

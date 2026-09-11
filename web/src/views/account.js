@@ -43,6 +43,11 @@ export function bindMenu() {
   $('#miLogout').addEventListener('click', logout);
   $('#miPassword').addEventListener('click', () => { setOpen(false); avatar.focus(); openPassword(); });
   $('#miUsers').addEventListener('click', () => { setOpen(false); avatar.focus(); openUsers(); });
+  $('#miReportPrefs').addEventListener('click', () => { setOpen(false); avatar.focus(); openReportPrefs(); });
+
+  $('#btnVisSave').addEventListener('click', saveVisibilityDefault);
+  $('#btnVisAllPublic').addEventListener('click', () => applyVisibilityToAll('public'));
+  $('#btnVisAllPrivate').addEventListener('click', () => applyVisibilityToAll('private'));
 
   $('#btnPwSave').addEventListener('click', savePassword);
   $('#pwNew2').addEventListener('keydown', e => { if (e.key === 'Enter') savePassword(); });
@@ -83,6 +88,56 @@ async function savePassword() {
     show(e.message);
   } finally {
     btn.disabled = false;
+  }
+}
+
+/* ---------- 日报可见性 ----------
+   两件事，界面上必须分清楚，不然一定有人以为改了默认值历史记录也跟着变：
+     · 默认值 —— 只影响以后新写的
+     · 两个批量按钮 —— 只影响已经写过的
+   都只作用于自己写的日报，后端那两个接口也没有管理员分支。 */
+function openReportPrefs() {
+  $('#visErr').classList.remove('on');
+  $('#visDefault').value = me?.reportVisibilityDefault === 'public' ? 'public' : 'private';
+  $('#visModal').classList.add('on');
+  $('#mask').classList.add('on');
+  setTimeout(() => $('#visDefault').focus(), 60);
+}
+
+const visError = m => { const e = $('#visErr'); e.textContent = m; e.classList.add('on'); };
+
+async function saveVisibilityDefault() {
+  const btn = $('#btnVisSave');
+  const v = $('#visDefault').value;
+  $('#visErr').classList.remove('on');
+  btn.disabled = true;
+  try {
+    const fresh = await api.prefsPatch({ reportVisibilityDefault: v });
+    // me 是这个模块里的一份缓存，不同步的话弹窗再打开会显示改之前的值
+    if (me) me.reportVisibilityDefault = fresh.reportVisibilityDefault;
+    close();
+    toast('ok', v === 'public' ? '以后新写的日报默认全员可见' : '以后新写的日报默认只有你自己看得到');
+  } catch (e) {
+    visError(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function applyVisibilityToAll(v) {
+  const btns = [$('#btnVisAllPublic'), $('#btnVisAllPrivate')];
+  $('#visErr').classList.remove('on');
+  for (const b of btns) b.disabled = true;
+  try {
+    const r = await api.reportsVisibilityAll(v);
+    close();
+    toast('ok', r.changed
+      ? `${r.changed} 条日报已改为${v === 'public' ? '全员可见' : '仅自己可见'}`
+      : '没有需要改的日报，本来就都是这个设置');
+  } catch (e) {
+    visError(e.message);
+  } finally {
+    for (const b of btns) b.disabled = false;
   }
 }
 
@@ -178,4 +233,5 @@ async function resetPassword(id, items) {
 export function close() {
   $('#pwModal').classList.remove('on');
   $('#usersModal').classList.remove('on');
+  $('#visModal').classList.remove('on');
 }

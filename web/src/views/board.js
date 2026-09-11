@@ -631,11 +631,23 @@ function caseCard(row) {
 }
 
 function reportCard(row) {
-  const statusClass = String(row.status || '').includes('待') ? 'wait' : 'done';
+  // 三种状态三种观感：待审核是要人动手的（琥珀），已反馈是有结果的（绿），
+  // 个人记录什么也不欠谁 —— 给它中性色，别在自己的日报上摆一个像待办的角标。
+  const solo = !row.reviewerName;
+  const statusClass = solo ? 'plain'
+    : (String(row.status || '').includes('待') ? 'wait' : 'done');
+  // 可见性放在最显眼的第一行：写日报的人需要在按下保存之后还能一眼确认
+  // 「这条到底给不给别人看」，翻进编辑弹窗才知道就太晚了。
+  const pub = row.visibility === 'public';
+  const visBadge = `<span class="report-vis ${pub ? 'is-public' : 'is-private'}" title="${
+    pub ? '全员可见：任何登录同事都能看到这条' : '仅自己可见：连管理员也看不到'
+  }">${pub ? '全员可见' : '仅自己'}</span>`;
   return `<article class="record-card report-card" ${cardAttrs(row)}>
-    <header class="record-top"><time>${esc(row.reportDate || '日期待补')}</time><span class="report-status ${statusClass}">${esc(row.status || '待审核')}</span>${deleteHtml(row)}</header>
+    <header class="record-top"><time>${esc(row.reportDate || '日期待补')}</time>${visBadge}<span class="report-status ${statusClass}">${esc(row.status || '个人记录')}</span>${deleteHtml(row)}</header>
     <h3>${textOr(row.title)}</h3>
-    <div class="report-route"><b>${esc(row.authorName || '我')}</b><i>→</i><span>${esc(row.reviewerName || '审核人待选')}</span></div>
+    ${solo
+      ? `<div class="report-route solo"><b>${esc(row.authorName || '我')}</b><span>没请人点评</span></div>`
+      : `<div class="report-route"><b>${esc(row.authorName || '我')}</b><i>→</i><span>${esc(row.reviewerName)}</span></div>`}
     ${row.summary ? `<p class="report-summary">${esc(row.summary)}</p>` : ''}
     ${row.needHelp ? `<div class="report-callout help"><span>需要协助</span>${esc(row.needHelp)}</div>` : ''}
     ${row.feedback ? `<div class="report-callout feedback"><span>审核反馈</span>${esc(row.feedback)}</div>` : ''}
@@ -701,18 +713,35 @@ function openEdit(key, id) {
       .toISOString().slice(0, 10);
     for (const f of fields) if (f.type === 'date') preset[f.key] = ymd;
   }
+  // 字段可以自带默认值，取当前登录人算（日报的「谁能看」就靠这个读个人设置）。
+  // 只在新建时用：编辑已有记录时值必须来自那条记录本身，
+  // 否则改个错别字就把别人已经设好的可见性顺手覆盖了。
+  if (!id) {
+    for (const f of fields) {
+      if (typeof f.default === 'function') preset[f.key] = f.default(me);
+      else if (f.default !== undefined) preset[f.key] = f.default;
+    }
+  }
 
   $('#bdTitle').textContent = reviewMode ? '审核工作提交' : (row ? '编辑 · ' : '新增 · ') + b.title;
+  // 日报不是台账：它归作者一个人，默认谁也看不到，删也是自己说了算。
+  // 沿用那句「团队共同维护、删除只有管理员能做」会把人吓得不敢写真话。
   $('#bdHint').textContent = reviewMode
     ? `${row.authorName || '同事'} · ${row.reportDate || '未填日期'} 提交 · 反馈保存后会通知提交人`
-    : '这些台账是团队共同维护的，任何人都能录和改；删除只有管理员能做。';
+    : key === 'reports'
+      ? '这是你自己的记录，默认只有你看得到；想请人点评再选审核人，不选就是记一笔。'
+      : '这些台账是团队共同维护的，任何人都能录和改；删除只有管理员能做。';
   $('#btnBdSave').textContent = reviewMode ? '提交审核反馈' : '保存';
   // 只有审核人（和管理员）才看得到「审核反馈」这一栏。
   // 不藏的话提交人会以为自己该填，填了又被后端拒掉。
   // 「审核反馈」只在编辑已有记录、且自己是审核人（或管理员）时才出现。
   // 新建那一刻还没人审核，这栏摆在那儿只会让提交人以为自己该填。
-  const visible = fields.filter(f => !f.reviewerOnly
-    || (row && (me.role === 'admin' || Number(row.reviewerId) === Number(me.id))));
+  // authorOnly 的字段只有作者本人能看到（新建时作者必然是自己）。
+  // 可见性就是这种字段：管理员和审核人都无权替作者决定公开与否，
+  // 摆出来只会让人以为能改，改了再被后端 403 拒掉。
+  const visible = fields.filter(f => (!f.reviewerOnly
+      || (row && (me.role === 'admin' || Number(row.reviewerId) === Number(me.id))))
+    && (!f.authorOnly || !row || Number(row.authorId) === Number(me.id)));
 
   $('#bdForm').innerHTML = visible.map(f => {
     const v = row ? valueOf(row, f.key) : (preset[f.key] ?? '');
@@ -741,8 +770,10 @@ function openEdit(key, id) {
           ? ' placeholder="写清楚做得好的地方、需要修改的地方，以及下一步建议"' : ''
       }>${esc(v)}</textarea>`;
     } else if (f.type === 'select') {
+      // noEmpty：有些选择题没有「没选」这个合法状态（比如日报给谁看），
+      // 留着那个「—」只会让人选出一个后端还得替他兜底的空值。
       input = `<select class="inp" id="${id_}">
-        <option value="">—</option>
+        ${f.noEmpty ? '' : '<option value="">—</option>'}
         ${f.options.map(o => {
           const val = typeof o === 'object' ? o.value : o;
           const lab = typeof o === 'object' ? o.label : o;

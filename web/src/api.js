@@ -93,6 +93,8 @@ const requestKey = scope => {
 
 export const api = {
   me:        ()            => call('GET',   '/api/me'),
+  /** 个人偏好。目前只有 reportVisibilityDefault（新日报默认给谁看）。 */
+  prefsPatch: (payload)    => call('PATCH', '/api/auth/me/prefs', payload),
   logout:    ()            => call('POST',  '/api/auth/logout'),
   users:     ()            => call('GET',   '/api/admin/users'),
   /** 可被指派为负责人的人。和上面那个 admin 接口不是一回事 ——
@@ -224,6 +226,8 @@ export const api = {
   reportsCreate: (payload)     => call('POST',   '/api/reports', payload),
   reportsPatch:  (id, payload) => call('PATCH',  `/api/reports/${id}`, payload),
   reportsDelete: (id)          => call('DELETE', `/api/reports/${id}`),
+  /** 一键把我已经写过的日报全部改成公开 / 全部收回私密。只作用于自己写的。 */
+  reportsVisibilityAll: (visibility) => call('POST', '/api/reports/visibility', { visibility }),
   reportFiles:   (id)          => call('GET',    `/api/reports/${id}/files`),
   reportUpload:  async (id, file) => {
     const r = await fetch(`${BASE}/api/reports/${id}/files?name=${encodeURIComponent(file.name)}`,

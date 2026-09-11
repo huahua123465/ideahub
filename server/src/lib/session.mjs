@@ -77,7 +77,8 @@ export async function createSession(userId, userAgent) {
 export async function userBySession(sid) {
   if (!sid || !/^[0-9a-f]{64}$/.test(sid)) return null;
   const { rows } = await query(
-    `SELECT u.id, u.name, u.dept, u.role::text AS role, u.username
+    `SELECT u.id, u.name, u.dept, u.role::text AS role, u.username,
+            u.report_visibility_default
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.id = $1 AND s.expires_at > now()`, [sid]);
   if (!rows[0]) return null;

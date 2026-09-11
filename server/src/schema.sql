@@ -3641,3 +3641,25 @@ DECLARE sample_count INT;sample_distinct_ordinals INT;sample_min_ordinal INT;sam
   ELSIF claim_count<>8 OR dimension_count<>8 THEN RAISE EXCEPTION 'complete legacy account research run requires eight dimensions' USING ERRCODE='23514';END IF;
  END IF;RETURN NEW;END $$;
 CREATE TRIGGER account_research_runs_guard_trg BEFORE UPDATE OR DELETE ON account_research_runs FOR EACH ROW EXECUTE FUNCTION account_research_run_guard();
+
+-- ---------- 日报可见性（2026-09-10） ----------
+-- 工作提交同时承担「个人每日总结」的角色，所以每一条要能由作者自己决定给不给别人看。
+--   private（默认）→ 只有作者本人，以及作者主动指定的审核人
+--   public          → 全站登录用户都能看
+-- 管理员不是例外：private 就是 private，管理员也翻不到。这是有意的 ——
+-- 「私密」如果对管理员打折，同事就不会真的拿它写卡点和吐槽，这个字段也就白加了。
+-- 默认给 private，历史数据因此可见范围只会变窄不会变宽（原来管理员能看，现在不能）。
+ALTER TABLE work_reports ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'private';
+ALTER TABLE work_reports DROP CONSTRAINT IF EXISTS work_reports_visibility_ck;
+ALTER TABLE work_reports ADD  CONSTRAINT work_reports_visibility_ck
+  CHECK (visibility IN ('private', 'public'));
+
+-- 每个人自己的默认值：不想每条都点一次的人，在个人设置里定一次就行。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS report_visibility_default TEXT NOT NULL DEFAULT 'private';
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_report_visibility_ck;
+ALTER TABLE users ADD  CONSTRAINT users_report_visibility_ck
+  CHECK (report_visibility_default IN ('private', 'public'));
+
+-- 「全员公开」这一栏是按日期倒序翻的，走独立索引，别让它去扫全表
+CREATE INDEX IF NOT EXISTS idx_work_public
+  ON work_reports(report_date DESC, id DESC) WHERE visibility = 'public';

@@ -288,10 +288,17 @@ export function mount(router) {
       const ok = m[0] && (Number(m[0].from_id) === me.id || Number(m[0].to_id) === me.id);
       if (!ok) throw forbidden('这是别人的私聊文件');
     }
-    if (f.scope === 'report' && me.role !== 'admin') {
+    // 工作提交（= 个人日报）的附件跟着那条日报的可见性走，规则见 routes/work.mjs 文件头：
+    //   public  → 全站登录用户
+    //   private → 只有作者和他指定的审核人，**管理员也不行**
+    // 这里没有 me.role === 'admin' 的短路，是有意的；加回去就等于私密日报形同虚设。
+    if (f.scope === 'report') {
       const { rows: r } = await query(
-        'SELECT author_id, reviewer_id FROM work_reports WHERE id = $1', [f.ref_id]);
-      const ok = r[0] && (Number(r[0].author_id) === me.id || Number(r[0].reviewer_id) === me.id);
+        'SELECT author_id, reviewer_id, visibility FROM work_reports WHERE id = $1', [f.ref_id]);
+      const ok = r[0] && (
+        r[0].visibility === 'public'
+        || Number(r[0].author_id) === me.id
+        || (r[0].reviewer_id != null && Number(r[0].reviewer_id) === me.id));
       if (!ok) throw forbidden('这是别人的工作提交，你看不到');
     }
     if(f.scope==='idea')await ensureIdeaAccess(Number(f.ref_id),me);
