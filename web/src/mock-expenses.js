@@ -69,7 +69,9 @@ function configDto(me) {
     depts: CFG.depts.map(([dept, id]) => ({ dept, leader: person(id) })),
     roles: Object.fromEntries(STAGES.slice(1).map(s => [s, person(CFG.roles[s])])),
     ready: !missing.length, missing,
-    myDept: CFG.depts.some(d => d[0] === me.dept) ? me.dept : null,
+    myDept: me.dept || null,
+    myDeptReady: CFG.depts.some(d => d[0] === me.dept),
+    ...(me.role === 'admin' ? { deptMembers: { 产品部: 3, 内容组: 2, 技术组: 2 }, unassigned: 4 } : {}),
     myDuties: { leadDepts: CFG.depts.filter(d => d[1] === me.id).map(d => d[0]),
       roles: STAGES.slice(1).filter(s => CFG.roles[s] === me.id) },
   };
@@ -124,7 +126,6 @@ function dto(c, me, full) {
 function fields(b, partial) {
   const out = {};
   const has = k => !partial || b[k] !== undefined;
-  if (has('dept')) { if (!deptLeader(b.dept)) throw fail('请选择部门'); out.dept = b.dept; }
   if (has('category')) { if (!CAT[b.category]) throw fail('请选择报销类型'); out.category = b.category; }
   if (has('title')) { if (!String(b.title || '').trim()) throw fail('报销事项 不能为空'); out.title = String(b.title).trim(); }
   if (has('expenseDate')) { if (!/^\d{4}-\d{2}-\d{2}$/.test(b.expenseDate || '')) throw fail('日期格式不对'); out.expenseDate = b.expenseDate; }
@@ -173,9 +174,11 @@ export function handleExpenses(method, p, q, body, me) {
     return { items: items.map(c => dto(c, me, false)), todoCount: CLAIMS.filter(todo).length };
   }
   if (p === '/api/expenses' && method === 'POST') {
+    // 部门取管理员分配的，和后端一致；请求里带的 dept 忽略
+    if (!me.dept) throw fail('你还没有被分配部门，请联系管理员在「用户管理」里设置');
     const f = fields(body || {}, false);
-    const c = { id: ++seq, applicantId: me.id, status: 'draft', stage: null, round: 0, createdAt: new Date().toISOString(),
-      actions: [], files: [], note: '', ...f };
+    const c = { id: ++seq, applicantId: me.id, dept: me.dept, status: 'draft', stage: null, round: 0,
+      createdAt: new Date().toISOString(), actions: [], files: [], note: '', ...f };
     c.updatedAt = c.createdAt;
     CLAIMS.unshift(c);
     return dto(c, me, true);
@@ -220,6 +223,9 @@ export function handleExpenses(method, p, q, body, me) {
   if (method !== 'POST') return undefined;
   if (m[2] === 'submit') {
     if (!allowed.submit) throw fail('只有申请人本人能提交报销单', 403);
+    if (!me.dept) throw fail('你还没有被分配部门，请联系管理员在「用户管理」里设置');
+    c.dept = me.dept;
+    if (!deptLeader(c.dept)) throw fail(`「${c.dept}」还没有设置部门负责人，请联系管理员在「审批设置」里补上`);
     if (!c.files.length) throw fail('请至少上传一份凭证或支付截图再提交');
     c.round += 1;
     c.submittedAt = new Date().toISOString();

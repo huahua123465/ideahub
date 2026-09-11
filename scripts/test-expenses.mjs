@@ -13,7 +13,8 @@
  *   财务          周未
  *   出纳          叶昭
  *   申请人        赵嘉一（产品部）
- *   无关的人      王明轩
+ *   无关的人      王明轩（技术部）
+ * 报销单的部门取管理员给申请人分配的部门，跑之前统一分好，跑完恢复原来的部门。
  */
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
@@ -68,11 +69,17 @@ const setConfig = (over = {}) => call(ADMIN, 'PATCH', '/api/expenses/config', {
   gmId: GM, financeId: FIN, cashierId: CASH, ...over,
 });
 
-// 跑之前把原配置存下来，跑完原样放回去
+// 跑之前把原配置和这几个人原来的部门存下来，跑完原样放回去
 const snapshot = {
   depts: (await dbq('SELECT dept, leader_id, sort FROM expense_dept_leaders')).rows,
   roles: (await dbq('SELECT role, user_id FROM expense_role_holders')).rows,
+  userDepts: (await dbq('SELECT id, dept FROM users WHERE id = ANY($1::bigint[])', [Object.values(id)])).rows,
 };
+const setDept = (user, dept, as = ADMIN) => call(as, 'PATCH', `/api/admin/users/${user}/dept`, { dept });
+for (const [u, d] of [[APP, '产品部'], [LEAD_P, '产品部'], [CASH, '产品部'], [LEAD_T, '技术部'], [OUT, '技术部']]) {
+  const r = await setDept(u, d);
+  if (r.status !== 200) throw new Error(`分配部门失败：${JSON.stringify(r.data)}`);
+}
 
 after(async () => {
   if (created.length) {
@@ -88,6 +95,7 @@ after(async () => {
   for (const r of snapshot.roles) {
     await dbq('INSERT INTO expense_role_holders(role, user_id) VALUES($1,$2)', [r.role, r.user_id]);
   }
+  for (const u of snapshot.userDepts) await dbq('UPDATE users SET dept = $2 WHERE id = $1', [u.id, u.dept]);
   await close();
 });
 
@@ -126,12 +134,13 @@ test('建草稿：字段校验', async () => {
   await bad({ amount: '0' }, /大于 0/);
   await bad({ amount: '12.345' }, /金额格式/);
   await bad({ amount: '-5' }, /金额格式/);
-  await bad({ dept: '不存在的部门' }, /不在报销部门列表/);
   await bad({ category: 'bribe' }, /报销类型/);
   await bad({ expenseDate: '2026-02-30' }, /日期/);
   await bad({ title: '  ' }, /报销事项/);
 
-  const c = await newClaim(APP, { amount: '1,234.5' });
+  // 请求里带的部门被忽略，一律用管理员给申请人分配的部门
+  const c = await newClaim(APP, { amount: '1,234.5', dept: '技术部' });
+  assert.equal(c.dept, '产品部');
   assert.equal(c.amount, '1234.50');
   assert.equal(c.amountCents, 123450);
   assert.equal(c.status, 'draft');
@@ -140,6 +149,52 @@ test('建草稿：字段校验', async () => {
   assert.deepEqual(c.flow.map(s => [s.stage, s.state, s.handler?.id]),
     [['leader', 'waiting', LEAD_P], ['gm', 'waiting', GM], ['finance', 'waiting', FIN], ['cashier', 'waiting', CASH]]);
   assert.equal(c.can.edit && c.can.submit && c.can.remove && c.can.upload, true);
+});
+
+test('部门由管理员分配：没分配不能发起，提交时按当时的部门送审', async () => {
+  assert.equal((await setDept(APP, '技术部', GM)).status, 403, '非管理员不能改部门');
+  assert.equal((await setDept(APP, 'x'.repeat(41))).status, 400);
+  assert.equal((await setDept(99999999, '产品部')).status, 404);
+
+  // 管理员看得到分配情况，普通人看不到
+  const adminCfg = await call(ADMIN, 'GET', '/api/expenses/config');
+  assert.equal(typeof adminCfg.data.unassigned, 'number');
+  assert.equal(typeof adminCfg.data.deptMembers, 'object');
+  const appCfg = await call(APP, 'GET', '/api/expenses/config');
+  assert.equal(appCfg.data.deptMembers, undefined);
+  assert.equal(appCfg.data.myDept, '产品部');
+  assert.equal(appCfg.data.myDeptReady, true);
+
+  // 没分配部门：不能发起
+  assert.equal((await setDept(APP, '')).data.dept, null);
+  const none = await call(APP, 'POST', '/api/expenses', {
+    category: 'office', title: '打印纸', expenseDate: '2026-09-01', amount: '10',
+  });
+  assert.equal(none.status, 400);
+  assert.match(none.data.error, /还没有被分配部门/);
+  assert.equal((await call(APP, 'GET', '/api/expenses/config')).data.myDept, null);
+
+  // 草稿建在产品部，提交前被调到技术部 → 提交时送技术部负责人
+  await setDept(APP, '产品部');
+  const moved = await newClaim(APP);
+  assert.equal(moved.dept, '产品部');
+  assert.equal((await upload(APP, moved.id, '发票.png')).status, 201);
+  await setDept(APP, '技术部');
+  const sub = await call(APP, 'POST', `/api/expenses/${moved.id}/submit`, {});
+  assert.equal(sub.status, 200, JSON.stringify(sub.data));
+  assert.equal(sub.data.dept, '技术部');
+  assert.equal(sub.data.handler.id, LEAD_T);
+  assert.equal((await call(LEAD_P, 'GET', `/api/expenses/${moved.id}`)).status, 404, '原部门负责人不再看得到');
+
+  // 分到了一个还没设负责人的部门：草稿能建，提交被拦
+  await setDept(APP, '市场部');
+  const market = await newClaim(APP);
+  assert.equal(market.dept, '市场部');
+  assert.equal((await upload(APP, market.id, '发票.png')).status, 201);
+  const blocked = await call(APP, 'POST', `/api/expenses/${market.id}/submit`, {});
+  assert.equal(blocked.status, 400);
+  assert.match(blocked.data.error, /市场部.*部门负责人/);
+  await setDept(APP, '产品部');
 });
 
 test('草稿只有申请人看得见；没附件不能提交；草稿可删且带走附件', async () => {

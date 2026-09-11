@@ -505,26 +505,27 @@ function paintEditFiles() {
 }
 
 function fillOptions(cfg, c) {
-  const deptSel = $('#expDept');
-  const dept = c?.dept || cfg.myDept || (cfg.depts.length === 1 ? cfg.depts[0].dept : '');
-  const depts = cfg.depts.map(d => d.dept);
-  // 被退回的单子如果部门已经被管理员删了，也要能看见原来填的是什么
-  if (c?.dept && !depts.includes(c.dept)) depts.unshift(c.dept);
-  deptSel.innerHTML = `<option value="">请选择部门</option>${depts.map(d =>
-    `<option value="${esc(d)}"${d === dept ? ' selected' : ''}>${esc(d)}</option>`).join('')}`;
+  // 部门只读：取管理员分配的部门，提交时后端也按这一刻的分配走（不是单子上次存的部门）
+  $('#expDept').value = me.dept || '未分配部门';
+  const note = $('#expEditDeptNote');
+  const ready = cfg.depts.some(d => d.dept === me.dept);
+  note.hidden = ready;
+  note.innerHTML = ready ? '' : `<b>「${esc(me.dept)}」还没有设置部门负责人</b><span>可以先存草稿，提交需要管理员在「审批设置」里给这个部门选负责人。</span>`;
   $('#expCategory').innerHTML = `<option value="">请选择类型</option>${cfg.categories.map(k =>
     `<option value="${k.key}"${k.key === c?.category ? ' selected' : ''}>${esc(k.label)}</option>`).join('')}`;
 }
 
 export async function openCreate() {
-  let cfg;
-  try { cfg = await ensureConfig(); }
-  catch (e) { toast('info', e.message || '读取报销设置失败'); return; }
-  if (!cfg.depts.length) {
-    if (me.role === 'admin') { toast('info', '先在「审批设置」里添加部门和负责人'); openConfig(); }
-    else toast('info', '管理员还没有设置报销部门，暂时不能发起报销');
+  // 报销单送给哪个部门负责人，取决于管理员给你分的部门；没分就没法发起
+  if (!me.dept) {
+    toast('info', me.role === 'admin'
+      ? '先在头像菜单「用户管理」里给自己分配部门，才能发起报销'
+      : '你还没有被分配部门，请联系管理员在「用户管理」里设置');
     return;
   }
+  let cfg;
+  try { cfg = state.config = await api.expenseConfig(); }
+  catch (e) { toast('info', e.message || '读取报销设置失败'); return; }
   openEditor(null, cfg);
 }
 
@@ -559,7 +560,6 @@ function openEditor(c, cfg) {
 
 function readForm() {
   const payload = {
-    dept: $('#expDept').value,
     category: $('#expCategory').value,
     title: $('#expTitle').value.trim(),
     expenseDate: $('#expDate').value,
@@ -567,7 +567,7 @@ function readForm() {
     note: $('#expNote').value.trim(),
   };
   const missing = [
-    [!payload.dept, '部门', '#expDept'], [!payload.category, '报销类型', '#expCategory'],
+    [!payload.category, '报销类型', '#expCategory'],
     [!payload.title, '报销事项', '#expTitle'], [!payload.expenseDate, '发生日期', '#expDate'],
     [!payload.amount, '金额', '#expAmount'],
   ].filter(x => x[0]);
@@ -672,7 +672,7 @@ function bindEditor() {
 let people = [];
 /** 公司现有的部门。设置里总会列出这几行，管理员只需要给每个部门选负责人；
     没选负责人的部门先不启用，可以分几次配完。以后有新部门用「添加部门」补。 */
-const DEFAULT_DEPTS = ['运营部', '财务部', '行政部'];
+export const DEFAULT_DEPTS = ['运营部', '财务部', '行政部'];
 
 function cfgRowHtml(d = { dept: '', leader: null }) {
   return `<div class="exp-cfg-row">
@@ -704,6 +704,13 @@ export async function openConfig() {
     const [cfg, users] = await Promise.all([api.expenseConfig(), api.people()]);
     state.config = cfg;
     people = users.items || [];
+    const stats = $('#expCfgStats');
+    const members = cfg.deptMembers || {};
+    const assigned = Object.entries(members).map(([d, n]) => `${esc(d)} ${n} 人`).join('、');
+    stats.hidden = !cfg.deptMembers;
+    stats.innerHTML = `报销单按申请人所在部门送审。${assigned ? `已分配：${assigned}。` : ''}${cfg.unassigned
+      ? `<b>还有 ${cfg.unassigned} 人没分配部门</b>，他们暂时不能发起报销，在头像菜单「用户管理」里设置。`
+      : '所有人都已分配部门。'}`;
     const rows = [...cfg.depts, ...DEFAULT_DEPTS
       .filter(dept => !cfg.depts.some(d => d.dept === dept)).map(dept => ({ dept, leader: null }))];
     $('#expCfgDepts').innerHTML = rows.map(cfgRowHtml).join('');

@@ -752,10 +752,11 @@
   </header>
   <div class="form">
     <div class="exp-callout warn" id="expEditReturn" hidden></div>
+    <div class="exp-callout warn" id="expEditDeptNote" hidden></div>
     <div class="row2">
       <div class="field">
-        <label for="expDept">部门 <span>*</span></label>
-        <select class="inp" id="expDept"></select>
+        <label for="expDept">部门</label>
+        <input class="inp exp-dept-inp" id="expDept" readonly title="由管理员在「用户管理」里分配，报销单送这个部门的负责人审批">
       </div>
       <div class="field">
         <label for="expCategory">报销类型 <span>*</span></label>
@@ -820,6 +821,7 @@
   <div class="form">
     <div class="field">
       <div class="exp-cfg-label" id="expCfgDeptsLabel">部门与部门负责人</div>
+      <div class="exp-cfg-stats" id="expCfgStats" hidden></div>
       <div class="exp-cfg-depts" id="expCfgDepts" role="group" aria-labelledby="expCfgDeptsLabel"></div>
       <button class="btn btn-ghost exp-cfg-add" type="button" id="btnExpCfgAddDept">＋ 添加部门</button>
     </div>

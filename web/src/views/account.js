@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { $, avatarColor, initial, esc } from '../util.js';
 import { toast } from '../toast.js';
 import { clearCache as clearDashboardCache } from './dashboard.js';
+import { DEFAULT_DEPTS } from './expenses.js';
 
 const ROLE_CN = { admin: '管理员', reviewer: '评审委员', member: '成员' };
 
@@ -154,10 +155,19 @@ async function openUsers() {
   await renderUsers();
 }
 
+/** 部门下拉：报销审批里配过的部门 + 公司默认部门 + 这个人当前填的（哪怕不在列表里也要显示出来） */
+function deptOptions(current, cfg) {
+  const configured = new Set((cfg?.depts || []).map(d => d.dept));
+  const names = [...new Set([...configured, ...DEFAULT_DEPTS, ...(current ? [current] : [])])];
+  return `<option value="">未分配部门</option>${names.map(d => `<option value="${esc(d)}"${d === current ? ' selected' : ''}>${
+    esc(d)}${configured.has(d) ? '' : '（未设负责人）'}</option>`).join('')}`;
+}
+
 async function renderUsers() {
-  let items;
+  let items, cfg;
   try {
-    ({ items } = await api.users());
+    // 读不到报销配置不影响管理账号，部门下拉退回到默认部门
+    [{ items }, cfg] = await Promise.all([api.users(), api.expenseConfig().catch(() => null)]);
   } catch (e) {
     $('#userList').innerHTML = `<div class="uempty">加载失败：${esc(e.message)}</div>`;
     return;
@@ -183,6 +193,8 @@ async function renderUsers() {
         <span>@${esc(u.username || '')}${u.dept ? ' · ' + esc(u.dept) : ''} · 提过 ${u.ideaCount} 条灵感${
           u.lastLoginAt ? '' : ' · 从没登录过'}</span>
       </div>
+      <select class="inp udept" data-dept-user="${u.id}" aria-label="${esc(u.name)}的部门"
+        title="报销单按这个部门找负责人审批">${deptOptions(u.dept, cfg)}</select>
       <div class="roles">
         ${['member', 'reviewer', 'admin'].map(r => `
           <button data-role="${r}" class="${u.role === r ? 'on' : ''}"${
@@ -193,12 +205,32 @@ async function renderUsers() {
     </div>`;
   }).join('');
 
+  $('#userList').onchange = e => {
+    const sel = e.target.closest('[data-dept-user]');
+    if (sel) changeDept(sel);
+  };
   $('#userList').onclick = async e => {
     const roleBtn = e.target.closest('[data-role]');
     if (roleBtn && !roleBtn.disabled) return changeRole(roleBtn);
     const resetBtn = e.target.closest('[data-reset]');
     if (resetBtn) return resetPassword(Number(resetBtn.dataset.reset), items);
   };
+}
+
+async function changeDept(sel) {
+  const id = Number(sel.dataset.deptUser);
+  sel.disabled = true;
+  try {
+    const saved = await api.setDept(id, sel.value);
+    toast('ok', saved.dept ? `${saved.name} 已分到${saved.dept}` : `已取消 ${saved.name} 的部门`);
+    // me 是全站共用的那份当前用户对象：改的是自己时同步过去，发起报销马上按新部门走
+    if (id === me.id) { me.dept = saved.dept; setMe(me); }
+  } catch (e) {
+    toast('info', e.message || '保存失败');
+  }
+  await renderUsers();
+  // 重绘后焦点回到这个人的下拉框，键盘连续分配时不用重新找
+  $(`#userList [data-dept-user="${id}"]`)?.focus();
 }
 
 async function changeRole(btn) {

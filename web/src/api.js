@@ -102,6 +102,8 @@ export const api = {
   people:    ()            => call('GET',   '/api/users'),
   setRole:   (id, role)    => call('PATCH', `/api/admin/users/${id}/role`, { role }),
   resetPw:   (id, password)=> call('POST',  `/api/admin/users/${id}/reset-password`, { password }),
+  /** 分配部门，报销单按这个部门找负责人审批。传空字符串 = 取消分配 */
+  setDept:   (id, dept)    => call('PATCH', `/api/admin/users/${id}/dept`, { dept }),
   changePw:  (oldPassword, newPassword) =>
                               call('POST',  '/api/auth/password', { oldPassword, newPassword }),
   ideas:     (opts = {})   => call('GET',   '/api/ideas' + qs(opts)),

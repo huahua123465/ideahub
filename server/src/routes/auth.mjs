@@ -236,6 +236,24 @@ export function mount(router) {
     sendJson(res, 200, publicUser(rows[0]));
   });
 
+  /** 分配部门。报销单按申请人所在部门找部门负责人审批（routes/expenses.mjs），
+      所以部门由管理员统一设置，不让本人或申请时随手改。传空字符串 = 取消分配。 */
+  router.patch('/api/admin/users/:id/dept', async (req, res, params) => {
+    const me = await currentUser(req);
+    assertAdmin(me);
+    const id = Number(params.id);
+    const raw = (await readJson(req)).dept;
+    if (raw !== null && raw !== undefined && typeof raw !== 'string') throw badRequest('部门名称格式不对');
+    const dept = String(raw ?? '').trim();
+    if (dept.length > 40) throw badRequest('部门名称最多 40 个字');
+    const { rows } = await query(
+      `UPDATE users SET dept = $2 WHERE id = $1
+       RETURNING id, username, name, dept, role::text AS role, report_visibility_default, created_at, last_login_at`,
+      [id, dept || null]);
+    if (!rows[0]) throw notFound('没有这个用户');
+    sendJson(res, 200, publicUser(rows[0]));
+  });
+
   /** 重置某人的密码。同事忘了密码时管理员用，没有邮件系统，只能这样。 */
   router.post('/api/admin/users/:id/reset-password', async (req, res, params) => {
     assertAdmin(await currentUser(req));

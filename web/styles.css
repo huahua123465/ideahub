@@ -3210,6 +3210,9 @@ body.learning-fullscreen-open{overflow:hidden}
 
 .exp-config-modal{width:600px}
 .exp-cfg-label{margin-bottom:6px;color:var(--ink2);font-size:12.5px;font-weight:600}
+.exp-cfg-stats{margin:-2px 0 9px;color:var(--muted);font-size:12px;line-height:1.6}
+.exp-cfg-stats b{color:var(--warn);font-weight:650}
+.exp-dept-inp[readonly]{background:var(--page);color:var(--ink2);cursor:default}
 .exp-cfg-depts{display:flex;flex-direction:column;gap:7px}
 .exp-cfg-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 36px;gap:8px;align-items:center}
 .exp-cfg-del{width:36px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--surface);

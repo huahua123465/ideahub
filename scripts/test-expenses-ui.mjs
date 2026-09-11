@@ -150,8 +150,9 @@ try {
     await page.waitForFunction(() => /金额/.test(document.querySelector('#expEditErr')?.textContent || ''));
     await page.$eval('#expAmount', n => { n.value = ''; });
     await page.type('#expAmount', '86.5');
-    // 部门默认带出演示身份所在的产品部
-    assert.equal(await page.$eval('#expDept', n => n.value), '产品部');
+    // 部门只读，取管理员给演示身份分配的产品部
+    assert.deepEqual(await page.$eval('#expDept', n => [n.value, n.readOnly]), ['产品部', true]);
+    assert.equal(await page.$eval('#expEditDeptNote', n => n.hidden), true, '产品部已有负责人，不该提示');
     await page.click('#btnExpSubmit');
     await page.waitForFunction(() => /凭证/.test(document.querySelector('#expEditErr')?.textContent || ''), { timeout: 5_000 });
     // 草稿已经存下，删除草稿按钮出现；补附件后提交
@@ -196,6 +197,8 @@ try {
     assert.equal(cfg.rows, 6);
     assert.deepEqual((await deptRows()).slice(3), [['运营部', ''], ['财务部', ''], ['行政部', '']]);
     assert.match(cfg.gm, /陈屿/);
+    // 管理员能看到部门分配情况，没分配的人数要醒目
+    assert.match(await page.$eval('#expCfgStats', n => (n.hidden ? '' : n.textContent)), /已分配：产品部 3 人.*还有 4 人没分配部门/);
     await buttonVisible(page, 'expConfigModal', '#btnExpCfgSave');
     await harness.screenshot(page, `expenses-config-${scene}`);
     if (mobile) {
@@ -231,6 +234,33 @@ try {
         && document.querySelector('#expCfgDepts .exp-cfg-row [data-cfg-leader]').value === '2');
       assert.deepEqual(await deptRows(), [['运营部', '2'], ['财务部', ''], ['行政部', '']]);
     }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.modal.on'));
+
+    // 用户管理：每个人一行部门下拉，选项含公司部门，当前部门选中；手机上不溢出
+    await page.click('#meAvatar');
+    await page.waitForSelector('#miUsers', { visible: true });
+    await page.click('#miUsers');
+    await page.waitForSelector('#usersModal.on [data-dept-user]', { visible: true });
+    await settleDom(page);
+    const users = await page.$eval('#usersModal [data-dept-user]', sel => ({
+      value: sel.value, label: sel.getAttribute('aria-label'),
+      options: [...sel.options].map(o => o.textContent),
+    }));
+    assert.equal(users.value, '产品部');
+    assert.match(users.label, /的部门$/);
+    assert.deepEqual(users.options.slice(0, 1), ['未分配部门']);
+    // 「（未设负责人）」标记跟着实时审批配置走（桌面这轮前面刚改过配置），这里只核对部门名称齐全
+    const names = users.options.map(o => o.replace('（未设负责人）', ''));
+    assert.ok(['运营部', '财务部', '行政部', '产品部'].every(o => names.includes(o)), JSON.stringify(users.options));
+    await modalInViewport(page, 'usersModal');
+    st = await pageState(page);
+    assert.ok(st.overflow <= 1, `用户管理横向溢出 ${JSON.stringify(st)}`);
+    if (mobile) {
+      const h = await page.$eval('#usersModal [data-dept-user]', n => n.getBoundingClientRect().height);
+      assert.ok(h >= 44, `手机上部门下拉高度 ${h}`);
+    }
+    await harness.screenshot(page, `expenses-users-${scene}`);
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.modal.on'));
 

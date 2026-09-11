@@ -16,6 +16,9 @@
  *     不想报了就作废。草稿可以直接删，提交过的单子只能作废不能删 —— 财务单据要留痕。
  *  5. 所有状态流转都在事务里 SELECT ... FOR UPDATE，前端还会带上 stage 做乐观校验，
  *     双击或两个人同时点不会把一步审批记两次。
+ *  6. 部门不由申请人选：取管理员在「用户管理」里给他分配的部门（users.dept）。
+ *     建草稿时写入，提交时再按当时的分配刷新一次 —— 中途调了部门，单子送到新部门的负责人。
+ *     没分配部门的人不能发起报销。
  */
 import { unlink } from 'node:fs/promises';
 import { join, basename } from 'node:path';
@@ -85,7 +88,8 @@ function configDto(cfg, me) {
     roles: Object.fromEntries(STAGES.slice(1).map(s => [s, cfg.roles[s] || null])),
     ready: missing.length === 0,
     missing,
-    myDept: me.dept && cfg.depts.has(me.dept) ? me.dept : null,
+    myDept: me.dept || null,
+    myDeptReady: !!me.dept && cfg.depts.has(me.dept),
     myDuties: { leadDepts: [...leads], roles },
   };
 }
@@ -95,6 +99,24 @@ function configDto(cfg, me) {
 const CLAIM_SELECT = `
   SELECT c.*, a.name AS applicant_name
     FROM expense_claims c JOIN users a ON a.id = c.applicant_id`;
+
+/** 管理员看的分配情况：每个部门几个人、还有几个人没分部门（只数能登录的账号） */
+async function deptStats() {
+  const { rows } = await query(`
+    SELECT coalesce(nullif(btrim(dept), ''), '') AS dept, count(*)::int AS n
+      FROM users WHERE password_hash IS NOT NULL GROUP BY 1`);
+  return {
+    deptMembers: Object.fromEntries(rows.filter(r => r.dept).map(r => [r.dept, r.n])),
+    unassigned: rows.find(r => !r.dept)?.n || 0,
+  };
+}
+
+async function configResponse(me) {
+  const dto = configDto(await loadConfig(), me);
+  return me.role === 'admin' ? { ...dto, ...(await deptStats()) } : dto;
+}
+
+const NO_DEPT = '你还没有被分配部门，请联系管理员在「用户管理」里设置';
 
 async function loadActions(db, claimId) {
   const { rows } = await db.query(`
@@ -286,16 +308,10 @@ function optText(v, max, label) {
   return s || null;
 }
 
-/** partial=true 时只校验传了的字段（PATCH 用） */
-function parseFields(b, cfg, { partial = false } = {}) {
+/** partial=true 时只校验传了的字段（PATCH 用）。部门不从这里来，见文件头第 6 条；传了也忽略。 */
+function parseFields(b, { partial = false } = {}) {
   const out = {};
   const has = k => !partial || b[k] !== undefined;
-  if (has('dept')) {
-    const dept = String(b.dept ?? '').trim();
-    if (!dept) throw badRequest('请选择部门');
-    if (!cfg.depts.has(dept)) throw badRequest(`「${dept}」不在报销部门列表里，请联系管理员添加`);
-    out.dept = dept;
-  }
   if (has('category')) {
     if (!CATEGORY_LABEL[b.category]) throw badRequest('请选择报销类型');
     out.category = b.category;
@@ -366,7 +382,7 @@ export function mount(router) {
   /* ---------- 配置：所有人可读（填单要选部门、看流程），管理员可改 ---------- */
   router.get('/api/expenses/config', async (req, res) => {
     const me = await currentUser(req);
-    sendJson(res, 200, configDto(await loadConfig(), me));
+    sendJson(res, 200, await configResponse(me));
   });
 
   router.patch('/api/expenses/config', async (req, res) => {
@@ -428,7 +444,7 @@ export function mount(router) {
         }
       }
     });
-    sendJson(res, 200, configDto(await loadConfig(), me));
+    sendJson(res, 200, await configResponse(me));
     publish('expense:updated', {});
   });
 
@@ -486,11 +502,12 @@ export function mount(router) {
   router.post('/api/expenses', async (req, res) => {
     const me = await currentUser(req);
     const b = await readJson(req);
-    const f = parseFields(b, await loadConfig());
+    if (!me.dept) throw badRequest(NO_DEPT);
+    const f = parseFields(b);
     const { rows } = await query(`
       INSERT INTO expense_claims(applicant_id, dept, category, title, expense_date, amount_cents, note)
       VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [me.id, f.dept, f.category, f.title, f.expense_date, f.amount_cents, f.note]);
+      [me.id, me.dept, f.category, f.title, f.expense_date, f.amount_cents, f.note]);
     sendJson(res, 201, await loadDetail(Number(rows[0].id), me));
   });
 
@@ -503,7 +520,7 @@ export function mount(router) {
       const { c, cfg, can } = await lockClaim(db, id, me);
       if (!can.edit) throw forbidden(Number(c.applicant_id) === me.id
         ? '报销单审批中，不能修改；需要修改请让审批人退回' : '只有申请人本人能修改报销单');
-      const f = parseFields(b, cfg, { partial: true });
+      const f = parseFields(b, { partial: true });
       const cols = Object.keys(f);
       if (!cols.length) return;
       await db.query(
@@ -539,6 +556,12 @@ export function mount(router) {
       if (!can.submit) {
         throw c.status === 'pending' ? conflict('这张报销单已经提交过了')
           : forbidden('只有申请人本人能提交报销单');
+      }
+      // 按提交这一刻的部门分配走（能提交的只有申请人本人，所以就是 me）
+      if (!me.dept) throw badRequest(NO_DEPT);
+      if (me.dept !== c.dept) {
+        await db.query('UPDATE expense_claims SET dept = $2 WHERE id = $1', [id, me.dept]);
+        c.dept = me.dept;
       }
       if (!cfg.depts.has(c.dept)) {
         throw badRequest(`「${c.dept}」还没有设置部门负责人，请联系管理员在「审批设置」里补上`);
