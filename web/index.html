@@ -42,6 +42,7 @@
 <link rel="modulepreload" href="./src/views/collector.js">
 <link rel="modulepreload" href="./src/views/dashboard.js">
 <link rel="modulepreload" href="./src/views/drawer.js">
+<link rel="modulepreload" href="./src/views/expenses.js">
 <link rel="modulepreload" href="./src/views/formal.js">
 <link rel="modulepreload" href="./src/views/function-tree.js">
 <link rel="modulepreload" href="./src/views/funnel.js">
@@ -123,6 +124,7 @@
       <button class="navtop">团队<i class="caret"></i></button>
       <div class="navmenu">
         <button id="tab-reports" data-go="reports">工作提交</button>
+        <button id="tab-expenses" data-go="expenses">报销审批<span class="badge is-empty" id="expenseN" aria-label="待我处理的报销单">0</span></button>
         <button id="tab-tagadmin" data-go="tagadmin">标签与对接</button>
       </div>
     </div>
@@ -265,6 +267,7 @@
          的字段定义搭出来 —— 五个板块共用一套渲染器，不在 HTML 里重复五遍表格。 -->
     <section class="view" id="v-demands"></section>
     <section class="view" id="v-reports"></section>
+    <section class="view" id="v-expenses"></section>
     <section class="view" id="v-clientDetail"></section>
     <section class="view" id="v-tagadmin"></section>
     <section class="view" id="v-persona"></section>
@@ -738,6 +741,108 @@
     <div class="spacer"></div>
     <button class="btn btn-ghost" data-close>取消</button>
     <button class="btn btn-primary" id="btnVisSave">保存默认值</button>
+  </footer>
+</div>
+
+<!-- ============ 报销审批 ============ -->
+<div class="modal exp-edit-modal" id="expEditModal" role="dialog" aria-modal="true" aria-labelledby="expEditTitle">
+  <header>
+    <h2 id="expEditTitle">发起报销</h2>
+    <div class="hint" id="expEditHint">填好信息、传上凭证，提交后依次由部门负责人、总经理、财务审批，最后由出纳打款。</div>
+  </header>
+  <div class="form">
+    <div class="exp-callout warn" id="expEditReturn" hidden></div>
+    <div class="row2">
+      <div class="field">
+        <label for="expDept">部门 <span>*</span></label>
+        <select class="inp" id="expDept"></select>
+      </div>
+      <div class="field">
+        <label for="expCategory">报销类型 <span>*</span></label>
+        <select class="inp" id="expCategory"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="expTitle">报销事项 <span>*</span></label>
+      <input class="inp" id="expTitle" maxlength="120" placeholder="例如：9 月上海客户拜访，高铁往返">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="expDate">发生日期 <span>*</span></label>
+        <input class="inp" id="expDate" type="date">
+      </div>
+      <div class="field">
+        <label for="expAmount">金额（元） <span>*</span></label>
+        <input class="inp exp-amount-inp" id="expAmount" inputmode="decimal" autocomplete="off" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label for="expNote">备注 <span class="opt">选填</span></label>
+      <textarea class="inp" id="expNote" maxlength="2000" placeholder="补充说明，比如同行人员、招待对象"></textarea>
+    </div>
+    <div class="field">
+      <label for="expFiles">凭证与附件 <span>*</span></label>
+      <label class="idea-file-picker exp-file-picker">
+        <input type="file" id="expFiles" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx">
+        <b>选择电子发票、佐证材料或支付截图</b>
+        <span>支持图片、PDF、Word、Excel，单个不超过 20MB</span>
+      </label>
+      <div class="exp-file-list" id="expEditFiles"></div>
+    </div>
+    <div class="exp-error" id="expEditErr" role="alert" aria-live="polite"></div>
+  </div>
+  <footer>
+    <button class="btn btn-crit" type="button" id="btnExpDelete" hidden>删除草稿</button>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" type="button" data-close>取消</button>
+    <button class="btn btn-ghost" type="button" id="btnExpSaveDraft">存为草稿</button>
+    <button class="btn btn-primary" type="button" id="btnExpSubmit">提交审批</button>
+  </footer>
+</div>
+
+<div class="modal exp-detail-modal" id="expDetailModal" role="dialog" aria-modal="true" aria-labelledby="expDetailTitle">
+  <header class="exp-detail-head">
+    <div>
+      <div class="exp-detail-code" id="expDetailCode"></div>
+      <h2 id="expDetailTitle">报销单</h2>
+    </div>
+    <button class="btn btn-ghost btn-mini" type="button" data-close>关闭</button>
+  </header>
+  <div class="exp-detail-body" id="expDetailBody"></div>
+  <footer class="exp-detail-foot" id="expDetailFoot"></footer>
+</div>
+
+<div class="modal exp-config-modal" id="expConfigModal" role="dialog" aria-modal="true" aria-labelledby="expConfigTitle">
+  <header>
+    <h2 id="expConfigTitle">报销审批设置</h2>
+    <div class="hint">报销单按「部门负责人 → 总经理 → 财务 → 出纳」流转。人员有变动时改这里，正在审批中的单子会自动转给新的人。</div>
+  </header>
+  <div class="form">
+    <div class="field">
+      <div class="exp-cfg-label" id="expCfgDeptsLabel">部门与部门负责人</div>
+      <div class="exp-cfg-depts" id="expCfgDepts" role="group" aria-labelledby="expCfgDeptsLabel"></div>
+      <button class="btn btn-ghost exp-cfg-add" type="button" id="btnExpCfgAddDept">＋ 添加部门</button>
+    </div>
+    <div class="exp-cfg-roles">
+      <div class="field">
+        <label for="expCfgGm">总经理</label>
+        <select class="inp" id="expCfgGm"></select>
+      </div>
+      <div class="field">
+        <label for="expCfgFinance">财务</label>
+        <select class="inp" id="expCfgFinance"></select>
+      </div>
+      <div class="field">
+        <label for="expCfgCashier">出纳</label>
+        <select class="inp" id="expCfgCashier"></select>
+      </div>
+    </div>
+    <div class="exp-error" id="expCfgErr" role="alert" aria-live="polite"></div>
+  </div>
+  <footer>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" type="button" data-close>取消</button>
+    <button class="btn btn-primary" type="button" id="btnExpCfgSave">保存设置</button>
   </footer>
 </div>
 

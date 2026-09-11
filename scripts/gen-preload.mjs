@@ -9,8 +9,8 @@ import { WEB_HTML, WEB_ROOT, makeModulePreloadHtml } from './lib/web-build.mjs';
 const list = [];
 for (const [dir, prefix] of [[join(WEB_ROOT, 'src'), './src/'], [join(WEB_ROOT, 'src', 'views'), './src/views/']]) {
   for (const file of await readdir(dir)) {
-    // mock.js 只有后端连不上时才会用到，不值得占一个并发额度。
-    if (file.endsWith('.js') && file !== 'mock.js') list.push(prefix + file);
+    // mock*.js 只有后端连不上时才会用到，不值得占一个并发额度。
+    if (file.endsWith('.js') && !file.startsWith('mock')) list.push(prefix + file);
   }
 }
 

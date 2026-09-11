@@ -3079,3 +3079,170 @@ body.learning-fullscreen-open{overflow:hidden}
 /* Account research 1.1 depth: auditable scope, content matrix and saturation. */
 .account-pattern-code{display:block;margin:8px 0;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px}.account-sample-scope{margin:14px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);overflow:hidden}.account-sample-scope>summary{min-height:44px;display:flex;align-items:center;padding:9px 12px;color:var(--ink2);font-size:12px;font-weight:700;cursor:pointer}.account-sample-scope>div{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 12px 12px}.account-sample-scope section{min-width:0;padding:10px;border-radius:9px;background:var(--surface)}.account-sample-scope section>b,.account-sample-scope section>span{display:block}.account-sample-scope section>b{margin-bottom:6px;font-size:11px}.account-sample-scope section>span{padding:4px 0;color:var(--muted);font-size:10px;line-height:1.4}.account-depth-card{margin-top:18px;padding:20px;border:1px solid var(--line);border-radius:18px;background:var(--surface);box-shadow:var(--shadow-sm)}.account-depth-card>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.account-depth-card>header span{color:var(--muted);font-size:10px;font-weight:700}.account-depth-card>header h2{margin-top:4px;font-size:18px}.account-depth-card>header>b{color:var(--accent);font-size:12px}.account-matrix-table{display:grid;gap:10px;margin-top:15px}.account-matrix-table>article{padding:12px;border:1px solid var(--line-soft);border-radius:12px;background:var(--surface-2)}.account-matrix-table article>header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.account-matrix-table article>header b{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px}.account-matrix-table article>header span,.account-matrix-table article>header em{padding:3px 7px;border-radius:99px;background:var(--surface);font-size:9px;font-style:normal}.account-matrix-table article>header em{margin-left:auto}.account-matrix-table article>div{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.account-matrix-table article>div>span{min-width:110px;padding:8px;border-radius:8px;background:var(--surface)}.account-matrix-table article>div b,.account-matrix-table article>div small{display:block}.account-matrix-table article>div b{font-size:10px}.account-matrix-table article>div small{margin-top:2px;color:var(--muted);font-size:9px}.account-depth-card>footer,.account-depth-card>p{margin-top:12px;color:var(--muted);font-size:10px}.account-saturation-batches{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:14px}.account-saturation-batches>span{padding:10px;border-radius:10px;background:var(--surface-2)}.account-saturation-batches b,.account-saturation-batches small{display:block}.account-saturation-batches b{font-size:11px}.account-saturation-batches small{margin-top:4px;color:var(--muted);font-size:9px}
 @media(max-width:700px){.account-depth-card{padding:15px;border-radius:15px}.account-depth-card>header{flex-direction:column}.account-sample-scope>div{grid-template-columns:1fr}.account-matrix-table article>header em{margin-left:0}.account-matrix-table article>div>span{flex:1 1 120px}}
+
+/* ================= 报销审批 ================= */
+/* 所有选择器带 exp- 前缀；颜色只用现有 tokens（soft.css 会整体换色，这里跟着走）。
+   页面主角是每张单上的四段进度条：申请人最关心「卡在谁那儿」。 */
+.nav .badge.is-empty{display:none}
+.exp-setup{margin:-6px 0 14px}
+.exp-toolbar .exp-tab-n{margin-left:1px;color:var(--warn);font-variant-numeric:tabular-nums;font-weight:720}
+.exp-body{min-width:0}
+.exp-state{padding:46px 16px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7}
+.exp-state.error{color:var(--crit)}
+.exp-state .btn{margin-left:8px}
+
+.exp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;min-width:0}
+.exp-card{position:relative;display:flex;flex-direction:column;gap:9px;min-width:0;padding:17px 18px 15px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  transition:border-color var(--t-out) var(--ease),box-shadow var(--t-out) var(--ease)}
+.exp-card:hover{border-color:var(--blue-200);box-shadow:var(--shadow)}
+.exp-card:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-100)}
+.exp-card header{display:flex;align-items:center;gap:8px;min-width:0}
+.exp-code{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
+.exp-cat{padding:2px 8px;border-radius:999px;background:var(--blue-100);color:var(--blue-dk);font-size:11px;font-weight:650;white-space:nowrap}
+.exp-status{margin-left:auto;flex:none;padding:3px 9px;border:1px solid transparent;border-radius:var(--r-sm);
+  font-size:11.5px;font-weight:680;white-space:nowrap}
+.exp-status.s-pending{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
+.exp-status.s-returned{background:var(--crit-bg);border-color:var(--crit-line);color:var(--crit)}
+.exp-status.s-paid{background:var(--good-bg);border-color:var(--good-line);color:var(--good)}
+.exp-status.s-draft,.exp-status.s-cancelled{background:var(--page);border-color:var(--line);color:var(--muted)}
+.exp-card h3{margin:0;font-size:15.5px;font-weight:700;line-height:1.45}
+/* 标题按钮的 ::after 铺满整张卡：整卡可点，但读屏和键盘只遇到一个清楚的「打开」目标 */
+.exp-open{all:unset;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  overflow-wrap:anywhere;cursor:pointer}
+.exp-open::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.exp-card-amount{font-size:24px;font-weight:740;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+.exp-card-amount small{margin-right:2px;font-size:14px;font-weight:600;color:var(--ink2)}
+.exp-card-meta{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--muted);font-size:12px}
+.exp-clip{display:inline-flex;align-items:center;gap:3px}
+.exp-clip svg{width:13px;height:13px}
+.exp-card-hint{padding-top:9px;border-top:1px dashed var(--line);color:var(--muted);font-size:12px}
+
+/* 四段进度条：通过 = 实线绿，当前 = 琥珀并轻微呼吸，退回 = 红，自动跳过 = 虚线 */
+.exp-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0;padding:10px 0 0;
+  list-style:none;border-top:1px solid var(--line-soft)}
+.exp-flow li{position:relative;display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:11px}
+.exp-flow li>i{position:absolute;top:0;left:0;right:0;height:4px;border-radius:999px;background:var(--line)}
+.exp-flow li.is-done>i{background:var(--good)}
+.exp-flow li.is-current>i{background:var(--warn);box-shadow:0 0 0 3px var(--warn-bg)}
+.exp-flow li.is-returned>i{background:var(--crit)}
+.exp-flow li.is-skipped>i{background:repeating-linear-gradient(90deg,var(--good-line) 0 6px,transparent 6px 10px)}
+.exp-flow-label{overflow:hidden;color:var(--ink2);font-size:11.5px;font-weight:650;white-space:nowrap;text-overflow:ellipsis}
+.exp-flow small{overflow:hidden;color:var(--muted);font-size:11px;white-space:nowrap;text-overflow:ellipsis}
+.exp-flow small em{font-style:normal}
+.exp-flow li.is-current .exp-flow-label{color:var(--warn)}
+.exp-flow li.is-returned .exp-flow-label{color:var(--crit)}
+.exp-flow.compact small em{display:none}
+@media (prefers-reduced-motion:no-preference){
+  .exp-flow li.is-current>i{animation:exp-pulse 2.4s var(--ease) infinite}
+}
+@keyframes exp-pulse{50%{box-shadow:0 0 0 5px var(--warn-bg)}}
+
+.exp-callout{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px 12px;border-radius:var(--r-sm);
+  font-size:12.5px;line-height:1.6}
+.exp-callout.warn{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--ink2)}
+.exp-callout b{color:var(--warn);font-weight:700}
+.exp-callout span{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+.exp-callout.slim{padding:7px 10px;font-size:12px}
+.exp-callout.slim span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.exp-callout[hidden]{display:none}
+.exp-error{display:none;padding:9px 12px;border:1px solid var(--crit-line);border-radius:var(--r-sm);
+  background:var(--crit-bg);color:var(--crit);font-size:12.5px;line-height:1.6;overflow-wrap:anywhere}
+.exp-error.on{display:block}
+
+/* 弹窗：整个框限制在视口内，头部和底部按钮固定，只让中间滚动 ——
+   标题说明折几行都不会把主按钮挤出屏幕 */
+.exp-edit-modal,.exp-config-modal,.exp-detail-modal{display:flex;flex-direction:column;max-height:calc(100dvh - 32px)}
+.exp-edit-modal>header,.exp-config-modal>header,.exp-detail-modal>header,
+.exp-edit-modal>footer,.exp-config-modal>footer,.exp-detail-modal>footer{flex:none}
+.exp-edit-modal>.form,.exp-config-modal>.form{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain}
+.exp-amount-inp{font-variant-numeric:tabular-nums}
+.exp-file-list{display:flex;flex-direction:column;gap:5px;margin-top:7px}
+.exp-edit-modal footer,.exp-detail-foot{flex-wrap:wrap}
+.exp-detail-modal{width:640px}
+.exp-detail-modal>.exp-detail-head{display:flex;align-items:flex-start;gap:12px;padding:18px 22px 13px;border-bottom:1px solid var(--line-soft)}
+.exp-detail-head>div{flex:1;min-width:0}
+.exp-detail-head h2{overflow-wrap:anywhere}
+.exp-detail-code{margin-bottom:3px;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.exp-detail-body{display:flex;flex:1 1 auto;flex-direction:column;gap:16px;min-height:0;padding:16px 22px 4px;
+  overflow-y:auto;overscroll-behavior:contain}
+.exp-summary{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.exp-amount small{display:block;margin-bottom:2px;color:var(--muted);font-size:11.5px}
+.exp-amount b{font-size:30px;font-weight:760;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+.exp-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;margin:0;padding:14px 16px;
+  border-radius:var(--r-sm);background:var(--page)}
+.exp-fields div{min-width:0}
+.exp-fields .wide{grid-column:1/-1}
+.exp-fields dt{margin-bottom:2px;color:var(--muted);font-size:11.5px}
+.exp-fields dd{margin:0;color:var(--ink);font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.exp-sec h3{display:flex;align-items:baseline;gap:8px;margin:0 0 9px;color:var(--ink);font-size:13px;font-weight:700}
+.exp-sec h3 small{color:var(--muted);font-size:11.5px;font-weight:500}
+.exp-sec .exp-flow{padding-top:0;border-top:0}
+.exp-files{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.exp-file{display:grid;grid-template-columns:40px minmax(0,1fr) auto;column-gap:10px;align-items:center;
+  padding:7px 8px;border:1px solid var(--line-soft);border-radius:var(--r-sm)}
+.exp-file>i{display:grid;grid-row:1/3;place-items:center;height:30px;border-radius:7px;background:var(--blue-100);
+  color:var(--blue-dk);font-size:9.5px;font-style:normal;font-weight:750}
+.exp-file a{overflow:hidden;color:var(--ink);font-size:13px;white-space:nowrap;text-overflow:ellipsis}
+.exp-file a:hover{color:var(--blue-dk);text-decoration:underline}
+.exp-file small{grid-column:2;color:var(--muted);font-size:11px}
+.exp-file-del{grid-column:3;grid-row:1/3;width:34px;height:34px;border:0;border-radius:8px;background:transparent;
+  color:var(--muted);font-size:18px;cursor:pointer}
+.exp-file-del:hover{background:var(--crit-bg);color:var(--crit)}
+.exp-file-picker.slim{min-height:46px;margin-top:8px}
+.exp-muted{color:var(--muted);font-size:12.5px}
+.exp-timeline{display:flex;flex-direction:column;gap:12px;margin:0 0 0 5px;padding:0 0 0 16px;list-style:none;
+  border-left:2px solid var(--line-soft)}
+.exp-timeline li{position:relative;color:var(--ink2);font-size:13px}
+.exp-timeline li::before{content:"";position:absolute;left:-23px;top:4px;width:12px;height:12px;border:2px solid var(--line);
+  border-radius:50%;background:var(--surface)}
+.exp-timeline li.a-approve::before,.exp-timeline li.a-pay::before{border-color:var(--good);background:var(--good-bg)}
+.exp-timeline li.a-return::before,.exp-timeline li.a-cancel::before{border-color:var(--crit);background:var(--crit-bg)}
+.exp-timeline li.a-skip::before{border-style:dashed}
+.exp-timeline b{color:var(--ink);font-weight:650}
+.exp-timeline span{color:var(--muted)}
+.exp-timeline p{margin:4px 0 0;padding:7px 10px;border-radius:8px;background:var(--page);color:var(--ink);
+  white-space:pre-wrap;overflow-wrap:anywhere}
+.exp-timeline time{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.exp-act label{display:block;margin-bottom:5px;color:var(--ink2);font-size:12.5px;font-weight:600}
+.exp-act label .opt{margin-left:4px;color:var(--muted);font-weight:400}
+.exp-act textarea.inp{height:76px}
+
+.exp-config-modal{width:600px}
+.exp-cfg-label{margin-bottom:6px;color:var(--ink2);font-size:12.5px;font-weight:600}
+.exp-cfg-depts{display:flex;flex-direction:column;gap:7px}
+.exp-cfg-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 36px;gap:8px;align-items:center}
+.exp-cfg-del{width:36px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--surface);
+  color:var(--muted);font-size:18px;cursor:pointer}
+.exp-cfg-del:hover{border-color:var(--crit-line);background:var(--crit-bg);color:var(--crit)}
+.exp-cfg-add{margin-top:8px}
+.exp-cfg-roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+
+@media (max-width:700px){
+  .exp-detail-modal,.exp-config-modal{width:calc(100vw - 16px)}
+  .exp-cfg-roles,.exp-fields{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:560px){
+  .exp-grid{grid-template-columns:minmax(0,1fr)}
+  .exp-detail-modal>.exp-detail-head{padding:15px 16px 11px}
+  .exp-edit-modal,.exp-config-modal,.exp-detail-modal{max-height:calc(100dvh - 16px)}
+  .exp-detail-body{padding:14px 16px 4px}
+  /* 手机上填单弹窗最多四个按钮：两列排，主按钮「提交审批」排第一个，保证总在视野里 */
+  .exp-edit-modal>footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .exp-edit-modal>footer .spacer{display:none}
+  .exp-edit-modal>footer .btn{justify-content:center;width:100%}
+  #btnExpSubmit{order:1}
+  #btnExpSaveDraft{order:2}
+  #btnExpDelete{order:3}
+  .exp-edit-modal>footer [data-close]{order:4}
+  .exp-amount b{font-size:26px}
+  /* 详情里的进度条竖排，名字和状态说全；列表卡片保持四格横排 */
+  .exp-sec .exp-flow{grid-template-columns:minmax(0,1fr);gap:0}
+  .exp-sec .exp-flow li{flex-direction:row;align-items:baseline;gap:8px;padding:6px 0 6px 16px}
+  .exp-sec .exp-flow li>i{top:6px;bottom:6px;left:0;right:auto;width:4px;height:auto}
+  .exp-cfg-row{grid-template-columns:minmax(0,1fr) 44px}
+  .exp-cfg-row select{grid-column:1/-1;grid-row:2}
+  .exp-cfg-del{width:44px;height:44px}
+  .exp-file-del{width:44px;height:44px}
+  .exp-edit-modal footer .btn,.exp-detail-foot .btn,.exp-config-modal footer .btn{height:44px}
+}

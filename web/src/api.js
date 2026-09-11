@@ -239,6 +239,32 @@ export const api = {
     return d;
   },
 
+  /* ---------- 报销审批 ---------- */
+  expenseConfig:     ()            => call('GET',    '/api/expenses/config'),
+  expenseConfigSave: (payload)     => call('PATCH',  '/api/expenses/config', payload),
+  /** scope: mine 我发起的 | todo 待我处理 | all 我能看见的全部 */
+  expenses:          (opts = {})   => call('GET',    '/api/expenses' + qs(opts)),
+  expense:           (id)          => call('GET',    `/api/expenses/${id}`),
+  expenseCreate:     (payload)     => call('POST',   '/api/expenses', payload),
+  expensePatch:      (id, payload) => call('PATCH',  `/api/expenses/${id}`, payload),
+  expenseDelete:     (id)          => call('DELETE', `/api/expenses/${id}`),
+  /** action: submit | approve | return | pay | cancel。流转类动作带上 stage 防重复处理 */
+  expenseAct:        (id, action, payload = {}) => call('POST', `/api/expenses/${id}/${action}`, payload),
+  expenseUpload: async (id, file) => {
+    const path = `/api/expenses/${id}/files?name=${encodeURIComponent(file.name)}`;
+    if (state.mode === 'mock') return mock.handle('POST', path, file);
+    const r = await fetch(BASE + path, { method: 'POST', body: file, credentials: 'include' });
+    logApi('POST', `/api/expenses/${id}/files`, r.status);
+    let d = null;
+    try { d = await r.json(); } catch { /* 空响应体 */ }
+    if (r.status === 401) {
+      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+      throw new Error('请先登录');
+    }
+    if (!r.ok) throw new Error(d?.error || `上传失败（${r.status}）`);
+    return d;
+  },
+
   /* ---------- 站内消息 ---------- */
   notifications: ()   => call('GET',  '/api/notifications'),
   /** 不传 id 就是全部标已读 */

@@ -188,6 +188,15 @@ try {
   await query('DELETE FROM idea_comments');
   await query('DELETE FROM idea_votes');
   await query('DELETE FROM ideas');
+  // 报销单的申请人外键是 RESTRICT（财务单据不能跟着账号消失），
+  // 虚拟同事名下的报销单得先清掉，否则下一句删用户会直接失败。
+  await query(`
+    DELETE FROM attachments WHERE scope = 'expense' AND ref_id IN (
+      SELECT c.id FROM expense_claims c JOIN users u ON u.id = c.applicant_id
+       WHERE u.password_hash IS NULL)`);
+  await query(`
+    DELETE FROM expense_claims c USING users u
+     WHERE u.id = c.applicant_id AND u.password_hash IS NULL`);
   await query('DELETE FROM users WHERE password_hash IS NULL');
 
   const { rows: kept } = await query(
