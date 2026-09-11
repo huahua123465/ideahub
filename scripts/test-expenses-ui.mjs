@@ -186,11 +186,15 @@ try {
     await page.waitForSelector('#expConfigModal.on .exp-cfg-row', { visible: true });
     await settleDom(page);
     await modalInViewport(page, 'expConfigModal');
+    const deptRows = () => page.$$eval('#expCfgDepts .exp-cfg-row', rows => rows.map(r => [
+      r.querySelector('[data-cfg-dept]').value, r.querySelector('[data-cfg-leader]').value]));
     const cfg = await page.evaluate(() => ({
       rows: document.querySelectorAll('#expCfgDepts .exp-cfg-row').length,
       gm: document.querySelector('#expCfgGm')?.selectedOptions[0]?.textContent,
     }));
-    assert.equal(cfg.rows, 3);
+    // 演示数据已配了 3 个部门；公司的运营部、财务部、行政部还没配，也要列出来等管理员选负责人
+    assert.equal(cfg.rows, 6);
+    assert.deepEqual((await deptRows()).slice(3), [['运营部', ''], ['财务部', ''], ['行政部', '']]);
     assert.match(cfg.gm, /陈屿/);
     await buttonVisible(page, 'expConfigModal', '#btnExpCfgSave');
     await harness.screenshot(page, `expenses-config-${scene}`);
@@ -199,25 +203,36 @@ try {
         ns.map(n => n.getBoundingClientRect()).filter(b => b.width > 0 && (b.height < 44 || b.width < 44)).length);
       assert.equal(small, 0, '手机上设置弹窗的按钮至少 44×44');
     }
-    await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('.modal.on'));
 
-    // 还没配置过部门时，预填公司现有的三个部门，负责人留空等管理员选
+    // 报错必须滚到看得见的地方：选了负责人却没填部门名称
+    await page.click('#btnExpCfgAddDept');
+    await page.select('#expCfgDepts .exp-cfg-row:last-child [data-cfg-leader]', '2');
+    await page.click('#btnExpCfgSave');
+    await page.waitForFunction(() => /没填部门名称/.test(document.querySelector('#expCfgErr')?.textContent || ''));
+    await settleDom(page);
+    const errBox = await page.evaluate(() => {
+      const e = document.querySelector('#expCfgErr').getBoundingClientRect();
+      const body = document.querySelector('#expConfigModal > .form').getBoundingClientRect();
+      return { top: e.top, bottom: e.bottom, bodyTop: body.top, bodyBottom: body.bottom };
+    });
+    assert.ok(errBox.top >= errBox.bodyTop - 1 && errBox.bottom <= errBox.bodyBottom + 1, `报错没有滚进可见区域：${JSON.stringify(errBox)}`);
+    await page.click('#expCfgDepts .exp-cfg-row:last-child [data-cfg-del]');
+
+    // 用户实际遇到的情况：只给一个部门选了负责人就保存 —— 要能保存成功，其余部门先不启用
     if (!mobile) {
-      await page.click('#v-expenses .exp-config-btn');
-      await page.waitForSelector('#expConfigModal.on .exp-cfg-row', { visible: true });
-      for (let i = 0; i < 3; i++) await page.click('#expCfgDepts .exp-cfg-row [data-cfg-del]');
+      for (let i = 0; i < 3; i++) await page.click('#expCfgDepts .exp-cfg-row:first-child [data-cfg-del]');
+      assert.deepEqual((await deptRows()).map(r => r[0]), ['运营部', '财务部', '行政部']);
+      await page.select('#expCfgDepts .exp-cfg-row:first-child [data-cfg-leader]', '2');
       await page.click('#btnExpCfgSave');
-      await waitToast(page, /已保存/);
+      await waitToast(page, /已保存。财务部、行政部还没选负责人，先不启用/);
       await page.waitForFunction(() => !document.querySelector('#expConfigModal.on'));
       await page.click('#v-expenses .exp-config-btn');
-      await page.waitForFunction(() => document.querySelectorAll('#expCfgDepts .exp-cfg-row').length === 3);
-      const preset = await page.$$eval('#expCfgDepts .exp-cfg-row', rows => rows.map(r => [
-        r.querySelector('[data-cfg-dept]').value, r.querySelector('[data-cfg-leader]').value]));
-      assert.deepEqual(preset, [['运营部', ''], ['财务部', ''], ['行政部', '']]);
-      await page.keyboard.press('Escape');
-      await page.waitForFunction(() => !document.querySelector('.modal.on'));
+      await page.waitForFunction(() => document.querySelectorAll('#expCfgDepts .exp-cfg-row').length === 3
+        && document.querySelector('#expCfgDepts .exp-cfg-row [data-cfg-leader]').value === '2');
+      assert.deepEqual(await deptRows(), [['运营部', '2'], ['财务部', ''], ['行政部', '']]);
     }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.modal.on'));
 
     harness.recordCheck(`${scene}-expenses-flow`, 'interaction', { approved: true, submitted: true, config: cfg });
     await page.close();

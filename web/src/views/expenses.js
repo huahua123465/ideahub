@@ -355,9 +355,16 @@ export async function openDetail(id, { quiet = false } = {}) {
   }
 }
 
+/** 报错区都在可滚动内容的底部：出错时滚过去，否则手机上看起来就是「点了没反应」 */
+function showError(box, msg) {
+  if (!box) return;
+  box.textContent = msg;
+  box.classList.toggle('on', !!msg);
+  if (msg) box.scrollIntoView({ block: 'nearest' });
+}
+
 function detailError(msg) {
-  const box = $('#expDetailErr');
-  if (box) { box.textContent = msg; box.classList.toggle('on', !!msg); }
+  showError($('#expDetailErr'), msg);
 }
 
 /** 详情里所有会改状态的动作都走这里：锁按钮、报错不关窗、409 时拉最新 */
@@ -480,9 +487,7 @@ async function ensureConfig() {
 }
 
 function editError(msg) {
-  const box = $('#expEditErr');
-  box.textContent = msg;
-  box.classList.toggle('on', !!msg);
+  showError($('#expEditErr'), msg);
 }
 
 function paintEditFiles() {
@@ -665,8 +670,8 @@ function bindEditor() {
 /* ================= 审批设置（管理员） ================= */
 
 let people = [];
-/** 公司现有的部门。还没配置过时预填这几行，管理员只需要给每个部门选负责人；
-    以后有新部门用「添加部门」补。 */
+/** 公司现有的部门。设置里总会列出这几行，管理员只需要给每个部门选负责人；
+    没选负责人的部门先不启用，可以分几次配完。以后有新部门用「添加部门」补。 */
 const DEFAULT_DEPTS = ['运营部', '财务部', '行政部'];
 
 function cfgRowHtml(d = { dept: '', leader: null }) {
@@ -685,9 +690,7 @@ function personOptions(selected, placeholder) {
 }
 
 function cfgError(msg) {
-  const box = $('#expCfgErr');
-  box.textContent = msg;
-  box.classList.toggle('on', !!msg);
+  showError($('#expCfgErr'), msg);
 }
 
 export async function openConfig() {
@@ -701,8 +704,9 @@ export async function openConfig() {
     const [cfg, users] = await Promise.all([api.expenseConfig(), api.people()]);
     state.config = cfg;
     people = users.items || [];
-    $('#expCfgDepts').innerHTML = (cfg.depts.length ? cfg.depts : DEFAULT_DEPTS.map(dept => ({ dept, leader: null })))
-      .map(cfgRowHtml).join('');
+    const rows = [...cfg.depts, ...DEFAULT_DEPTS
+      .filter(dept => !cfg.depts.some(d => d.dept === dept)).map(dept => ({ dept, leader: null }))];
+    $('#expCfgDepts').innerHTML = rows.map(cfgRowHtml).join('');
     $('#expCfgGm').innerHTML = personOptions(cfg.roles.gm?.id, '选择总经理');
     $('#expCfgFinance').innerHTML = personOptions(cfg.roles.finance?.id, '选择财务');
     $('#expCfgCashier').innerHTML = personOptions(cfg.roles.cashier?.id, '选择出纳');
@@ -727,10 +731,15 @@ function bindConfig() {
   $('#btnExpCfgSave').addEventListener('click', async () => {
     const btn = $('#btnExpCfgSave');
     const rows = [...$('#expCfgDepts').querySelectorAll('.exp-cfg-row')]
-      .map(r => ({ dept: r.querySelector('[data-cfg-dept]').value.trim(), leaderId: r.querySelector('[data-cfg-leader]').value }))
-      .filter(r => r.dept || r.leaderId);
+      .map(r => ({ dept: r.querySelector('[data-cfg-dept]').value.trim(), leaderId: Number(r.querySelector('[data-cfg-leader]').value) || null }));
+    if (rows.some(r => !r.dept && r.leaderId)) {
+      cfgError('有一行选了负责人但没填部门名称，补上名称或删掉这一行');
+      return;
+    }
+    // 没选负责人的部门先不启用：后端要求每个启用的部门都有负责人，一起发过去会整张表保存失败
+    const skipped = rows.filter(r => r.dept && !r.leaderId).map(r => r.dept);
     const payload = {
-      depts: rows.map(r => ({ dept: r.dept, leaderId: Number(r.leaderId) || null })),
+      depts: rows.filter(r => r.dept && r.leaderId).map(r => ({ dept: r.dept, leaderId: r.leaderId })),
       gmId: Number($('#expCfgGm').value) || null,
       financeId: Number($('#expCfgFinance').value) || null,
       cashierId: Number($('#expCfgCashier').value) || null,
@@ -740,7 +749,11 @@ function bindConfig() {
     cfgError('');
     try {
       state.config = await api.expenseConfigSave(payload);
-      toast('ok', state.config.ready ? '审批设置已保存' : `已保存，还缺：${state.config.missing.join('、')}`);
+      const notes = [
+        skipped.length ? `${skipped.join('、')}还没选负责人，先不启用` : '',
+        state.config.ready ? '' : `流程还缺：${state.config.missing.join('、')}`,
+      ].filter(Boolean);
+      toast('ok', notes.length ? `已保存。${notes.join('；')}` : '审批设置已保存');
       closeModals();
       loadListIfOpen();
     } catch (e) {
