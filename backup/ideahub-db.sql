@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CYyDEijiThhCSTq8scjB1qOx1KjwoRLsfgrPJwYul0glXxJMA1ECZmjS26N5pfD
+\restrict dXKI73ELig7sp8zInrFAT7nOR45hEc1srmNqIvB5ashIhxHAtflkpktKjnR7VFq
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -6125,6 +6125,7 @@ COPY public.attachments (id, scope, ref_id, side, orig_name, stored_name, mime, 
 79	client	115	submit	乐乐_V5_人工确认分析报告.html	5ae7ce2a91a2f66fc39200db305faba6.html	text/html; charset=utf-8	26160	Tech2 V5 人工确认的完整分析报告；不含原始材料附件。	\N	2026-09-07 08:14:53.166423+00	\N
 80	client	115	submit	乐乐_V5_客户重点简报.html	f2c5a39eddfc8d5b9e30490884636282.html	text/html; charset=utf-8	4350	Tech2 V5 人工确认版的重点简报；只含基础资料与重点结论。	\N	2026-09-07 08:35:02.808338+00	\N
 81	expense	2	submit	已生成图像 1 (2).png	251a4a2b0b681c8f7d7922a3f661bf85.png	image/png	3302452	\N	1	2026-09-11 06:33:56.733873+00	\N
+82	expense	3	submit	IMG_20260910_082514.png	a86762ca763d9945e9227bd20642db2e.png	image/png	3686811	\N	30	2026-09-14 02:47:38.328444+00	\N
 \.
 
 
@@ -6482,6 +6483,8 @@ client	115	8	2026-09-07 08:36:34.71496+00
 
 COPY public.expense_claim_actions (id, claim_id, round, stage, action, actor_id, comment, created_at) FROM stdin;
 1	2	1	\N	submit	1	\N	2026-09-11 06:41:53.929661+00
+2	3	1	\N	submit	30	\N	2026-09-14 02:47:38.752062+00
+3	3	1	leader	skip	30	申请人本人，自动跳过	2026-09-14 02:47:38.752062+00
 \.
 
 
@@ -6491,6 +6494,7 @@ COPY public.expense_claim_actions (id, claim_id, round, stage, action, actor_id,
 
 COPY public.expense_claims (id, applicant_id, dept, category, title, expense_date, amount_cents, note, status, stage, round, submitted_at, paid_at, created_at, updated_at) FROM stdin;
 2	1	运营部	office	6022	2026-09-11	54200	fsf	pending	leader	1	2026-09-11 06:41:53.929661+00	\N	2026-09-11 06:33:47.505305+00	2026-09-11 06:41:53.929661+00
+3	30	财务部	travel	高铁票	2026-09-12	20000	单独出行，已报备	pending	gm	1	2026-09-14 02:47:38.752062+00	\N	2026-09-14 02:47:36.315728+00	2026-09-14 02:47:38.752062+00
 \.
 
 
@@ -6775,21 +6779,21 @@ COPY public.ideas (id, code, title, content, category, tags, status, author_id, 
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	164	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.009164863	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.022606954	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.2283026	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.1031044	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.009801648	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.023975927	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.2419072	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.109248415	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	18	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
 10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.00916506	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.015968613	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.022610107	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.05537823	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.009801868	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.017617537	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.023979405	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.059245143	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	10	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
 \.
 
@@ -6829,6 +6833,7 @@ COPY public.notifications (id, user_id, actor_id, kind, title, body, board, ref_
 26	10	4	report_feedback	朱涛 反馈了你的「作品」	1	reports	22	2026-08-31 03:32:04.773401+00	2026-08-28 06:39:22.505643+00
 25	10	4	report_feedback	朱涛 反馈了你的「表格」	1	reports	23	2026-08-31 03:32:14.679111+00	2026-08-28 06:39:12.429015+00
 27	4	1	expense	华俊杰提交了报销单，等你审批	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-11 06:41:53.955299+00
+28	28	30	expense	温欣颖提交了报销单，等你审批	差旅费 · ¥200.00 · 高铁票	expenses	3	\N	2026-09-14 02:47:38.770917+00
 \.
 
 
@@ -9070,7 +9075,7 @@ SELECT pg_catalog.setval('public.api_keys_id_seq', 23, true);
 -- Name: attachments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.attachments_id_seq', 81, true);
+SELECT pg_catalog.setval('public.attachments_id_seq', 82, true);
 
 
 --
@@ -9196,14 +9201,14 @@ SELECT pg_catalog.setval('public.demands_id_seq', 30, true);
 -- Name: expense_claim_actions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.expense_claim_actions_id_seq', 1, true);
+SELECT pg_catalog.setval('public.expense_claim_actions_id_seq', 3, true);
 
 
 --
 -- Name: expense_claims_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.expense_claims_id_seq', 2, true);
+SELECT pg_catalog.setval('public.expense_claims_id_seq', 3, true);
 
 
 --
@@ -9245,7 +9250,7 @@ SELECT pg_catalog.setval('public.links_id_seq', 24, true);
 -- Name: notifications_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.notifications_id_seq', 27, true);
+SELECT pg_catalog.setval('public.notifications_id_seq', 28, true);
 
 
 --
@@ -14809,5 +14814,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CYyDEijiThhCSTq8scjB1qOx1KjwoRLsfgrPJwYul0glXxJMA1ECZmjS26N5pfD
+\unrestrict dXKI73ELig7sp8zInrFAT7nOR45hEc1srmNqIvB5ashIhxHAtflkpktKjnR7VFq
 
