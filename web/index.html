@@ -43,6 +43,7 @@
 <link rel="modulepreload" href="./src/views/dashboard.js">
 <link rel="modulepreload" href="./src/views/drawer.js">
 <link rel="modulepreload" href="./src/views/expenses.js">
+<link rel="modulepreload" href="./src/views/purchases.js">
 <link rel="modulepreload" href="./src/views/formal.js">
 <link rel="modulepreload" href="./src/views/function-tree.js">
 <link rel="modulepreload" href="./src/views/funnel.js">
@@ -125,6 +126,7 @@
       <div class="navmenu">
         <button id="tab-reports" data-go="reports">工作提交</button>
         <button id="tab-expenses" data-go="expenses">报销审批<span class="badge is-empty" id="expenseN" aria-label="待我处理的报销单">0</span></button>
+        <button id="tab-purchases" data-go="purchases">采购<span class="badge is-empty" id="purchaseN" aria-label="待我处理的采购申请">0</span></button>
         <button id="tab-tagadmin" data-go="tagadmin">标签与对接</button>
       </div>
     </div>
@@ -268,6 +270,7 @@
     <section class="view" id="v-demands"></section>
     <section class="view" id="v-reports"></section>
     <section class="view" id="v-expenses"></section>
+    <section class="view" id="v-purchases"></section>
     <section class="view" id="v-clientDetail"></section>
     <section class="view" id="v-tagadmin"></section>
     <section class="view" id="v-persona"></section>
@@ -742,6 +745,76 @@
     <button class="btn btn-ghost" data-close>取消</button>
     <button class="btn btn-primary" id="btnVisSave">保存默认值</button>
   </footer>
+</div>
+
+<!-- ============ 采购申请 ============ -->
+<div class="modal exp-edit-modal pur-edit-modal" id="purEditModal" role="dialog" aria-modal="true" aria-labelledby="purEditTitle">
+  <header>
+    <h2 id="purEditTitle">发起采购</h2>
+    <div class="hint">填好信息、传上聊天记录、采购合同或价格清单，提交后依次由部门负责人、总经理、财务审批立项。</div>
+  </header>
+  <div class="form">
+    <div class="exp-callout warn" id="purEditReturn" hidden></div>
+    <div class="exp-callout warn" id="purEditDeptNote" hidden></div>
+    <div class="row2">
+      <div class="field">
+        <label for="purDept">部门</label>
+        <input class="inp exp-dept-inp" id="purDept" readonly title="由管理员在「用户管理」里分配，采购申请送这个部门的负责人审批">
+      </div>
+      <div class="field">
+        <label for="purPayType">支付类型 <span>*</span></label>
+        <select class="inp" id="purPayType"></select>
+      </div>
+    </div>
+    <div class="pur-type-hint" id="purPayTypeHint"></div>
+    <div class="field">
+      <label for="purTitle">采购事项 <span>*</span></label>
+      <input class="inp" id="purTitle" maxlength="120" placeholder="例如：直播间补光灯两套">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="purDate">申请日期 <span>*</span></label>
+        <input class="inp" id="purDate" type="date">
+      </div>
+      <div class="field">
+        <label for="purAmount">金额（元） <span>*</span></label>
+        <input class="inp exp-amount-inp" id="purAmount" inputmode="decimal" autocomplete="off" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label for="purNote">备注 <span class="opt">选填</span></label>
+      <textarea class="inp" id="purNote" maxlength="2000" placeholder="采购原因、规格型号、供应商等"></textarea>
+    </div>
+    <div class="field">
+      <label for="purFiles">申请材料 <span>*</span></label>
+      <label class="idea-file-picker exp-file-picker">
+        <input type="file" id="purFiles" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx">
+        <b>选择聊天记录、采购合同或价格清单</b>
+        <span>支持图片、PDF、Word、Excel，单个不超过 20MB</span>
+      </label>
+      <div class="exp-file-list" id="purEditFiles"></div>
+    </div>
+    <div class="exp-error" id="purEditErr" role="alert" aria-live="polite"></div>
+  </div>
+  <footer>
+    <button class="btn btn-crit" type="button" id="btnPurDelete" hidden>删除草稿</button>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" type="button" data-close>取消</button>
+    <button class="btn btn-ghost" type="button" id="btnPurSaveDraft">存为草稿</button>
+    <button class="btn btn-primary" type="button" id="btnPurSubmit">提交立项</button>
+  </footer>
+</div>
+
+<div class="modal exp-detail-modal pur-detail-modal" id="purDetailModal" role="dialog" aria-modal="true" aria-labelledby="purDetailTitle">
+  <header class="exp-detail-head">
+    <div>
+      <div class="exp-detail-code" id="purDetailCode"></div>
+      <h2 id="purDetailTitle">采购申请</h2>
+    </div>
+    <button class="btn btn-ghost btn-mini" type="button" data-close>关闭</button>
+  </header>
+  <div class="exp-detail-body" id="purDetailBody"></div>
+  <footer class="exp-detail-foot" id="purDetailFoot"></footer>
 </div>
 
 <!-- ============ 报销审批 ============ -->

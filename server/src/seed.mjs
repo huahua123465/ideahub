@@ -197,6 +197,14 @@ try {
   await query(`
     DELETE FROM expense_claims c USING users u
      WHERE u.id = c.applicant_id AND u.password_hash IS NULL`);
+  // 采购申请同理：申请人外键也是 RESTRICT
+  await query(`
+    DELETE FROM attachments WHERE scope = 'purchase' AND ref_id IN (
+      SELECT r.id FROM purchase_requests r JOIN users u ON u.id = r.applicant_id
+       WHERE u.password_hash IS NULL)`);
+  await query(`
+    DELETE FROM purchase_requests r USING users u
+     WHERE u.id = r.applicant_id AND u.password_hash IS NULL`);
   await query('DELETE FROM users WHERE password_hash IS NULL');
 
   const { rows: kept } = await query(

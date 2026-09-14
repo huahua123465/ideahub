@@ -3202,6 +3202,42 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-timeline li.a-skip::before{border-style:dashed}
 .exp-timeline li.a-withdraw::before,.exp-timeline li.a-revoke::before{border-color:var(--warn);background:var(--warn-bg)}
 .exp-flow li.is-withdrawn .exp-flow-label{color:var(--muted)}
+
+/* ---------- 采购：复用上面的 exp-* 组件，这里只有五段进度、付款记录、详情内表单和交付清单 ---------- */
+.exp-flow.pur-flow{grid-template-columns:repeat(5,minmax(0,1fr))}
+.exp-status.s-delivering{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
+.pur-setup{display:flex;flex-direction:column;gap:8px}
+.pur-setup[hidden]{display:none}
+.pur-paid{margin-left:8px;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:0}
+.pur-type-hint{margin:-4px 0 10px;color:var(--muted);font-size:12px;line-height:1.6}
+.pur-type-hint:empty{display:none}
+.pur-pays{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.pur-pay{padding:10px 12px;border:1px solid var(--line-soft);border-radius:var(--r-sm)}
+.pur-pay.is-active{border-color:var(--warn-line);background:var(--warn-bg)}
+.pur-pay.s-cancelled{opacity:.72}
+.pur-pay-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.pur-pay-head b{color:var(--ink);font-size:13px;font-weight:680}
+.pur-pay-amount{color:var(--ink);font-weight:720;font-variant-numeric:tabular-nums}
+.pur-pay-head .exp-status{margin-left:auto}
+.pur-pay-acc{margin-top:5px;color:var(--ink2);font-size:12.5px;overflow-wrap:anywhere}
+.pur-acc-no,.pur-acc-inp{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.pur-pay-meta{margin-top:3px;color:var(--muted);font-size:11.5px;overflow-wrap:anywhere}
+.pur-form{padding:12px 14px 14px;border:1px solid var(--warn-line);border-radius:var(--r-sm);background:var(--surface)}
+.pur-form h3{margin-bottom:4px}
+.pur-form .exp-muted{margin:0}
+.pur-form .field{display:flex;flex-direction:column;gap:5px;min-width:0;margin-top:10px}
+.pur-form label{color:var(--ink2);font-size:12.5px;font-weight:600}
+.pur-form label span{color:var(--crit)}
+.pur-form label .opt{color:var(--muted);font-weight:400}
+.pur-form .row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}
+.pur-form textarea.inp{height:86px}
+.pur-delivery-note{padding:10px 12px;border-radius:var(--r-sm);background:var(--page);color:var(--ink);font-size:13px;
+  line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+.exp-timeline li.a-deliver::before{border-color:var(--good);background:var(--good-bg)}
+@media (max-width:700px){
+  .pur-form .row2{grid-template-columns:minmax(0,1fr)}
+  .pur-form .inp{min-height:44px}
+}
 .exp-timeline b{color:var(--ink);font-weight:650}
 .exp-timeline span{color:var(--muted)}
 .exp-timeline p{margin:4px 0 0;padding:7px 10px;border-radius:8px;background:var(--page);color:var(--ink);

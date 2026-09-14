@@ -269,6 +269,32 @@ export const api = {
     return d;
   },
 
+  /* ---------- 采购申请 ---------- */
+  /** scope: mine 我发起的 | todo 待我处理 | all 我能看见的全部 */
+  purchases:      (opts = {})   => call('GET',    '/api/purchases' + qs(opts)),
+  purchase:       (id)          => call('GET',    `/api/purchases/${id}`),
+  purchaseCreate: (payload)     => call('POST',   '/api/purchases', payload),
+  purchasePatch:  (id, payload) => call('PATCH',  `/api/purchases/${id}`, payload),
+  purchaseDelete: (id)          => call('DELETE', `/api/purchases/${id}`),
+  /** action: submit | approve | return | revoke | withdraw | cancel | account | payments
+      | payment-approve | payment-return | pay | payment-cancel | deliver。
+      立项动作带 stage，付款动作带 paymentId + paymentStage，防重复处理 */
+  purchaseAct:    (id, action, payload = {}) => call('POST', `/api/purchases/${id}/${action}`, payload),
+  purchaseUpload: async (id, file) => {
+    const path = `/api/purchases/${id}/files?name=${encodeURIComponent(file.name)}`;
+    if (state.mode === 'mock') return mock.handle('POST', path, file);
+    const r = await fetch(BASE + path, { method: 'POST', body: file, credentials: 'include' });
+    logApi('POST', `/api/purchases/${id}/files`, r.status);
+    let d = null;
+    try { d = await r.json(); } catch { /* 空响应体 */ }
+    if (r.status === 401) {
+      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+      throw new Error('请先登录');
+    }
+    if (!r.ok) throw new Error(d?.error || `上传失败（${r.status}）`);
+    return d;
+  },
+
   /* ---------- 站内消息 ---------- */
   notifications: ()   => call('GET',  '/api/notifications'),
   /** 不传 id 就是全部标已读 */

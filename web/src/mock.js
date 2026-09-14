@@ -6,6 +6,7 @@
  */
 import { logApi, logSql, logQueue } from './apilog.js';
 import { handleExpenses } from './mock-expenses.js';
+import { handlePurchases } from './mock-purchases.js';
 import { ACCOUNT_RESEARCH_DIMENSIONS, ACCOUNT_RESEARCH_DTO_VERSION, accountResearchError } from './account-research-contract.js';
 
 const hoursAgo = h => new Date(Date.now() - h * 3600e3).toISOString();
@@ -990,6 +991,9 @@ export async function handle(method, path, body) {
   // 报销审批（含报销附件的删除），规则见 mock-expenses.js
   const expenseResult = handleExpenses(method, p, q, body, ME);
   if (expenseResult !== undefined) return expenseResult;
+  // 采购申请（含采购附件的删除），规则见 mock-purchases.js
+  const purchaseResult = handlePurchases(method, p, q, body, ME);
+  if (purchaseResult !== undefined) return purchaseResult;
 
   if (p === '/api/reports' && method === 'GET') {
     const scope = q.get('scope') || 'mine';

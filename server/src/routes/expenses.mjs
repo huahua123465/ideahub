@@ -908,3 +908,9 @@ export function mount(router) {
     publish('expense:updated', {});
   });
 }
+
+// 采购申请（routes/purchases.mjs）复用同一套审批人配置、撤销同意规则和输入校验
+export {
+  loadConfig, handlerOf, duties, liveRoundActions, actorOf, person, yuan, ymdLocal,
+  parseAmount, parseDate, optText,
+};

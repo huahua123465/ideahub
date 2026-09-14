@@ -29,6 +29,7 @@ import { currentUser } from '../lib/auth.mjs';
 import { requireKey } from '../lib/apikey.mjs';
 import { publish } from '../lib/bus.mjs';
 import { assertExpenseFileReadable, assertExpenseFileDeletable } from './expenses.mjs';
+import { assertPurchaseFileReadable, assertPurchaseFileDeletable } from './purchases.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/data/uploads';
 const MAX_SIZE = 20 * 1024 * 1024;   // 20MB
@@ -306,6 +307,8 @@ export function mount(router) {
     // 报销凭证跟着报销单的可见范围走（规则见 routes/expenses.mjs 文件头）。
     // 这段不能漏：没列在这里的 scope 默认登录就能下载，漏了就能按连续 id 翻别人的报销凭证。
     if (f.scope === 'expense') await assertExpenseFileReadable(f, me);
+    // 采购申请的材料、转款凭证、交付照片同理，跟着采购单的可见范围走（routes/purchases.mjs 文件头）
+    if (f.scope === 'purchase') await assertPurchaseFileReadable(f, me);
 
     const path = join(UPLOAD_DIR, basename(f.stored_name));
     let st;
@@ -344,6 +347,8 @@ export function mount(router) {
     // 报销凭证单独判：只有上传者本人、且单据还能改附件时才能删，管理员也不例外 ——
     // 提交后的凭证是审批依据，不能在审批人眼皮底下被换掉。
     if (f.scope === 'expense') await assertExpenseFileDeletable(f, me);
+    // 采购材料同理：交出去的申请材料、转款凭证、交付照片都是审批和对账依据
+    else if (f.scope === 'purchase') await assertPurchaseFileDeletable(f, me);
     // 其余附件：传的人自己能删，管理员也能删
     else if (me.role !== 'admin' && Number(f.uploaded_by) !== me.id) {
       throw forbidden('只有上传者本人和管理员能删除');
@@ -353,6 +358,7 @@ export function mount(router) {
     sendJson(res, 200, { ok: true });
     if(f.scope==='idea')publish('idea:updated',{id:Number(f.ref_id),files:true});
     else if (f.scope === 'expense') publish('expense:updated', {});
+    else if (f.scope === 'purchase') publish('purchase:updated', {});
     else publish('board:updated', { board:f.scope==='report'?'reports':'clients' });
   });
 }

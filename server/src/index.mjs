@@ -25,6 +25,7 @@ import * as clients from './routes/clients.mjs';
 import * as files from './routes/files.mjs';
 import * as work from './routes/work.mjs';
 import * as expenses from './routes/expenses.mjs';
+import * as purchases from './routes/purchases.mjs';
 import * as notifications from './routes/notifications.mjs';
 import * as chat from './routes/chat.mjs';
 import * as demands from './routes/demands.mjs';
@@ -104,6 +105,7 @@ clients.mount(router);
 files.mount(router);
 work.mount(router);
 expenses.mount(router);
+purchases.mount(router);
 notifications.mount(router);
 chat.mount(router);
 demands.mount(router);
@@ -314,7 +316,12 @@ function startScheduler() {
   setTimeout(archiveStale, 30_000).unref?.();
   setInterval(archiveStale, STALE_EVERY).unref?.();
 
-  console.log(`  定时任务   热度每 15 分钟重算，超期归档每天一次`);
+  // 采购已付款、还没提交交付清单：每小时查一次，每张单每天最多提醒申请人一条（规则见 routes/purchases.mjs）
+  const remindDeliveries = () => tick('采购交付提醒', purchases.remindPendingDeliveries);
+  setTimeout(remindDeliveries, 60_000).unref?.();
+  setInterval(remindDeliveries, 60 * 60 * 1000).unref?.();
+
+  console.log(`  定时任务   热度每 15 分钟重算，超期归档每天一次，采购待交付每天提醒`);
 }
 
 server.listen(PORT, () => {

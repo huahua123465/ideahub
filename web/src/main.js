@@ -30,6 +30,7 @@ import * as learning from './views/learning.js';
 import * as collector from './views/collector.js';
 import * as samples from './views/samples.js';
 import * as expenses from './views/expenses.js';
+import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
 
 let view = 'home';
@@ -55,6 +56,7 @@ const CHROME = {
   cases:        { group: '交付与案例', title: '案例库', create: '新增案例' },
   reports:      { group: '团队', title: '工作提交', create: '提交工作' },
   expenses:     { group: '团队', title: '报销审批', create: '发起报销' },
+  purchases:    { group: '团队', title: '采购', create: '发起采购' },
   tagadmin:     { group: '团队', title: '标签与对接' },
   funnel:       { group: '数据', title: '数据漏斗' },
   stats:        { group: '数据', title: '统计看板' },
@@ -110,6 +112,10 @@ function createForCurrentView() {
     expenses.openCreate();
     return;
   }
+  if (view === 'purchases') {
+    purchases.openCreate();
+    return;
+  }
   if (BOARD_ORDER.includes(view)) {
     document.querySelector(`#v-${view} .bd-add`)?.click();
     return;
@@ -136,6 +142,7 @@ async function boot() {
   dashboard.setMe(me);
   collector.setMe(me);
   expenses.setMe(me);
+  purchases.setMe(me);
   const av = $('#meAvatar');
   av.textContent = initial(me.name);
   av.style.background = avatarColor(me.name);
@@ -150,12 +157,14 @@ async function boot() {
 
   bind();
   expenses.bind();
+  purchases.bind();
   await Promise.all([dashboard.render(), pool.render(), formal.render()]);
 
   // 页面从此自己保持最新：后端推事件，连不上就退回轮询
   notify.bind();
   notify.refresh();
   expenses.refreshBadge();
+  purchases.refreshBadge();
   chat.bind();
   chat.refresh();
   alertBox.bind();
@@ -208,6 +217,8 @@ function bindLive() {
   on('notify:ping', () => notify.refresh());
   // 报销单有流转：导航徽标跟着变；页面开着就刷新列表和正在看的那张单
   on('expense:updated', () => expenses.refresh(view));
+  // 采购同理：徽标、列表、正在看的那张单（每日交付提醒也会推这个事件）
+  on('purchase:updated', () => purchases.refresh(view));
   // 有人给你发消息了
   on('chat:ping', () => chat.refreshSoon());
 
@@ -230,6 +241,7 @@ function bindLive() {
     funnel.refresh(view),
     dashboard.refresh(),
     expenses.refresh(view),
+    purchases.refresh(view),
   ]));
 }
 
@@ -240,7 +252,7 @@ function syncDrawerVote(d) {
 /** 所有一级视图。
     clientDetail 没有对应的导航按钮 —— 它是从客户档案点进去的二级页面，
     所以下面切视图时要单独处理它的 tab 高亮（客户档案那颗仍然亮着）。 */
-const VIEWS = ['home', 'functionTree', 'pool', 'formal', 'stats', 'funnel', 'samples', 'collector', 'clientDetail', 'tagadmin', 'learning', 'expenses', ...BOARD_ORDER];
+const VIEWS = ['home', 'functionTree', 'pool', 'formal', 'stats', 'funnel', 'samples', 'collector', 'clientDetail', 'tagadmin', 'learning', 'expenses', 'purchases', ...BOARD_ORDER];
 
 function go(next) {
   // 全局搜索只服务当前操作，不把上一页关键词带进下一个业务页面。
@@ -287,6 +299,7 @@ function go(next) {
   if (next === 'collector') collector.render();
   if (next === 'samples') samples.render();
   if (next === 'expenses') expenses.render();
+  if (next === 'purchases') purchases.render();
 }
 
 /**
@@ -301,6 +314,11 @@ async function openAnywhere({ board: boardKey, entity, refId, filters, filterLab
   if (boardKey === 'expenses') {
     go('expenses');
     if (refId) expenses.openDetail(Number(refId));
+    return;
+  }
+  if (boardKey === 'purchases') {
+    go('purchases');
+    if (refId) purchases.openDetail(Number(refId));
     return;
   }
   // 灵感和正式内容都在灵感库里，用抽屉打开而不是表格
@@ -567,6 +585,12 @@ function bind() {
       if (refId) expenses.openDetail(Number(refId));
       return;
     }
+    // 采购同理
+    if (board_ === 'purchases') {
+      go('purchases');
+      if (refId) purchases.openDetail(Number(refId));
+      return;
+    }
     go(board_);
     // board.openRow 会挨个小板块找 —— 「等你审核」的那条不在默认的「我提交的」里
     if (refId && !await board.openRow(board_, refId)) {
@@ -684,7 +708,8 @@ function closeAll() {
   board.closeEdit();
   bench.close();
   drawer.closeDrawer();
-  // 放在最后：提交中不允许关闭时，它要把前面已经被收起的遮罩补回来
+  // 放在最后：提交中不允许关闭时，它们要把前面已经被收起的遮罩补回来
+  purchases.close();
   expenses.close();
   // 抽屉开着的时候被跳过的表格刷新，现在补上
   formal.flush();

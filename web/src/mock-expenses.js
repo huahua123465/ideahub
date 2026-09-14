@@ -24,6 +24,8 @@ const CFG = {
   depts: [['产品部', 2], ['内容组', 2], ['技术组', 4]],
   roles: { gm: 1, finance: 3, cashier: 4 },
 };
+/** 采购申请和报销共用一套审批人配置（mock-purchases.js 用）；返回的是同一个对象，审批设置改了两边一起变 */
+export const mockExpenseConfig = () => CFG;
 
 const ago = h => new Date(Date.now() - h * 3600e3).toISOString();
 let seq = 9000;
