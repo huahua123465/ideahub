@@ -3688,9 +3688,9 @@ CREATE TABLE IF NOT EXISTS expense_role_holders (
 );
 
 -- 报销单。一单一个类型、一个金额。
---   status：draft 草稿 | pending 审批中 | returned 已退回 | paid 已打款 | cancelled 已作废
+--   status：draft 草稿 | pending 审批中 | returned 已退回 | withdrawn 已撤回 | paid 已打款 | cancelled 已作废
 --   stage ：只在 pending 时有值，表示卡在哪一步
---   round ：第几次提交。退回后重提会 +1，审批记录按轮次区分
+--   round ：第几次提交。退回或撤回后重提会 +1，审批记录按轮次区分
 -- 金额存「分」，避免浮点误差；上限 99,999,999.99 元。
 -- 申请人外键用 RESTRICT：财务单据不能因为删了账号就跟着消失。
 CREATE TABLE IF NOT EXISTS expense_claims (
@@ -3704,7 +3704,7 @@ CREATE TABLE IF NOT EXISTS expense_claims (
   amount_cents BIGINT NOT NULL CHECK (amount_cents > 0 AND amount_cents <= 9999999999),
   note         TEXT CHECK (note IS NULL OR length(note) <= 2000),
   status       TEXT NOT NULL DEFAULT 'draft'
-               CHECK (status IN ('draft', 'pending', 'returned', 'paid', 'cancelled')),
+               CHECK (status IN ('draft', 'pending', 'returned', 'withdrawn', 'paid', 'cancelled')),
   stage        TEXT CHECK (stage IN ('leader', 'gm', 'finance', 'cashier')),
   round        INT NOT NULL DEFAULT 0 CHECK (round >= 0),
   submitted_at TIMESTAMPTZ,
@@ -3721,14 +3721,16 @@ CREATE INDEX IF NOT EXISTS idx_expense_claims_pending
 
 -- 审批留痕。只追加，不修改。
 --   submit 提交 | approve 通过 | skip 自动跳过 | return 退回 | pay 打款 | cancel 作废
+--   withdraw 申请人撤回 | revoke 审批人撤销自己的同意（2026-09-14 加，迁移见 scripts/migrations/20260914-expense-withdraw-revoke.sql）
 -- skip 的 actor 记的是「本该审批的那个人」，comment 写跳过原因。
+-- revoke 之后，那一步及后面各步在它之前的记录不再参与流转计算，但保留在这张表里。
 CREATE TABLE IF NOT EXISTS expense_claim_actions (
   id         BIGSERIAL PRIMARY KEY,
   claim_id   BIGINT NOT NULL REFERENCES expense_claims(id) ON DELETE CASCADE,
   round      INT NOT NULL CHECK (round >= 0),
   stage      TEXT CHECK (stage IN ('leader', 'gm', 'finance', 'cashier')),
   action     TEXT NOT NULL
-             CHECK (action IN ('submit', 'approve', 'skip', 'return', 'pay', 'cancel')),
+             CHECK (action IN ('submit', 'approve', 'skip', 'return', 'pay', 'cancel', 'withdraw', 'revoke')),
   actor_id   BIGINT REFERENCES users(id) ON DELETE SET NULL,
   comment    TEXT CHECK (comment IS NULL OR length(comment) <= 1000),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

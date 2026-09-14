@@ -3106,6 +3106,7 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-status.s-returned{background:var(--crit-bg);border-color:var(--crit-line);color:var(--crit)}
 .exp-status.s-paid{background:var(--good-bg);border-color:var(--good-line);color:var(--good)}
 .exp-status.s-draft,.exp-status.s-cancelled{background:var(--page);border-color:var(--line);color:var(--muted)}
+.exp-status.s-withdrawn{background:var(--page);border-color:var(--warn-line);color:var(--warn)}
 .exp-card h3{margin:0;font-size:15.5px;font-weight:700;line-height:1.45}
 /* 标题按钮的 ::after 铺满整张卡：整卡可点，但读屏和键盘只遇到一个清楚的「打开」目标 */
 .exp-open{all:unset;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
@@ -3199,6 +3200,8 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-timeline li.a-approve::before,.exp-timeline li.a-pay::before{border-color:var(--good);background:var(--good-bg)}
 .exp-timeline li.a-return::before,.exp-timeline li.a-cancel::before{border-color:var(--crit);background:var(--crit-bg)}
 .exp-timeline li.a-skip::before{border-style:dashed}
+.exp-timeline li.a-withdraw::before,.exp-timeline li.a-revoke::before{border-color:var(--warn);background:var(--warn-bg)}
+.exp-flow li.is-withdrawn .exp-flow-label{color:var(--muted)}
 .exp-timeline b{color:var(--ink);font-weight:650}
 .exp-timeline span{color:var(--muted)}
 .exp-timeline p{margin:4px 0 0;padding:7px 10px;border-radius:8px;background:var(--page);color:var(--ink);

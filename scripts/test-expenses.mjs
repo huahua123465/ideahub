@@ -420,3 +420,90 @@ test('作废、配置变更时的保护、列表可见范围', async () => {
   const mineList = await call(APP, 'GET', '/api/expenses?scope=mine');
   assert.ok(ids(mineList).includes(c.id) && ids(mineList).includes(draft.id));
 });
+
+test('撤回修改重提、撤销同意、审批中直接作废', async () => {
+  assert.equal((await setConfig()).status, 200);
+  const c = await submitted(APP);
+  assert.equal(c.can.withdraw && c.can.cancel && !c.can.revoke, true);
+
+  // 撤回：只有申请人；stage 对不上回 409
+  assert.equal((await call(LEAD_P, 'POST', `/api/expenses/${c.id}/withdraw`, { stage: 'leader' })).status, 403);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/withdraw`, { stage: 'gm' })).status, 409);
+  const w = await call(APP, 'POST', `/api/expenses/${c.id}/withdraw`, { stage: 'leader', comment: '金额填错了' });
+  assert.equal(w.status, 200, JSON.stringify(w.data));
+  assert.equal(w.data.status, 'withdrawn');
+  assert.equal(w.data.stage, null);
+  assert.equal(w.data.statusLabel, '已撤回');
+  assert.equal(w.data.flow[0].state, 'withdrawn');
+  assert.deepEqual(
+    Object.entries(w.data.can).filter(([, v]) => v).map(([k]) => k).sort(),
+    ['cancel', 'edit', 'submit', 'upload']);
+  assert.equal((await call(LEAD_P, 'POST', `/api/expenses/${c.id}/approve`, { stage: 'leader' })).status, 409, '撤回后原审批人不能再批');
+  assert.ok((await call(LEAD_P, 'GET', '/api/notifications')).data.items
+    .some(x => x.refId === c.id && /撤回/.test(x.title)), '原本等着审批的人收到撤回通知');
+
+  // 撤回后改金额、补附件、重新提交 → 从部门负责人重新走
+  assert.equal((await call(APP, 'PATCH', `/api/expenses/${c.id}`, { amount: '500' })).data.amount, '500.00');
+  assert.equal((await upload(APP, c.id, '补充.png')).status, 201);
+  const re = await call(APP, 'POST', `/api/expenses/${c.id}/submit`, {});
+  assert.equal(re.status, 200, JSON.stringify(re.data));
+  assert.equal(re.data.round, 2);
+  assert.deepEqual(re.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting']);
+
+  // 撤销同意：部门负责人同意后、总经理处理前可以收回
+  const a1 = await call(LEAD_P, 'POST', `/api/expenses/${c.id}/approve`, { stage: 'leader' });
+  assert.equal(a1.data.stage, 'gm');
+  assert.equal(a1.data.can.revoke, true);
+  assert.equal((await call(GM, 'GET', `/api/expenses/${c.id}`)).data.can.revoke, false, '总经理没同意过，不能撤销');
+  assert.equal((await call(GM, 'POST', `/api/expenses/${c.id}/revoke`, { stage: 'gm' })).status, 403);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/revoke`, { stage: 'gm' })).status, 403);
+  assert.equal((await call(LEAD_P, 'POST', `/api/expenses/${c.id}/revoke`, { stage: 'leader' })).status, 409);
+  const rv = await call(LEAD_P, 'POST', `/api/expenses/${c.id}/revoke`, { stage: 'gm', comment: '再核一下发票' });
+  assert.equal(rv.status, 200, JSON.stringify(rv.data));
+  assert.equal(rv.data.stage, 'leader');
+  assert.deepEqual(rv.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting']);
+  assert.equal(rv.data.can.approve && !rv.data.can.revoke, true);
+  assert.ok(!(await call(GM, 'GET', '/api/expenses?scope=todo')).data.items.some(x => x.id === c.id));
+  assert.ok((await call(APP, 'GET', '/api/notifications')).data.items
+    .some(x => x.refId === c.id && /撤销了同意/.test(x.title)));
+  assert.ok((await call(GM, 'GET', '/api/notifications')).data.items
+    .some(x => x.refId === c.id && /撤销/.test(x.title)), '总经理知道不用处理了');
+
+  // 重新同意后流转；后面的人处理过就不能再撤销
+  assert.equal((await call(LEAD_P, 'POST', `/api/expenses/${c.id}/approve`, { stage: 'leader' })).data.stage, 'gm');
+  assert.equal((await call(GM, 'POST', `/api/expenses/${c.id}/approve`, { stage: 'gm' })).data.stage, 'finance');
+  const late = await call(LEAD_P, 'POST', `/api/expenses/${c.id}/revoke`, { stage: 'finance' });
+  assert.equal(late.status, 409);
+  assert.match(late.data.error, /已经处理/);
+  assert.equal((await call(GM, 'GET', `/api/expenses/${c.id}`)).data.can.revoke, true);
+
+  // 审批中直接作废：流程结束，谁都不能再动
+  const x = await call(APP, 'POST', `/api/expenses/${c.id}/cancel`, { stage: 'finance' });
+  assert.equal(x.status, 200, JSON.stringify(x.data));
+  assert.equal(x.data.status, 'cancelled');
+  assert.equal(x.data.stage, null);
+  assert.equal(Object.values(x.data.can).some(Boolean), false);
+  assert.ok((await call(FIN, 'GET', '/api/notifications')).data.items
+    .some(n => n.refId === c.id && /作废/.test(n.title)));
+  assert.equal((await call(FIN, 'POST', `/api/expenses/${c.id}/approve`, { stage: 'finance' })).status, 409);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/withdraw`, {})).status, 409);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/cancel`, {})).status, 409);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/submit`, {})).status, 403);
+  assert.deepEqual(
+    x.data.actions.map(a => `${a.round}:${a.stage || '-'}:${a.action}`),
+    ['1:-:submit', '1:leader:withdraw',
+      '2:-:submit', '2:leader:approve', '2:leader:revoke', '2:leader:approve', '2:gm:approve', '2:finance:cancel']);
+
+  // 兼任连续两步：撤销同意后，被跳过的那一步重新算
+  assert.equal((await setConfig({ gmId: LEAD_T })).status, 200);
+  const tech = await submitted(OUT);
+  const t1 = await call(LEAD_T, 'POST', `/api/expenses/${tech.id}/approve`, { stage: 'leader' });
+  assert.deepEqual(t1.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting']);
+  assert.equal(t1.data.can.revoke, true, '中间的自动跳过不算后面的人处理过');
+  const t2 = await call(LEAD_T, 'POST', `/api/expenses/${tech.id}/revoke`, { stage: 'finance' });
+  assert.equal(t2.status, 200, JSON.stringify(t2.data));
+  assert.deepEqual(t2.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting']);
+  const t3 = await call(LEAD_T, 'POST', `/api/expenses/${tech.id}/approve`, { stage: 'leader' });
+  assert.deepEqual(t3.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting']);
+  assert.equal((await setConfig()).status, 200);
+});

@@ -12,7 +12,12 @@ const CATEGORIES = [
   { key: 'entertainment', label: '业务招待费' }, { key: 'other', label: '其他' },
 ];
 const CAT = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]));
-const ACTION_LABEL = { submit: '提交', approve: '审批通过', skip: '自动跳过', return: '退回', pay: '确认打款', cancel: '作废' };
+const ACTION_LABEL = {
+  submit: '提交', approve: '审批通过', skip: '自动跳过', return: '退回', pay: '确认打款', cancel: '作废',
+  withdraw: '撤回', revoke: '撤销同意',
+};
+const STATUS_LABEL = { draft: '草稿', returned: '已退回', withdrawn: '已撤回', paid: '已打款', cancelled: '已作废' };
+const FLOW_STATE = { approve: 'done', pay: 'done', skip: 'skipped', return: 'returned', withdraw: 'withdrawn' };
 const NAMES = { 1: '陈屿', 2: '苏禾', 3: '叶昭', 4: '林知远', 6: '何叙', 7: '赵嘉一' };
 
 const CFG = {
@@ -83,24 +88,43 @@ function canSee(c, me) {
   return STAGES.slice(1).some(s => CFG.roles[s] === me.id) || deptLeader(c.dept) === me.id;
 }
 
+/** 撤销同意之后，那一步及后面各步在撤销之前的记录不再算数 */
+function liveRoundActions(c) {
+  const live = [];
+  for (const a of c.actions.filter(x => x.round === c.round)) {
+    if (a.action !== 'revoke') { live.push(a); continue; }
+    const from = STAGES.indexOf(a.stage);
+    for (let i = live.length - 1; i >= 0; i--) {
+      if (live[i].stage && STAGES.indexOf(live[i].stage) >= from) live.splice(i, 1);
+    }
+  }
+  return live;
+}
+
+function lastApproval(c) {
+  if (c.status !== 'pending') return null;
+  const decisive = liveRoundActions(c).filter(a => a.action !== 'skip').at(-1);
+  return decisive?.action === 'approve' ? decisive : null;
+}
+
 function can(c, me) {
   const mine = c.applicantId === me.id;
-  const editable = mine && (c.status === 'draft' || c.status === 'returned');
+  const editable = mine && ['draft', 'returned', 'withdrawn'].includes(c.status);
   const handling = c.status === 'pending' && handlerId(c, c.stage) === me.id;
   return {
-    edit: editable, submit: editable, remove: mine && c.status === 'draft', cancel: mine && c.status === 'returned',
+    edit: editable, submit: editable, remove: mine && c.status === 'draft',
+    withdraw: mine && c.status === 'pending', cancel: mine && ['pending', 'returned', 'withdrawn'].includes(c.status),
     approve: handling && c.stage !== 'cashier' && !mine, return: handling,
-    pay: handling && c.stage === 'cashier', upload: editable || (handling && c.stage === 'cashier'),
+    pay: handling && c.stage === 'cashier', revoke: lastApproval(c)?.actorId === me.id,
+    upload: editable || (handling && c.stage === 'cashier'),
   };
 }
 
 function dto(c, me, full) {
-  const roundActions = c.actions.filter(a => a.round === c.round);
+  const live = liveRoundActions(c);
   const flow = STAGES.map(stage => {
-    const last = roundActions.filter(a => a.stage === stage).at(-1);
-    const state = last?.action === 'approve' || last?.action === 'pay' ? 'done'
-      : last?.action === 'skip' ? 'skipped' : last?.action === 'return' ? 'returned'
-        : c.status === 'pending' && c.stage === stage ? 'current' : 'waiting';
+    const last = live.filter(a => a.stage === stage && FLOW_STATE[a.action]).at(-1);
+    const state = last ? FLOW_STATE[last.action] : c.status === 'pending' && c.stage === stage ? 'current' : 'waiting';
     return { stage, label: STAGE_LABEL[stage], state, handler: person(last ? last.actorId : handlerId(c, stage)) };
   });
   const ret = c.actions.filter(a => a.action === 'return').at(-1);
@@ -109,7 +133,7 @@ function dto(c, me, full) {
     category: c.category, categoryLabel: CAT[c.category], title: c.title, expenseDate: c.expenseDate,
     amount: (c.cents / 100).toFixed(2), amountCents: c.cents, note: c.note || '', status: c.status, stage: c.stage,
     statusLabel: c.status === 'pending' ? (c.stage === 'cashier' ? '待出纳打款' : `${STAGE_LABEL[c.stage]}审批中`)
-      : { draft: '草稿', returned: '已退回', paid: '已打款', cancelled: '已作废' }[c.status],
+      : STATUS_LABEL[c.status],
     round: c.round, handler: c.status === 'pending' ? person(handlerId(c, c.stage)) : null, flow,
     returnReason: c.status === 'returned' && ret
       ? { by: person(ret.actorId), stageLabel: STAGE_LABEL[ret.stage], comment: ret.comment } : null,
@@ -139,7 +163,7 @@ function fields(b, partial) {
 }
 
 function advance(c, fromIndex) {
-  const approved = new Set(c.actions.filter(a => a.round === c.round && a.action === 'approve').map(a => a.actorId));
+  const approved = new Set(liveRoundActions(c).filter(a => a.action === 'approve').map(a => a.actorId));
   for (let i = fromIndex + 1; i < STAGES.length; i++) {
     const stage = STAGES[i];
     const h = handlerId(c, stage);
@@ -198,13 +222,13 @@ export function handleExpenses(method, p, q, body, me) {
     return dto(c, me, true);
   }
 
-  const m = p.match(/^\/api\/expenses\/(\d+)(?:\/(submit|approve|return|pay|cancel|files))?$/);
+  const m = p.match(/^\/api\/expenses\/(\d+)(?:\/(submit|approve|revoke|return|pay|withdraw|cancel|files))?$/);
   if (!m) {
     const del = p.match(/^\/api\/files\/(\d+)$/);
     if (del && method === 'DELETE') {
       const c = CLAIMS.find(x => x.files.some(f => f.id === Number(del[1])));
       if (!c) return undefined;
-      if (!can(c, me).upload) throw fail('报销单已经提交，附件不能再删除；需要修改请让审批人退回', 403);
+      if (!can(c, me).upload) throw fail('报销单已经提交，附件不能再删除；需要修改请先撤回', 403);
       c.files = c.files.filter(f => f.id !== Number(del[1]));
       return { ok: true };
     }
@@ -218,7 +242,7 @@ export function handleExpenses(method, p, q, body, me) {
 
   if (!m[2] && method === 'GET') return dto(c, me, true);
   if (!m[2] && method === 'PATCH') {
-    if (!allowed.edit) throw fail('报销单审批中，不能修改', 403);
+    if (!allowed.edit) throw fail('报销单审批中，不能修改；需要修改请先撤回', 403);
     Object.assign(c, fields(body || {}, true));
     return touch();
   }
@@ -255,6 +279,15 @@ export function handleExpenses(method, p, q, body, me) {
     advance(c, STAGES.indexOf(from));
     return touch();
   }
+  if (m[2] === 'revoke') {
+    stageCheck();
+    if (c.status !== 'pending') throw fail('这张报销单当前不在审批中，刷新看看最新状态', 409);
+    if (!allowed.revoke) throw fail('只有刚刚同意的审批人能撤销自己的同意', 403);
+    const from = lastApproval(c).stage;
+    c.actions.push(act(c.round, from, 'revoke', me.id, body?.comment, 0));
+    c.stage = from;
+    return touch();
+  }
   if (m[2] === 'return') {
     stageCheck();
     if (!allowed.return) throw fail('这一步不该由你处理', 403);
@@ -273,10 +306,20 @@ export function handleExpenses(method, p, q, body, me) {
     c.paidAt = new Date().toISOString();
     return touch();
   }
+  if (m[2] === 'withdraw') {
+    stageCheck();
+    if (!allowed.withdraw) throw fail('只有审批中的报销单能由申请人撤回', 409);
+    c.actions.push(act(c.round, c.stage, 'withdraw', me.id, body?.comment, 0));
+    c.status = 'withdrawn';
+    c.stage = null;
+    return touch();
+  }
   if (m[2] === 'cancel') {
-    if (!allowed.cancel) throw fail('只有被退回的报销单能由申请人作废', 403);
-    c.actions.push(act(c.round, null, 'cancel', me.id, '', 0));
+    stageCheck();
+    if (!allowed.cancel) throw fail('只有申请人本人能作废报销单', 403);
+    c.actions.push(act(c.round, c.stage, 'cancel', me.id, '', 0));
     c.status = 'cancelled';
+    c.stage = null;
     return touch();
   }
   return undefined;

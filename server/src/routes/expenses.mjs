@@ -12,11 +12,15 @@
  *     不因为是管理员就能翻所有人的报销单。看不见的一律回 404，不承认单子存在。
  *  3. 本该由申请人自己审批的一步自动跳过；同一个人兼任连续两步（比如部门负责人就是总经理）
  *     时，后一步也自动跳过。出纳打款这一步永远不跳过。跳过都会留痕。
- *  4. 退回后申请人可以改信息、补附件、重新提交，从第一步重新走，round + 1；
- *     不想报了就作废。草稿可以直接删，提交过的单子只能作废不能删 —— 财务单据要留痕。
- *  5. 所有状态流转都在事务里 SELECT ... FOR UPDATE，前端还会带上 stage 做乐观校验，
+ *  4. 退回或撤回后申请人可以改信息、补附件、重新提交，从第一步重新走，round + 1；
+ *     不想报了就作废。审批中（出纳确认打款之前）申请人可以随时撤回，也可以直接作废。
+ *     草稿可以直接删，提交过的单子只能作废不能删 —— 财务单据要留痕。
+ *  5. 最近一次点「同意」的审批人，在下一步的人处理之前可以撤销同意，单子回到他那一步。
+ *     撤销之后，那一步和后面各步在撤销之前留下的记录不再参与计算（进度条、自动跳过），
+ *     但仍然留在审批记录里。
+ *  6. 所有状态流转都在事务里 SELECT ... FOR UPDATE，前端还会带上 stage 做乐观校验，
  *     双击或两个人同时点不会把一步审批记两次。
- *  6. 部门不由申请人选：取管理员在「用户管理」里给他分配的部门（users.dept）。
+ *  7. 部门不由申请人选：取管理员在「用户管理」里给他分配的部门（users.dept）。
  *     建草稿时写入，提交时再按当时的分配刷新一次 —— 中途调了部门，单子送到新部门的负责人。
  *     没分配部门的人不能发起报销。
  */
@@ -43,10 +47,13 @@ export const CATEGORIES = [
   { key: 'other', label: '其他' },
 ];
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]));
-const STATUS_LABEL = { draft: '草稿', returned: '已退回', paid: '已打款', cancelled: '已作废' };
+const STATUS_LABEL = { draft: '草稿', returned: '已退回', withdrawn: '已撤回', paid: '已打款', cancelled: '已作废' };
 const ACTION_LABEL = {
   submit: '提交', approve: '审批通过', skip: '自动跳过', return: '退回', pay: '确认打款', cancel: '作废',
+  withdraw: '撤回', revoke: '撤销同意',
 };
+/** 申请人能改信息、补附件、重新提交的状态 */
+const EDITABLE = ['draft', 'returned', 'withdrawn'];
 const MAX_FILES = 20;
 const MAX_CENTS = 9_999_999_999;
 
@@ -126,6 +133,32 @@ async function loadActions(db, claimId) {
   return rows;
 }
 
+// 列表接口的轮次记录来自 jsonb（actorId），详情和事务里来自数据库行（actor_id）
+const actorOf = a => Number(a.actor_id ?? a.actorId);
+
+/**
+ * 当前这一轮里仍然算数的记录。规则见文件头第 5 条：
+ * 遇到一条撤销同意，就把它那一步及后面各步在它之前的记录剔掉。
+ */
+function liveRoundActions(roundActions) {
+  const live = [];
+  for (const a of roundActions) {
+    if (a.action !== 'revoke') { live.push(a); continue; }
+    const from = STAGES.indexOf(a.stage);
+    for (let i = live.length - 1; i >= 0; i--) {
+      if (live[i].stage && STAGES.indexOf(live[i].stage) >= from) live.splice(i, 1);
+    }
+  }
+  return live;
+}
+
+/** 审批中且最近一次有人拍板的动作是「同意」时返回那条记录（中间的自动跳过不算拍板） */
+function lastApproval(c, roundActions) {
+  if (c.status !== 'pending') return null;
+  const decisive = liveRoundActions(roundActions).filter(a => a.action !== 'skip').at(-1);
+  return decisive?.action === 'approve' ? decisive : null;
+}
+
 /** 能不能看见这张单。规则见文件头第 2 条。 */
 function canSee(c, me, cfg, actions) {
   if (Number(c.applicant_id) === me.id) return true;
@@ -135,19 +168,22 @@ function canSee(c, me, cfg, actions) {
   return roles.length > 0 || leads.has(c.dept);
 }
 
-function permissions(c, me, cfg) {
+function permissions(c, me, cfg, roundActions) {
   const mine = Number(c.applicant_id) === me.id;
-  const editable = mine && (c.status === 'draft' || c.status === 'returned');
+  const editable = mine && EDITABLE.includes(c.status);
   const handler = c.status === 'pending' ? handlerOf(cfg, c.stage, c) : null;
   const handling = !!handler && handler.id === me.id;
+  const approval = lastApproval(c, roundActions);
   return {
     edit: editable,
     submit: editable,
     remove: mine && c.status === 'draft',
-    cancel: mine && c.status === 'returned',
+    withdraw: mine && c.status === 'pending',
+    cancel: mine && ['pending', 'returned', 'withdrawn'].includes(c.status),
     approve: handling && c.stage !== 'cashier' && !mine,
     return: handling,
     pay: handling && c.stage === 'cashier',
+    revoke: !!approval && actorOf(approval) === me.id,
     upload: editable || (handling && c.stage === 'cashier'),
   };
 }
@@ -161,14 +197,15 @@ function statusLabel(c) {
   return c.stage === 'cashier' ? '待出纳打款' : `${STAGE_LABEL[c.stage]}审批中`;
 }
 
+const FLOW_STATE = { approve: 'done', pay: 'done', skip: 'skipped', return: 'returned', withdraw: 'withdrawn' };
+
 /** 当前这一轮每一步的状态，给进度条和审批时间线用 */
 function flowOf(c, cfg, roundActions) {
+  const live = liveRoundActions(roundActions);
   return STAGES.map(stage => {
-    const last = roundActions.filter(a => a.stage === stage).at(-1);
+    const last = live.filter(a => a.stage === stage && FLOW_STATE[a.action]).at(-1);
     let state = 'waiting';
-    if (last?.action === 'approve' || last?.action === 'pay') state = 'done';
-    else if (last?.action === 'skip') state = 'skipped';
-    else if (last?.action === 'return') state = 'returned';
+    if (last) state = FLOW_STATE[last.action];
     else if (c.status === 'pending' && c.stage === stage) state = 'current';
     const who = last
       ? person(last.actor_id ?? last.actorId, last.actor_name ?? last.actorName)
@@ -208,7 +245,7 @@ function claimDto(c, me, cfg, { roundActions, actions = null, files = null, file
     paidAt: c.paid_at,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
-    can: permissions(c, me, cfg),
+    can: permissions(c, me, cfg, roundActions),
     ...(actions ? {
       actions: actions.map(a => ({
         id: Number(a.id), round: a.round, stage: a.stage,
@@ -253,7 +290,8 @@ async function lockClaim(db, id, me) {
   const cfg = await loadConfig(db);
   const actions = await loadActions(db, id);
   if (!canSee(c, me, cfg, actions)) throw notFound('没有这张报销单');
-  return { c, cfg, actions, can: permissions(c, me, cfg) };
+  const roundActions = actions.filter(a => a.round === c.round);
+  return { c, cfg, actions, roundActions, can: permissions(c, me, cfg, roundActions) };
 }
 
 /* ================= 附件鉴权（给 routes/files.mjs 用） ================= */
@@ -274,8 +312,8 @@ export async function assertExpenseFileDeletable(file, me) {
   const [cfg, actions] = await Promise.all([loadConfig(), loadActions({ query }, c.id)]);
   if (!canSee(c, me, cfg, actions)) throw notFound('没有这个文件');
   if (Number(file.uploaded_by) !== me.id) throw forbidden('只有上传者本人能删除这个附件');
-  if (!permissions(c, me, cfg).upload) {
-    throw forbidden('报销单已经提交，附件不能再删除；需要修改请让审批人退回');
+  if (!permissions(c, me, cfg, actions.filter(a => a.round === c.round)).upload) {
+    throw forbidden('报销单已经提交，附件不能再删除；需要修改请先撤回');
   }
 }
 
@@ -308,7 +346,7 @@ function optText(v, max, label) {
   return s || null;
 }
 
-/** partial=true 时只校验传了的字段（PATCH 用）。部门不从这里来，见文件头第 6 条；传了也忽略。 */
+/** partial=true 时只校验传了的字段（PATCH 用）。部门不从这里来，见文件头第 7 条；传了也忽略。 */
 function parseFields(b, { partial = false } = {}) {
   const out = {};
   const has = k => !partial || b[k] !== undefined;
@@ -331,9 +369,10 @@ function parseFields(b, { partial = false } = {}) {
  */
 async function advance(db, c, cfg, fromIndex) {
   const { rows } = await db.query(
-    `SELECT actor_id FROM expense_claim_actions
-      WHERE claim_id = $1 AND round = $2 AND action = 'approve'`, [c.id, c.round]);
-  const approved = new Set(rows.map(r => Number(r.actor_id)));
+    `SELECT stage, action, actor_id FROM expense_claim_actions
+      WHERE claim_id = $1 AND round = $2 ORDER BY id`, [c.id, c.round]);
+  // 被撤销的同意不算「已在前一步审批通过」
+  const approved = new Set(liveRoundActions(rows).filter(a => a.action === 'approve').map(actorOf));
   for (let i = fromIndex + 1; i < STAGES.length; i++) {
     const stage = STAGES[i];
     const h = handlerOf(cfg, stage, c);
@@ -371,6 +410,16 @@ async function notifyHandler(next, c, actorId) {
     title: next.stage === 'cashier'
       ? `${c.applicant_name}的报销单审批完成，等你打款`
       : `${c.applicant_name}提交了报销单，等你审批`,
+    body: summaryOf(c),
+  });
+}
+
+/** 单子被申请人拿走（撤回 / 作废）时，告诉原本在等着处理它的人不用管了 */
+async function notifyDropped(handler, c, actorId, verb) {
+  if (!handler || handler.id === actorId) return;
+  await notifyUser(handler.id, {
+    actorId, kind: 'expense', board: 'expenses', refId: Number(c.id),
+    title: `${c.applicant_name}${verb}了报销单，暂时不用你处理`,
     body: summaryOf(c),
   });
 }
@@ -549,15 +598,15 @@ export function mount(router) {
     sendJson(res, 201, await loadDetail(Number(rows[0].id), me));
   });
 
-  /* ---------- 修改：草稿或被退回时，申请人本人 ---------- */
+  /* ---------- 修改：草稿、被退回或已撤回时，申请人本人 ---------- */
   router.patch('/api/expenses/:id', async (req, res, params) => {
     const me = await currentUser(req);
     const id = Number(params.id);
     const b = await readJson(req);
     await tx(async db => {
-      const { c, cfg, can } = await lockClaim(db, id, me);
+      const { c, can } = await lockClaim(db, id, me);
       if (!can.edit) throw forbidden(Number(c.applicant_id) === me.id
-        ? '报销单审批中，不能修改；需要修改请让审批人退回' : '只有申请人本人能修改报销单');
+        ? '报销单审批中，不能修改；需要修改请先撤回' : '只有申请人本人能修改报销单');
       const f = parseFields(b, { partial: true });
       const cols = Object.keys(f);
       if (!cols.length) return;
@@ -659,6 +708,48 @@ export function mount(router) {
     publish('expense:updated', {});
   });
 
+  /* ---------- 撤销同意：最近一次同意的审批人，在下一步的人处理之前收回 ----------
+     单子回到他那一步重新决定。规则见文件头第 5 条。 */
+  router.post('/api/expenses/:id/revoke', async (req, res, params) => {
+    const me = await currentUser(req);
+    const id = Number(params.id);
+    const b = await readJson(req);
+    const comment = optText(b.comment, 1000, '撤销原因');
+    const { c, from, waiting } = await tx(async db => {
+      const { c, cfg, roundActions, can } = await lockClaim(db, id, me);
+      assertStage(c, b);
+      if (c.status !== 'pending') throw conflict('这张报销单当前不在审批中，刷新看看最新状态');
+      if (!can.revoke) {
+        const approvedEarlier = liveRoundActions(roundActions)
+          .some(a => a.action === 'approve' && actorOf(a) === me.id);
+        throw approvedEarlier ? conflict('后面的审批人已经处理过了，不能再撤销同意')
+          : forbidden('只有刚刚同意的审批人能撤销自己的同意');
+      }
+      const from = lastApproval(c, roundActions).stage;
+      const waiting = handlerOf(cfg, c.stage, c);
+      await db.query(
+        `INSERT INTO expense_claim_actions(claim_id, round, stage, action, actor_id, comment)
+         VALUES($1,$2,$3,'revoke',$4,$5)`, [id, c.round, from, me.id, comment]);
+      await db.query(
+        `UPDATE expense_claims SET status = 'pending', stage = $2, updated_at = now() WHERE id = $1`, [id, from]);
+      return { c, from, waiting };
+    });
+    if (waiting && waiting.id !== me.id) {
+      await notifyUser(waiting.id, {
+        actorId: me.id, kind: 'expense', board: 'expenses', refId: id,
+        title: `${me.name}撤销了对${c.applicant_name}报销单的同意，暂时不用你处理`,
+        body: summaryOf(c),
+      });
+    }
+    await notifyUser(c.applicant_id, {
+      actorId: me.id, kind: 'expense', board: 'expenses', refId: id,
+      title: `${STAGE_LABEL[from]}撤销了同意，报销单回到${STAGE_LABEL[from]}审批`,
+      body: `${c.title}${comment ? ` · 原因：${comment}` : ''}`,
+    });
+    sendJson(res, 200, await loadDetail(id, me));
+    publish('expense:updated', {});
+  });
+
   /* ---------- 退回（任何一步的处理人都可以，必须写原因） ---------- */
   router.post('/api/expenses/:id/return', async (req, res, params) => {
     const me = await currentUser(req);
@@ -722,28 +813,62 @@ export function mount(router) {
     publish('expense:updated', {});
   });
 
-  /* ---------- 作废：被退回后申请人不想再报了 ---------- */
+  /* ---------- 撤回：审批中（出纳确认打款之前）申请人把单子拿回来改 ----------
+     回到可修改状态，改完重新提交从第一步走（round + 1），或者直接作废。 */
+  router.post('/api/expenses/:id/withdraw', async (req, res, params) => {
+    const me = await currentUser(req);
+    const id = Number(params.id);
+    const b = await readJson(req);
+    const comment = optText(b.comment, 1000, '撤回原因');
+    const { c, handler } = await tx(async db => {
+      const { c, cfg, can } = await lockClaim(db, id, me);
+      assertStage(c, b);
+      if (!can.withdraw) {
+        if (c.status === 'pending') throw forbidden('只有申请人本人能撤回报销单');
+        throw conflict(c.status === 'paid' ? '这张报销单已经打款，不能撤回'
+          : '这张报销单当前不在审批中，刷新看看最新状态');
+      }
+      const handler = handlerOf(cfg, c.stage, c);
+      await db.query(
+        `INSERT INTO expense_claim_actions(claim_id, round, stage, action, actor_id, comment)
+         VALUES($1,$2,$3,'withdraw',$4,$5)`, [id, c.round, c.stage, me.id, comment]);
+      await db.query(
+        `UPDATE expense_claims SET status = 'withdrawn', stage = NULL, updated_at = now() WHERE id = $1`, [id]);
+      return { c, handler };
+    });
+    await notifyDropped(handler, c, me.id, '撤回');
+    sendJson(res, 200, await loadDetail(id, me));
+    publish('expense:updated', {});
+  });
+
+  /* ---------- 作废：申请人不想再报了。审批中、被退回、已撤回都可以；草稿直接删 ---------- */
   router.post('/api/expenses/:id/cancel', async (req, res, params) => {
     const me = await currentUser(req);
     const id = Number(params.id);
-    await tx(async db => {
-      const { c, can } = await lockClaim(db, id, me);
+    const b = await readJson(req);
+    const { c, handler } = await tx(async db => {
+      const { c, cfg, can } = await lockClaim(db, id, me);
+      assertStage(c, b);
       if (!can.cancel) {
-        throw c.status === 'draft' ? badRequest('草稿直接删除即可')
-          : forbidden('只有被退回的报销单能由申请人作废');
+        if (c.status === 'draft') throw badRequest('草稿直接删除即可');
+        if (Number(c.applicant_id) !== me.id) throw forbidden('只有申请人本人能作废报销单');
+        throw conflict(c.status === 'paid' ? '这张报销单已经打款，不能作废' : '这张报销单已经作废了');
       }
+      const handler = c.status === 'pending' ? handlerOf(cfg, c.stage, c) : null;
       await db.query(
         `INSERT INTO expense_claim_actions(claim_id, round, stage, action, actor_id)
-         VALUES($1,$2,NULL,'cancel',$3)`, [id, c.round, me.id]);
+         VALUES($1,$2,$3,'cancel',$4)`, [id, c.round, c.stage, me.id]);
       await db.query(
-        `UPDATE expense_claims SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id]);
+        `UPDATE expense_claims SET status = 'cancelled', stage = NULL, updated_at = now() WHERE id = $1`, [id]);
+      return { c, handler };
     });
+    await notifyDropped(handler, c, me.id, '作废');
     sendJson(res, 200, await loadDetail(id, me));
     publish('expense:updated', {});
   });
 
   /* ---------- 附件上传 ----------
-     申请人在草稿 / 退回时传凭证（side=submit）；出纳在打款这一步传打款截图（side=review）。
+     申请人在草稿 / 退回 / 撤回时传凭证（side=submit）；出纳在打款这一步传打款截图（side=review）。
      先无锁判一次权限，免得没权限的人也把 20MB 写进磁盘；落库前在事务里再判一次，
      防止传文件的这几秒里单子已经被提交走了。 */
   router.post('/api/expenses/:id/files', async (req, res, params, url) => {

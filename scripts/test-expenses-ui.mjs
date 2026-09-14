@@ -131,6 +131,27 @@ try {
     assert.equal(after.approveGone, true, '同意后自己不能再审批这张单');
     assert.match(after.timeline, /陈屿 审批通过（总经理）/);
 
+    // 撤销同意：财务还没处理，总经理收回，单子回到总经理这一步；再同意一次继续往下走
+    await page.waitForSelector('#btnExpDRevoke', { visible: true });
+    await buttonVisible(page, 'expDetailModal', '#btnExpDRevoke');
+    await page.click('#btnExpDRevoke');
+    await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
+    await page.click('#confirmSubmit');
+    await page.waitForSelector('#expDetailModal.on #btnExpDApprove', { visible: true, timeout: 5_000 });
+    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '2', { timeout: 5_000 });
+    const revoked = await page.evaluate(() => ({
+      status: document.querySelector('#expDetailBody .exp-status')?.textContent,
+      timeline: document.querySelector('.exp-timeline li')?.textContent.replace(/\s+/g, ' '),
+      revokeGone: !document.querySelector('#btnExpDRevoke'),
+    }));
+    assert.match(revoked.status, /总经理审批中/);
+    assert.match(revoked.timeline, /陈屿 撤销同意（总经理）/);
+    assert.equal(revoked.revokeGone, true);
+    await page.click('#btnExpDApprove');
+    await page.waitForFunction(() => /财务审批中/.test(document.querySelector('#expDetailBody .exp-status')?.textContent || '')
+      && document.querySelector('#btnExpDRevoke'), { timeout: 5_000 });
+    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '1', { timeout: 5_000 });
+
     // Esc 关闭，遮罩收起
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.modal.on') && !document.querySelector('#mask.on'));
@@ -181,6 +202,41 @@ try {
     st = await pageState(page);
     assert.ok(st.overflow <= 1, `我发起的横向溢出 ${JSON.stringify(st)}`);
     await harness.screenshot(page, `expenses-mine-${scene}`);
+
+    // 撤回：自己审批中的单子（墨盒，停在财务）拿回来，能改、能重提、也能作废
+    await page.$$eval('#v-expenses .exp-card', ns => ns.find(n => /打印机墨盒两套/.test(n.textContent))
+      .querySelector('[data-exp-open]').click());
+    await page.waitForSelector('#expDetailModal.on #btnExpDWithdraw', { visible: true });
+    await settleDom(page);
+    await buttonVisible(page, 'expDetailModal', '#btnExpDWithdraw');
+    assert.ok(await page.$('#btnExpDCancel'), '审批中也能直接作废');
+    await page.click('#btnExpDWithdraw');
+    await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
+    await page.click('#confirmSubmit');
+    await page.waitForFunction(() => /已撤回/.test(document.querySelector('#expDetailBody .exp-status')?.textContent || ''), { timeout: 5_000 });
+    const withdrawn = await page.evaluate(() => ({
+      edit: !!document.querySelector('#btnExpDEdit'),
+      resubmit: document.querySelector('#btnExpDSubmit')?.textContent,
+      cancel: !!document.querySelector('#btnExpDCancel'),
+      withdraw: !!document.querySelector('#btnExpDWithdraw'),
+      timeline: document.querySelector('.exp-timeline li')?.textContent.replace(/\s+/g, ' '),
+    }));
+    assert.deepEqual({ ...withdrawn, timeline: undefined }, { edit: true, resubmit: '重新提交', cancel: true, withdraw: false, timeline: undefined });
+    assert.match(withdrawn.timeline, /陈屿 撤回（财务）/);
+    await modalInViewport(page, 'expDetailModal');
+    await buttonVisible(page, 'expDetailModal', '#btnExpDSubmit');
+    await harness.screenshot(page, `expenses-withdrawn-${scene}`);
+    if (mobile) {
+      const small = await page.$$eval('#expDetailFoot .btn', ns => ns.map(n => n.getBoundingClientRect())
+        .filter(b => b.width > 0 && b.height < 44).length);
+      assert.equal(small, 0, '手机上撤回后的详情底部按钮高度至少 44px');
+    }
+    await page.click('#btnExpDCancel');
+    await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
+    await page.click('#confirmSubmit');
+    await page.waitForFunction(() => /已作废/.test(document.querySelector('#expDetailBody .exp-status')?.textContent || ''), { timeout: 5_000 });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.modal.on') && !document.querySelector('#mask.on'));
 
     // 管理员：审批设置
     await page.click('#v-expenses .exp-config-btn');

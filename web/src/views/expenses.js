@@ -59,10 +59,10 @@ const timeText = iso => {
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
-const statusTone = c => ({ draft: 'draft', pending: 'pending', returned: 'returned', paid: 'paid', cancelled: 'cancelled' }[c.status]);
+const statusTone = c => ({ draft: 'draft', pending: 'pending', returned: 'returned', withdrawn: 'withdrawn', paid: 'paid', cancelled: 'cancelled' }[c.status]);
 
 function flowHtml(c, { compact = false } = {}) {
-  const note = { done: '已通过', skipped: '已跳过', returned: '已退回', current: '处理中', waiting: '' };
+  const note = { done: '已通过', skipped: '已跳过', returned: '已退回', withdrawn: '已撤回', current: '处理中', waiting: '' };
   return `<ol class="exp-flow${compact ? ' compact' : ''}" aria-label="审批进度">
     ${c.flow.map(s => `<li class="is-${s.state}">
       <i aria-hidden="true"></i>
@@ -153,7 +153,8 @@ function cardHtml(c) {
       ? `<div class="exp-callout warn slim"><b>${esc(c.returnReason.stageLabel)}退回</b><span>${esc(c.returnReason.comment)}</span></div>`
       : ''}
     ${c.status === 'draft' ? '<div class="exp-card-hint">草稿，还没提交</div>'
-      : c.status === 'cancelled' ? '<div class="exp-card-hint">已作废</div>' : flowHtml(c, { compact: true })}
+      : c.status === 'cancelled' ? '<div class="exp-card-hint">已作废</div>'
+        : c.status === 'withdrawn' ? '<div class="exp-card-hint">已撤回，改好后可以重新提交</div>' : flowHtml(c, { compact: true })}
   </article>`;
 }
 
@@ -280,6 +281,9 @@ function paintDetail(c) {
     ${c.status === 'returned' && c.returnReason ? `<div class="exp-callout warn">
       <b>${esc(c.returnReason.stageLabel)}（${esc(c.returnReason.by?.name || '')}）退回</b>
       <span>${esc(c.returnReason.comment)}</span></div>` : ''}
+    ${c.status === 'withdrawn' && c.can.edit ? `<div class="exp-callout warn">
+      <b>已撤回，审批暂停</b>
+      <span>修改信息或补充附件后可以重新提交，从部门负责人重新审批；不再报销可以作废。</span></div>` : ''}
     <dl class="exp-fields">
       <div><dt>申请人</dt><dd>${esc(c.applicant?.name || '')}</dd></div>
       <div><dt>部门</dt><dd>${esc(c.dept)}</dd></div>
@@ -322,8 +326,10 @@ function paintDetail(c) {
     c.can.cancel ? btn('btnExpDCancel', 'btn-crit', '作废') : '',
     c.can.return ? btn('btnExpDReturn', 'btn-crit', '退回') : '',
     '<div class="spacer"></div>',
+    c.can.withdraw ? btn('btnExpDWithdraw', 'btn-ghost', '撤回') : '',
+    c.can.revoke ? btn('btnExpDRevoke', 'btn-ghost', '撤销同意') : '',
     c.can.edit ? btn('btnExpDEdit', 'btn-ghost', '修改') : '',
-    c.can.submit ? btn('btnExpDSubmit', 'btn-primary', c.status === 'returned' ? '重新提交' : '提交审批') : '',
+    c.can.submit ? btn('btnExpDSubmit', 'btn-primary', c.status === 'draft' ? '提交审批' : '重新提交') : '',
     c.can.approve ? btn('btnExpDApprove', 'btn-primary', '同意') : '',
     c.can.pay ? btn('btnExpDPay', 'btn-primary', '确认已打款') : '',
     !(c.can.edit || c.can.approve || c.can.pay) ? '<button class="btn btn-ghost" type="button" data-close>关闭</button>' : '',
@@ -426,6 +432,24 @@ function bindDetail() {
     if (b.id === 'btnExpDSubmit') {
       return act(b, () => api.expenseAct(c.id, 'submit'), '已提交，等待审批', '正在提交…');
     }
+    if (b.id === 'btnExpDWithdraw') {
+      const ok = await confirmAction({
+        eyebrow: '撤回报销单', title: '撤回这张报销单？',
+        message: '撤回后审批暂停，当前审批人不用再处理。你可以修改信息、补附件后重新提交（从部门负责人重新审批），也可以直接作废。',
+        confirmLabel: '撤回',
+      });
+      if (!ok) return;
+      return act(b, () => api.expenseAct(c.id, 'withdraw', { stage: c.stage }), '已撤回，可以修改后重新提交', '正在撤回…');
+    }
+    if (b.id === 'btnExpDRevoke') {
+      const ok = await confirmAction({
+        eyebrow: '撤销同意', title: '撤销你对这张报销单的同意？',
+        message: '单子会回到你这一步，由你重新同意或退回；下一步的审批人暂时不用处理。',
+        confirmLabel: '撤销同意',
+      });
+      if (!ok) return;
+      return act(b, () => api.expenseAct(c.id, 'revoke', { stage: c.stage }), '已撤销同意，单子回到你这一步', '正在撤销…');
+    }
     if (b.id === 'btnExpDEdit') return openEdit(c);
     if (b.id === 'btnExpDRemove') {
       const ok = await confirmAction({
@@ -436,10 +460,14 @@ function bindDetail() {
     }
     if (b.id === 'btnExpDCancel') {
       const ok = await confirmAction({
-        eyebrow: '作废报销单', title: '作废这张报销单？', message: '作废后不能再提交，审批记录会保留。', confirmLabel: '作废',
+        eyebrow: '作废报销单', title: '作废这张报销单？',
+        message: c.status === 'pending'
+          ? '作废后审批流程立即结束，当前审批人不用再处理，单子也不能再提交。审批记录会保留。'
+          : '作废后不能再提交，审批记录会保留。',
+        confirmLabel: '作废',
       });
       if (!ok) return;
-      return act(b, () => api.expenseAct(c.id, 'cancel'), '报销单已作废', '正在作废…');
+      return act(b, () => api.expenseAct(c.id, 'cancel', { stage: c.stage }), '报销单已作废', '正在作废…');
     }
   });
 
@@ -551,7 +579,7 @@ function openEditor(c, cfg) {
   ret.hidden = !(c?.status === 'returned' && c.returnReason);
   ret.innerHTML = ret.hidden ? '' : `<b>${esc(c.returnReason.stageLabel)}退回：</b><span>${esc(c.returnReason.comment)}</span>`;
   $('#btnExpDelete').hidden = !c?.can.remove;
-  $('#btnExpSubmit').textContent = c?.status === 'returned' ? '重新提交' : '提交审批';
+  $('#btnExpSubmit').textContent = c && c.status !== 'draft' ? '重新提交' : '提交审批';
   editError('');
   paintEditFiles();
   $('#expEditModal').classList.add('on');
