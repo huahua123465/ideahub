@@ -147,7 +147,8 @@ test('建草稿：字段校验', async () => {
   assert.equal(c.expenseDate, '2026-09-08');
   assert.match(c.code, /^BX-\d{4}-\d{4,}$/);
   assert.deepEqual(c.flow.map(s => [s.stage, s.state, s.handler?.id]),
-    [['leader', 'waiting', LEAD_P], ['gm', 'waiting', GM], ['finance', 'waiting', FIN], ['cashier', 'waiting', CASH]]);
+    [['leader', 'waiting', LEAD_P], ['gm', 'waiting', GM], ['finance', 'waiting', FIN], ['cashier', 'waiting', CASH],
+      ['receipt', 'waiting', APP]]);
   assert.equal(c.can.edit && c.can.submit && c.can.remove && c.can.upload, true);
 });
 
@@ -282,7 +283,7 @@ test('完整流程：退回修改重提 → 四级审批 → 打款，权限和�
   const re = await call(APP, 'POST', `/api/expenses/${c.id}/submit`, {});
   assert.equal(re.data.round, 2);
   assert.equal(re.data.stage, 'leader');
-  assert.deepEqual(re.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting']);
+  assert.deepEqual(re.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting', 'waiting']);
 
   for (const [u, stage] of [[LEAD_P, 'leader'], [GM, 'gm'], [FIN, 'finance']]) {
     const r = await call(u, 'POST', `/api/expenses/${c.id}/approve`, { stage });
@@ -302,14 +303,120 @@ test('完整流程：退回修改重提 → 四级审批 → 打款，权限和�
   const paid = await call(CASH, 'POST', `/api/expenses/${c.id}/pay`, { stage: 'cashier', comment: '已转账' });
   assert.equal(paid.status, 200);
   assert.equal(paid.data.status, 'paid');
+  assert.equal(paid.data.statusLabel, '待确认收款');
   assert.ok(paid.data.paidAt);
-  assert.deepEqual(paid.data.flow.map(s => s.state), ['done', 'done', 'done', 'done']);
+  assert.deepEqual(paid.data.flow.map(s => s.state), ['done', 'done', 'done', 'done', 'current']);
   assert.deepEqual(
     paid.data.actions.map(a => `${a.round}:${a.stage || '-'}:${a.action}`),
     ['1:-:submit', '1:leader:approve', '1:gm:return',
       '2:-:submit', '2:leader:approve', '2:gm:approve', '2:finance:approve', '2:cashier:pay']);
   assert.equal((await call(CASH, 'DELETE', `/api/files/${proof.data.id}`)).status, 403, '打款后凭证锁定');
   assert.equal(Object.values(paid.data.can).some(Boolean), false);
+});
+
+const granted = can => Object.entries(can).filter(([, v]) => v).map(([k]) => k).sort();
+const approvedToCashier = async claim => {
+  for (const [u, stage] of [[LEAD_P, 'leader'], [GM, 'gm'], [FIN, 'finance']]) {
+    const r = await call(u, 'POST', `/api/expenses/${claim.id}/approve`, { stage });
+    assert.equal(r.status, 200, `${stage}: ${JSON.stringify(r.data)}`);
+  }
+};
+
+test('确认收款：申请人确认收到才算完成；没收到退回出纳重新打款', async () => {
+  assert.equal((await setConfig()).status, 200);
+  const c = await submitted(APP);
+  await approvedToCashier(c);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/confirm`, {})).status, 409, '出纳还没打款');
+  assert.equal((await call(CASH, 'POST', `/api/expenses/${c.id}/pay`, { stage: 'cashier', comment: '已转账' })).status, 200);
+
+  // 申请人：待我处理里有它，只能确认收到或反馈没收到，不能再撤回、作废
+  const mine = await call(APP, 'GET', `/api/expenses/${c.id}`);
+  assert.equal(mine.data.statusLabel, '待确认收款');
+  assert.deepEqual(granted(mine.data.can), ['confirm', 'dispute']);
+  assert.equal(mine.data.flow[4].handler.id, APP);
+  const todo = await call(APP, 'GET', '/api/expenses?scope=todo');
+  assert.ok(todo.data.items.some(x => x.id === c.id));
+  assert.ok(todo.data.todoCount >= 1);
+  assert.ok((await call(APP, 'GET', '/api/notifications')).data.items
+    .some(x => x.refId === c.id && /收到后请确认/.test(x.title)), '申请人收到打款通知');
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/withdraw`, {})).status, 409);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/cancel`, {})).status, 409);
+  // 别人不能替申请人确认或反馈
+  assert.equal((await call(CASH, 'POST', `/api/expenses/${c.id}/confirm`, {})).status, 403);
+  assert.equal((await call(CASH, 'POST', `/api/expenses/${c.id}/dispute`, { comment: '替他说没到' })).status, 403);
+  assert.equal((await call(OUT, 'POST', `/api/expenses/${c.id}/confirm`, {})).status, 404);
+
+  // 没收到：必须写情况；单子回到出纳，那次打款不再算数
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/dispute`, {})).status, 400);
+  const d = await call(APP, 'POST', `/api/expenses/${c.id}/dispute`, { comment: '工资卡没到账，查了两次' });
+  assert.equal(d.status, 200, JSON.stringify(d.data));
+  assert.equal(d.data.status, 'pending');
+  assert.equal(d.data.stage, 'cashier');
+  assert.equal(d.data.statusLabel, '待出纳打款');
+  assert.equal(d.data.paidAt, null);
+  assert.deepEqual(d.data.flow.map(s => s.state), ['done', 'done', 'done', 'current', 'waiting']);
+  assert.deepEqual(granted(d.data.can), [], '出纳打过款之后，申请人不能撤回或作废');
+  const w = await call(APP, 'POST', `/api/expenses/${c.id}/withdraw`, { stage: 'cashier' });
+  assert.equal(w.status, 409);
+  assert.match(w.data.error, /出纳已经操作过打款/);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/cancel`, { stage: 'cashier' })).status, 409);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/confirm`, {})).status, 409);
+  assert.equal((await call(FIN, 'POST', `/api/expenses/${c.id}/revoke`, { stage: 'cashier' })).status, 409,
+    '反馈没收到之后财务不能再撤销同意');
+  assert.ok((await call(CASH, 'GET', '/api/notifications')).data.items
+    .some(x => x.refId === c.id && /没收到/.test(x.title)), '出纳收到没收到的反馈');
+  const cashTodo = await call(CASH, 'GET', '/api/expenses?scope=todo');
+  assert.ok(cashTodo.data.items.some(x => x.id === c.id && x.can.pay));
+  assert.ok(!(await call(APP, 'GET', '/api/expenses?scope=todo')).data.items.some(x => x.id === c.id));
+
+  // 出纳核实后重新打款 → 申请人确认收到 → 完成
+  const repaid = await call(CASH, 'POST', `/api/expenses/${c.id}/pay`, { stage: 'cashier', comment: '账号填错，已重新转' });
+  assert.equal(repaid.status, 200, JSON.stringify(repaid.data));
+  assert.equal(repaid.data.status, 'paid');
+  const ok = await call(APP, 'POST', `/api/expenses/${c.id}/confirm`, { comment: '收到了' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.data));
+  assert.equal(ok.data.status, 'completed');
+  assert.equal(ok.data.statusLabel, '已完成');
+  assert.ok(ok.data.receivedAt);
+  assert.deepEqual(ok.data.flow.map(s => s.state), ['done', 'done', 'done', 'done', 'done']);
+  assert.deepEqual(granted(ok.data.can), []);
+  assert.deepEqual(
+    ok.data.actions.map(a => `${a.round}:${a.stage || '-'}:${a.action}`),
+    ['1:-:submit', '1:leader:approve', '1:gm:approve', '1:finance:approve',
+      '1:cashier:pay', '1:cashier:dispute', '1:cashier:pay', '1:-:confirm']);
+  assert.ok(!(await call(APP, 'GET', '/api/expenses?scope=todo')).data.items.some(x => x.id === c.id));
+  assert.ok((await call(CASH, 'GET', '/api/notifications')).data.items
+    .some(x => x.refId === c.id && /已确认收到/.test(x.title)), '出纳知道钱到了');
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/confirm`, {})).status, 409);
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/dispute`, { comment: '又没了' })).status, 409);
+  const late = await call(APP, 'POST', `/api/expenses/${c.id}/cancel`, {});
+  assert.equal(late.status, 409);
+  assert.match(late.data.error, /已经完成/);
+});
+
+test('每天提醒申请人确认收款：打款一天后开始，每张单每天最多一条', async () => {
+  const { remindUnconfirmedReceipts } = await import('../server/src/routes/expenses.mjs');
+  assert.equal((await setConfig()).status, 200);
+  const c = await submitted(APP);
+  await approvedToCashier(c);
+  assert.equal((await call(CASH, 'POST', `/api/expenses/${c.id}/pay`, { stage: 'cashier' })).status, 200);
+  const reminders = async () => (await dbq(
+    `SELECT count(*)::int AS n FROM notifications WHERE board = 'expenses' AND ref_id = $1 AND title = $2`,
+    [c.id, '报销款已打款，收到后请确认'])).rows[0].n;
+  const backdate = () => dbq(`UPDATE expense_claims SET reminded_at = now() - interval '25 hours' WHERE id = $1`, [c.id]);
+
+  await remindUnconfirmedReceipts();
+  assert.equal(await reminders(), 0, '刚打款不提醒');
+  await backdate();
+  await remindUnconfirmedReceipts();
+  assert.equal(await reminders(), 1);
+  await remindUnconfirmedReceipts();
+  assert.equal(await reminders(), 1, '同一天不重复提醒');
+
+  assert.equal((await call(APP, 'POST', `/api/expenses/${c.id}/confirm`, {})).status, 200);
+  await backdate();
+  await remindUnconfirmedReceipts();
+  assert.equal(await reminders(), 1, '确认收到之后不再提醒');
 });
 
 test('自动跳过：申请人本人是负责人；同一人兼任连续两步', async () => {
@@ -326,7 +433,7 @@ test('自动跳过：申请人本人是负责人；同一人兼任连续两步',
   assert.equal(tech.stage, 'leader');
   const a = await call(LEAD_T, 'POST', `/api/expenses/${tech.id}/approve`, { stage: 'leader' });
   assert.equal(a.data.stage, 'finance');
-  assert.deepEqual(a.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting']);
+  assert.deepEqual(a.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting', 'waiting']);
 
   // 总经理自己报销 → 部门、总经理两步都跳过（总经理此刻是林知远，技术部负责人也是他）
   const gmOwn = await submitted(LEAD_T, { dept: '技术部' });
@@ -448,7 +555,7 @@ test('撤回修改重提、撤销同意、审批中直接作废', async () => {
   const re = await call(APP, 'POST', `/api/expenses/${c.id}/submit`, {});
   assert.equal(re.status, 200, JSON.stringify(re.data));
   assert.equal(re.data.round, 2);
-  assert.deepEqual(re.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting']);
+  assert.deepEqual(re.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting', 'waiting']);
 
   // 撤销同意：部门负责人同意后、总经理处理前可以收回
   const a1 = await call(LEAD_P, 'POST', `/api/expenses/${c.id}/approve`, { stage: 'leader' });
@@ -461,7 +568,7 @@ test('撤回修改重提、撤销同意、审批中直接作废', async () => {
   const rv = await call(LEAD_P, 'POST', `/api/expenses/${c.id}/revoke`, { stage: 'gm', comment: '再核一下发票' });
   assert.equal(rv.status, 200, JSON.stringify(rv.data));
   assert.equal(rv.data.stage, 'leader');
-  assert.deepEqual(rv.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting']);
+  assert.deepEqual(rv.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting', 'waiting']);
   assert.equal(rv.data.can.approve && !rv.data.can.revoke, true);
   assert.ok(!(await call(GM, 'GET', '/api/expenses?scope=todo')).data.items.some(x => x.id === c.id));
   assert.ok((await call(APP, 'GET', '/api/notifications')).data.items
@@ -498,12 +605,12 @@ test('撤回修改重提、撤销同意、审批中直接作废', async () => {
   assert.equal((await setConfig({ gmId: LEAD_T })).status, 200);
   const tech = await submitted(OUT);
   const t1 = await call(LEAD_T, 'POST', `/api/expenses/${tech.id}/approve`, { stage: 'leader' });
-  assert.deepEqual(t1.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting']);
+  assert.deepEqual(t1.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting', 'waiting']);
   assert.equal(t1.data.can.revoke, true, '中间的自动跳过不算后面的人处理过');
   const t2 = await call(LEAD_T, 'POST', `/api/expenses/${tech.id}/revoke`, { stage: 'finance' });
   assert.equal(t2.status, 200, JSON.stringify(t2.data));
-  assert.deepEqual(t2.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting']);
+  assert.deepEqual(t2.data.flow.map(s => s.state), ['current', 'waiting', 'waiting', 'waiting', 'waiting']);
   const t3 = await call(LEAD_T, 'POST', `/api/expenses/${tech.id}/approve`, { stage: 'leader' });
-  assert.deepEqual(t3.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting']);
+  assert.deepEqual(t3.data.flow.map(s => s.state), ['done', 'skipped', 'current', 'waiting', 'waiting']);
   assert.equal((await setConfig()).status, 200);
 });

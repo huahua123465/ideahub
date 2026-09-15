@@ -3119,8 +3119,8 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-clip svg{width:13px;height:13px}
 .exp-card-hint{padding-top:9px;border-top:1px dashed var(--line);color:var(--muted);font-size:12px}
 
-/* 四段进度条：通过 = 实线绿，当前 = 琥珀并轻微呼吸，退回 = 红，自动跳过 = 虚线 */
-.exp-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0;padding:10px 0 0;
+/* 五段进度条（四步审批 + 申请人确认收款）：通过 = 实线绿，当前 = 琥珀并轻微呼吸，退回 = 红，自动跳过 = 虚线 */
+.exp-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:0;padding:10px 0 0;
   list-style:none;border-top:1px solid var(--line-soft)}
 .exp-flow li{position:relative;display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:11px}
 .exp-flow li>i{position:absolute;top:0;left:0;right:0;height:4px;border-radius:999px;background:var(--line)}
@@ -3197,8 +3197,8 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-timeline li{position:relative;color:var(--ink2);font-size:13px}
 .exp-timeline li::before{content:"";position:absolute;left:-23px;top:4px;width:12px;height:12px;border:2px solid var(--line);
   border-radius:50%;background:var(--surface)}
-.exp-timeline li.a-approve::before,.exp-timeline li.a-pay::before{border-color:var(--good);background:var(--good-bg)}
-.exp-timeline li.a-return::before,.exp-timeline li.a-cancel::before{border-color:var(--crit);background:var(--crit-bg)}
+.exp-timeline li.a-approve::before,.exp-timeline li.a-pay::before,.exp-timeline li.a-confirm::before{border-color:var(--good);background:var(--good-bg)}
+.exp-timeline li.a-return::before,.exp-timeline li.a-cancel::before,.exp-timeline li.a-dispute::before{border-color:var(--crit);background:var(--crit-bg)}
 .exp-timeline li.a-skip::before{border-style:dashed}
 .exp-timeline li.a-withdraw::before,.exp-timeline li.a-revoke::before{border-color:var(--warn);background:var(--warn-bg)}
 .exp-flow li.is-withdrawn .exp-flow-label{color:var(--muted)}
@@ -3278,7 +3278,7 @@ body.learning-fullscreen-open{overflow:hidden}
   #btnExpDelete{order:3}
   .exp-edit-modal>footer [data-close]{order:4}
   .exp-amount b{font-size:26px}
-  /* 详情里的进度条竖排，名字和状态说全；列表卡片保持四格横排 */
+  /* 详情里的进度条竖排，名字和状态说全；列表卡片保持五格横排 */
   .exp-sec .exp-flow{grid-template-columns:minmax(0,1fr);gap:0}
   .exp-sec .exp-flow li{flex-direction:row;align-items:baseline;gap:8px;padding:6px 0 6px 16px}
   .exp-sec .exp-flow li>i{top:6px;bottom:6px;left:0;right:auto;width:4px;height:auto}

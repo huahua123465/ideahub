@@ -2,7 +2,7 @@
  * 报销审批。
  *
  * 一页三件事：申请人发起 / 跟进自己的报销，审批人处理轮到自己的单子，管理员配置审批人。
- * 页面的主角是每张单上那条四段进度条（部门负责人 → 总经理 → 财务 → 出纳）——
+ * 页面的主角是每张单上那条五段进度条（部门负责人 → 总经理 → 财务 → 出纳 → 申请人确认收款）——
  * 申请人最想知道的就是「卡在谁那儿了」，审批人一眼能看出前面谁批过。
  *
  * 权限全部以后端返回的 can.* 为准，这里只决定按钮画不画；规则见 server/src/routes/expenses.mjs。
@@ -22,7 +22,7 @@ const TABS = [
   { key: 'all', label: '全部' },
 ];
 const EMPTY = {
-  todo: ['没有等你处理的报销单', '轮到你审批或打款时，这里和右上角的消息都会提醒你。'],
+  todo: ['没有等你处理的报销单', '轮到你审批、打款，或者出纳给你打款后等你确认收到时，这里和右上角的消息都会提醒你。'],
   mine: ['你还没有发起过报销', '点右上角「发起报销」，填好信息、传上凭证就能提交。'],
   all: ['还没有你能看到的报销单', '你发起的、经手过的，以及你负责审批的报销单都会出现在这里。'],
 };
@@ -59,16 +59,21 @@ const timeText = iso => {
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
-const statusTone = c => ({ draft: 'draft', pending: 'pending', returned: 'returned', withdrawn: 'withdrawn', paid: 'paid', cancelled: 'cancelled' }[c.status]);
+// 待确认收款还没走完，用琥珀；申请人确认收到之后才是绿色的「已完成」
+const statusTone = c => ({ draft: 'draft', pending: 'pending', returned: 'returned', withdrawn: 'withdrawn', paid: 'pending', completed: 'paid', cancelled: 'cancelled' }[c.status]);
 
 function flowHtml(c, { compact = false } = {}) {
   const note = { done: '已通过', skipped: '已跳过', returned: '已退回', withdrawn: '已撤回', current: '处理中', waiting: '' };
+  const receiptNote = { done: '已确认', current: '待确认' };
   return `<ol class="exp-flow${compact ? ' compact' : ''}" aria-label="审批进度">
-    ${c.flow.map(s => `<li class="is-${s.state}">
+    ${c.flow.map(s => {
+      const text = s.stage === 'receipt' ? receiptNote[s.state] : note[s.state];
+      return `<li class="is-${s.state}">
       <i aria-hidden="true"></i>
       <span class="exp-flow-label">${esc(s.label)}</span>
-      <small>${esc(s.handler?.name || '未设置')}${note[s.state] ? `<em> · ${note[s.state]}</em>` : ''}</small>
-    </li>`).join('')}
+      <small>${esc(s.handler?.name || '未设置')}${text ? `<em> · ${text}</em>` : ''}</small>
+    </li>`;
+    }).join('')}
   </ol>`;
 }
 
@@ -81,7 +86,7 @@ function build(root) {
       <div>
         <div class="page-kicker">团队协作</div>
         <h1>报销审批</h1>
-        <div class="sub">提交后依次由部门负责人、总经理、财务审批，最后由出纳打款。每一步都会通知到人。</div>
+        <div class="sub">提交后依次由部门负责人、总经理、财务审批，出纳打款后由申请人确认收到，报销才算完成。每一步都会通知到人。</div>
       </div>
     </div>
     <div class="exp-setup" hidden></div>
@@ -151,6 +156,9 @@ function cardHtml(c) {
     </div>
     ${c.status === 'returned' && c.returnReason
       ? `<div class="exp-callout warn slim"><b>${esc(c.returnReason.stageLabel)}退回</b><span>${esc(c.returnReason.comment)}</span></div>`
+      : ''}
+    ${c.can.confirm
+      ? '<div class="exp-callout warn slim"><b>出纳已打款</b><span>收到钱后打开确认；没收到可以反馈给出纳</span></div>'
       : ''}
     ${c.status === 'draft' ? '<div class="exp-card-hint">草稿，还没提交</div>'
       : c.status === 'cancelled' ? '<div class="exp-card-hint">已作废</div>'
@@ -268,7 +276,7 @@ function fileItemHtml(f, deletable) {
 function paintDetail(c) {
   $('#expDetailCode').textContent = `${c.code} · ${c.categoryLabel}`;
   $('#expDetailTitle').textContent = c.title;
-  const canAct = c.can.approve || c.can.return || c.can.pay;
+  const canAct = c.can.approve || c.can.return || c.can.pay || c.can.confirm;
   // 附件能删的前提：单子处在我能改附件的状态，且是我这一侧传的（申请人删凭证 / 出纳删打款截图）
   const mySide = c.can.edit ? 'submit' : c.can.pay ? 'review' : null;
   const timeline = c.actions.slice().reverse();
@@ -284,6 +292,9 @@ function paintDetail(c) {
     ${c.status === 'withdrawn' && c.can.edit ? `<div class="exp-callout warn">
       <b>已撤回，审批暂停</b>
       <span>修改信息或补充附件后可以重新提交，从部门负责人重新审批；不再报销可以作废。</span></div>` : ''}
+    ${c.can.confirm ? `<div class="exp-callout warn">
+      <b>出纳已打款 ¥${money(c.amount)}，请核对是否到账</b>
+      <span>收到了点「确认收到」，报销完成；没收到写清楚情况点「没收到」，单子会回到出纳重新核实。</span></div>` : ''}
     <dl class="exp-fields">
       <div><dt>申请人</dt><dd>${esc(c.applicant?.name || '')}</dd></div>
       <div><dt>部门</dt><dd>${esc(c.dept)}</dd></div>
@@ -291,6 +302,7 @@ function paintDetail(c) {
       <div><dt>发生日期</dt><dd>${esc(c.expenseDate)}</dd></div>
       ${c.submittedAt ? `<div><dt>提交时间</dt><dd>${esc(timeText(c.submittedAt))}</dd></div>` : ''}
       ${c.paidAt ? `<div><dt>打款时间</dt><dd>${esc(timeText(c.paidAt))}</dd></div>` : ''}
+      ${c.receivedAt ? `<div><dt>确认收款时间</dt><dd>${esc(timeText(c.receivedAt))}</dd></div>` : ''}
       ${c.note ? `<div class="wide"><dt>备注</dt><dd>${esc(c.note)}</dd></div>` : ''}
     </dl>
     ${c.status === 'draft' || c.status === 'cancelled' ? '' : `<section class="exp-sec">
@@ -307,8 +319,11 @@ function paintDetail(c) {
         <b>${c.can.pay ? '上传打款截图' : '补充附件'}</b><span>单个不超过 20MB</span></label>` : ''}
     </section>
     ${canAct ? `<section class="exp-sec exp-act">
-      <label for="expActComment">${c.can.pay ? '打款备注' : '审批意见'} <span class="opt">通过时选填，退回时必填</span></label>
-      <textarea class="inp" id="expActComment" maxlength="1000" placeholder="${c.can.pay ? '比如：已通过银行转账' : '写给申请人和后面审批人看的话'}"></textarea>
+      ${c.can.confirm
+        ? `<label for="expActComment">收款情况 <span class="opt">确认收到时选填，没收到时必填</span></label>
+      <textarea class="inp" id="expActComment" maxlength="1000" placeholder="没收到的话写清楚：查的哪个账户、什么时候查的"></textarea>`
+        : `<label for="expActComment">${c.can.pay ? '打款备注' : '审批意见'} <span class="opt">通过时选填，退回时必填</span></label>
+      <textarea class="inp" id="expActComment" maxlength="1000" placeholder="${c.can.pay ? '比如：已通过银行转账' : '写给申请人和后面审批人看的话'}"></textarea>`}
     </section>` : ''}
     ${timeline.length ? `<section class="exp-sec">
       <h3>审批记录</h3>
@@ -325,6 +340,7 @@ function paintDetail(c) {
     c.can.remove ? btn('btnExpDRemove', 'btn-crit', '删除草稿') : '',
     c.can.cancel ? btn('btnExpDCancel', 'btn-crit', '作废') : '',
     c.can.return ? btn('btnExpDReturn', 'btn-crit', '退回') : '',
+    c.can.dispute ? btn('btnExpDDispute', 'btn-crit', '没收到') : '',
     '<div class="spacer"></div>',
     c.can.withdraw ? btn('btnExpDWithdraw', 'btn-ghost', '撤回') : '',
     c.can.revoke ? btn('btnExpDRevoke', 'btn-ghost', '撤销同意') : '',
@@ -332,7 +348,8 @@ function paintDetail(c) {
     c.can.submit ? btn('btnExpDSubmit', 'btn-primary', c.status === 'draft' ? '提交审批' : '重新提交') : '',
     c.can.approve ? btn('btnExpDApprove', 'btn-primary', '同意') : '',
     c.can.pay ? btn('btnExpDPay', 'btn-primary', '确认已打款') : '',
-    !(c.can.edit || c.can.approve || c.can.pay) ? '<button class="btn btn-ghost" type="button" data-close>关闭</button>' : '',
+    c.can.confirm ? btn('btnExpDConfirm', 'btn-primary', '确认收到') : '',
+    !(c.can.edit || c.can.approve || c.can.pay || c.can.confirm) ? '<button class="btn btn-ghost" type="button" data-close>关闭</button>' : '',
   ].join('');
 }
 
@@ -424,10 +441,22 @@ function bindDetail() {
     if (b.id === 'btnExpDPay') {
       const ok = await confirmAction({
         eyebrow: '确认打款', title: `确认已向${c.applicant?.name || '申请人'}打款 ¥${money(c.amount)}？`,
-        message: '确认后报销单标记为已打款，申请人会收到通知，这一步不能撤销。', confirmLabel: '确认已打款',
+        message: '确认后等申请人核对到账，申请人会收到通知；如果申请人反馈没收到，单子会回到你这里重新核实。', confirmLabel: '确认已打款',
       });
       if (!ok) return;
-      return act(b, () => api.expenseAct(c.id, 'pay', { stage: c.stage, comment: comment() }), '已确认打款', '正在确认…');
+      return act(b, () => api.expenseAct(c.id, 'pay', { stage: c.stage, comment: comment() }), '已确认打款，等申请人确认收到', '正在确认…');
+    }
+    if (b.id === 'btnExpDConfirm') {
+      const ok = await confirmAction({
+        eyebrow: '确认收款', title: `确认已收到报销款 ¥${money(c.amount)}？`,
+        message: '确认后这张报销单就完成了，出纳会收到通知，这一步不能撤销。', confirmLabel: '确认收到',
+      });
+      if (!ok) return;
+      return act(b, () => api.expenseAct(c.id, 'confirm', { stage: c.stage, comment: comment() }), '已确认收到，报销完成', '正在确认…');
+    }
+    if (b.id === 'btnExpDDispute') {
+      if (!comment()) { detailError('没收到请写明情况，出纳会根据这个核实'); $('#expActComment')?.focus(); return; }
+      return act(b, () => api.expenseAct(c.id, 'dispute', { stage: c.stage, comment: comment() }), '已反馈给出纳，等出纳核实后重新打款', '正在反馈…');
     }
     if (b.id === 'btnExpDSubmit') {
       return act(b, () => api.expenseAct(c.id, 'submit'), '已提交，等待审批', '正在提交…');

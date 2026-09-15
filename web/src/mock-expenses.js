@@ -14,9 +14,11 @@ const CATEGORIES = [
 const CAT = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]));
 const ACTION_LABEL = {
   submit: '提交', approve: '审批通过', skip: '自动跳过', return: '退回', pay: '确认打款', cancel: '作废',
-  withdraw: '撤回', revoke: '撤销同意',
+  withdraw: '撤回', revoke: '撤销同意', confirm: '确认收到', dispute: '反馈未收到',
 };
-const STATUS_LABEL = { draft: '草稿', returned: '已退回', withdrawn: '已撤回', paid: '已打款', cancelled: '已作废' };
+const STATUS_LABEL = {
+  draft: '草稿', returned: '已退回', withdrawn: '已撤回', paid: '待确认收款', completed: '已完成', cancelled: '已作废',
+};
 const FLOW_STATE = { approve: 'done', pay: 'done', skip: 'skipped', return: 'returned', withdraw: 'withdrawn' };
 const NAMES = { 1: '陈屿', 2: '苏禾', 3: '叶昭', 4: '林知远', 6: '何叙', 7: '赵嘉一' };
 
@@ -52,10 +54,18 @@ const CLAIMS = [
     actions: [act(1, null, 'submit', 1, '', 118), act(1, 'leader', 'return', 2, '缺少送水单照片，补上后重新提交', 100)],
     files: [file('支付截图.png', 'submit', 1)] },
   { id: 105, applicantId: 7, dept: '产品部', category: 'travel', title: '8 月杭州展会住宿', expenseDate: '2026-08-22',
-    cents: 214000, note: '', status: 'paid', stage: null, round: 1, createdAt: ago(400), submittedAt: ago(396), paidAt: ago(300),
+    cents: 214000, note: '', status: 'completed', stage: null, round: 1, createdAt: ago(400), submittedAt: ago(396),
+    paidAt: ago(300), receivedAt: ago(290),
     actions: [act(1, null, 'submit', 7, '', 396), act(1, 'leader', 'approve', 2, '', 380), act(1, 'gm', 'approve', 1, '', 360),
-      act(1, 'finance', 'approve', 3, '票据齐全', 330), act(1, 'cashier', 'pay', 4, '已银行转账', 300)],
+      act(1, 'finance', 'approve', 3, '票据齐全', 330), act(1, 'cashier', 'pay', 4, '已银行转账', 300),
+      act(1, null, 'confirm', 7, '', 290)],
     files: [file('酒店发票.pdf', 'submit', 7), file('打款回单.png', 'review', 4)] },
+  // 演示身份自己的单子：出纳已打款，等陈屿确认收到（在「待我处理」里）
+  { id: 107, applicantId: 1, dept: '产品部', category: 'office', title: '会议室投屏器', expenseDate: '2026-09-02',
+    cents: 45900, note: '', status: 'paid', stage: null, round: 1, createdAt: ago(90), submittedAt: ago(88), paidAt: ago(52),
+    actions: [act(1, null, 'submit', 1, '', 88), act(1, 'leader', 'approve', 2, '', 80), act(1, 'gm', 'skip', 1, '申请人本人，自动跳过', 80),
+      act(1, 'finance', 'approve', 3, '', 70), act(1, 'cashier', 'pay', 4, '已转到工资卡', 52)],
+    files: [file('投屏器发票.pdf', 'submit', 1), file('转账回单.png', 'review', 4)] },
   { id: 106, applicantId: 1, dept: '产品部', category: 'other', title: '团建场地定金', expenseDate: '2026-09-10',
     cents: 80000, note: '', status: 'draft', stage: null, round: 0, createdAt: ago(3), actions: [], files: [] },
 ];
@@ -90,11 +100,11 @@ function canSee(c, me) {
   return STAGES.slice(1).some(s => CFG.roles[s] === me.id) || deptLeader(c.dept) === me.id;
 }
 
-/** 撤销同意之后，那一步及后面各步在撤销之前的记录不再算数 */
+/** 撤销同意（以及申请人反馈没收到）之后，那一步及后面各步在它之前的记录不再算数 */
 function liveRoundActions(c) {
   const live = [];
   for (const a of c.actions.filter(x => x.round === c.round)) {
-    if (a.action !== 'revoke') { live.push(a); continue; }
+    if (a.action !== 'revoke' && a.action !== 'dispute') { live.push(a); continue; }
     const from = STAGES.indexOf(a.stage);
     for (let i = live.length - 1; i >= 0; i--) {
       if (live[i].stage && STAGES.indexOf(live[i].stage) >= from) live.splice(i, 1);
@@ -113,11 +123,15 @@ function can(c, me) {
   const mine = c.applicantId === me.id;
   const editable = mine && ['draft', 'returned', 'withdrawn'].includes(c.status);
   const handling = c.status === 'pending' && handlerId(c, c.stage) === me.id;
+  const paidOnce = c.actions.some(a => a.round === c.round && a.action === 'pay');
+  const awaitingReceipt = mine && c.status === 'paid';
   return {
     edit: editable, submit: editable, remove: mine && c.status === 'draft',
-    withdraw: mine && c.status === 'pending', cancel: mine && ['pending', 'returned', 'withdrawn'].includes(c.status),
+    withdraw: mine && c.status === 'pending' && !paidOnce,
+    cancel: mine && (['returned', 'withdrawn'].includes(c.status) || (c.status === 'pending' && !paidOnce)),
     approve: handling && c.stage !== 'cashier' && !mine, return: handling,
-    pay: handling && c.stage === 'cashier', revoke: lastApproval(c)?.actorId === me.id,
+    pay: handling && c.stage === 'cashier', revoke: lastApproval(c)?.actorId === me.id && !paidOnce,
+    confirm: awaitingReceipt, dispute: awaitingReceipt,
     upload: editable || (handling && c.stage === 'cashier'),
   };
 }
@@ -128,6 +142,12 @@ function dto(c, me, full) {
     const last = live.filter(a => a.stage === stage && FLOW_STATE[a.action]).at(-1);
     const state = last ? FLOW_STATE[last.action] : c.status === 'pending' && c.stage === stage ? 'current' : 'waiting';
     return { stage, label: STAGE_LABEL[stage], state, handler: person(last ? last.actorId : handlerId(c, stage)) };
+  });
+  const confirmed = live.filter(a => a.action === 'confirm').at(-1);
+  flow.push({
+    stage: 'receipt', label: '确认收款',
+    state: c.status === 'completed' ? 'done' : c.status === 'paid' ? 'current' : 'waiting',
+    handler: person(confirmed ? confirmed.actorId : c.applicantId),
   });
   const ret = c.actions.filter(a => a.action === 'return').at(-1);
   return {
@@ -140,6 +160,7 @@ function dto(c, me, full) {
     returnReason: c.status === 'returned' && ret
       ? { by: person(ret.actorId), stageLabel: STAGE_LABEL[ret.stage], comment: ret.comment } : null,
     fileCount: c.files.length, submittedAt: c.submittedAt || null, paidAt: c.paidAt || null,
+    receivedAt: c.receivedAt || null,
     createdAt: c.createdAt, updatedAt: c.updatedAt, can: can(c, me),
     ...(full ? {
       actions: c.actions.map(a => ({ ...a, stageLabel: STAGE_LABEL[a.stage] || '', actionLabel: ACTION_LABEL[a.action],
@@ -208,7 +229,8 @@ export function handleExpenses(method, p, q, body, me) {
   }
   if (p === '/api/expenses' && method === 'GET') {
     const scope = q.get('scope') || 'mine';
-    const todo = c => c.status === 'pending' && handlerId(c, c.stage) === me.id;
+    const todo = c => (c.status === 'pending' && handlerId(c, c.stage) === me.id)
+      || (c.status === 'paid' && c.applicantId === me.id);
     const items = CLAIMS.filter(c => (scope === 'mine' ? c.applicantId === me.id : scope === 'todo' ? todo(c) : canSee(c, me)))
       .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
     return { items: items.map(c => dto(c, me, false)), todoCount: CLAIMS.filter(todo).length };
@@ -224,7 +246,7 @@ export function handleExpenses(method, p, q, body, me) {
     return dto(c, me, true);
   }
 
-  const m = p.match(/^\/api\/expenses\/(\d+)(?:\/(submit|approve|revoke|return|pay|withdraw|cancel|files))?$/);
+  const m = p.match(/^\/api\/expenses\/(\d+)(?:\/(submit|approve|revoke|return|pay|confirm|dispute|withdraw|cancel|files))?$/);
   if (!m) {
     const del = p.match(/^\/api\/files\/(\d+)$/);
     if (del && method === 'DELETE') {
@@ -306,6 +328,24 @@ export function handleExpenses(method, p, q, body, me) {
     c.status = 'paid';
     c.stage = null;
     c.paidAt = new Date().toISOString();
+    return touch();
+  }
+  if (m[2] === 'confirm') {
+    if (c.status !== 'paid') throw fail('出纳还没确认打款，刷新看看最新状态', 409);
+    if (!allowed.confirm) throw fail('只有申请人本人能确认收款', 403);
+    c.actions.push(act(c.round, null, 'confirm', me.id, body?.comment, 0));
+    c.status = 'completed';
+    c.receivedAt = new Date().toISOString();
+    return touch();
+  }
+  if (m[2] === 'dispute') {
+    if (c.status !== 'paid') throw fail('这张报销单当前不在待确认收款，刷新看看最新状态', 409);
+    if (!allowed.dispute) throw fail('只有申请人本人能反馈收款情况', 403);
+    if (!String(body?.comment || '').trim()) throw fail('没收到的情况 不能为空');
+    c.actions.push(act(c.round, 'cashier', 'dispute', me.id, body.comment, 0));
+    c.status = 'pending';
+    c.stage = 'cashier';
+    c.paidAt = null;
     return touch();
   }
   if (m[2] === 'withdraw') {

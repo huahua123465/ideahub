@@ -321,7 +321,12 @@ function startScheduler() {
   setTimeout(remindDeliveries, 60_000).unref?.();
   setInterval(remindDeliveries, 60 * 60 * 1000).unref?.();
 
-  console.log(`  定时任务   热度每 15 分钟重算，超期归档每天一次，采购待交付每天提醒`);
+  // 报销已打款、申请人还没确认收到：同样每小时查，每张单每天最多提醒一条（规则见 routes/expenses.mjs 第 8 条）
+  const remindReceipts = () => tick('报销确认收款提醒', expenses.remindUnconfirmedReceipts);
+  setTimeout(remindReceipts, 90_000).unref?.();
+  setInterval(remindReceipts, 60 * 60 * 1000).unref?.();
+
+  console.log(`  定时任务   热度每 15 分钟重算，超期归档每天一次，采购待交付、报销待确认收款每天提醒`);
 }
 
 server.listen(PORT, () => {

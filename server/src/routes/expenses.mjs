@@ -1,7 +1,7 @@
 /**
  * 报销审批。
  *
- * 流程固定四步：部门负责人 → 总经理 → 财务 → 出纳打款。
+ * 流程固定四步审批：部门负责人 → 总经理 → 财务 → 出纳打款，最后由申请人确认收到钱才算完成。
  * 改的时候留意这几条规则，前端、附件鉴权（routes/files.mjs）和测试都依赖它们：
  *
  *  1. 审批人不写死在单据上，每一步都按当前配置实时算
@@ -23,6 +23,10 @@
  *  7. 部门不由申请人选：取管理员在「用户管理」里给他分配的部门（users.dept）。
  *     建草稿时写入，提交时再按当时的分配刷新一次 —— 中途调了部门，单子送到新部门的负责人。
  *     没分配部门的人不能发起报销。
+ *  8. 出纳确认打款后单子是 paid（待确认收款），申请人确认收到才变成 completed（已完成）。
+ *     申请人反馈没收到（必须写情况）时单子回到出纳打款这一步，按撤销同意的规则让那次打款不再算数，
+ *     出纳核实后重新确认打款。这一轮出纳点过打款之后，申请人就不能再撤回或作废 ——
+ *     钱可能已经转出去了，要先核实清楚。待确认收款的单子每天提醒申请人一次（remindUnconfirmedReceipts）。
  */
 import { unlink } from 'node:fs/promises';
 import { join, basename } from 'node:path';
@@ -47,10 +51,12 @@ export const CATEGORIES = [
   { key: 'other', label: '其他' },
 ];
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]));
-const STATUS_LABEL = { draft: '草稿', returned: '已退回', withdrawn: '已撤回', paid: '已打款', cancelled: '已作废' };
+const STATUS_LABEL = {
+  draft: '草稿', returned: '已退回', withdrawn: '已撤回', paid: '待确认收款', completed: '已完成', cancelled: '已作废',
+};
 const ACTION_LABEL = {
   submit: '提交', approve: '审批通过', skip: '自动跳过', return: '退回', pay: '确认打款', cancel: '作废',
-  withdraw: '撤回', revoke: '撤销同意',
+  withdraw: '撤回', revoke: '撤销同意', confirm: '确认收到', dispute: '反馈未收到',
 };
 /** 申请人能改信息、补附件、重新提交的状态 */
 const EDITABLE = ['draft', 'returned', 'withdrawn'];
@@ -139,11 +145,12 @@ const actorOf = a => Number(a.actor_id ?? a.actorId);
 /**
  * 当前这一轮里仍然算数的记录。规则见文件头第 5 条：
  * 遇到一条撤销同意，就把它那一步及后面各步在它之前的记录剔掉。
+ * 申请人反馈没收到（dispute，记在出纳这一步）同理，那次打款不再算数（第 8 条）。
  */
 function liveRoundActions(roundActions) {
   const live = [];
   for (const a of roundActions) {
-    if (a.action !== 'revoke') { live.push(a); continue; }
+    if (a.action !== 'revoke' && a.action !== 'dispute') { live.push(a); continue; }
     const from = STAGES.indexOf(a.stage);
     for (let i = live.length - 1; i >= 0; i--) {
       if (live[i].stage && STAGES.indexOf(live[i].stage) >= from) live.splice(i, 1);
@@ -174,19 +181,28 @@ function permissions(c, me, cfg, roundActions) {
   const handler = c.status === 'pending' ? handlerOf(cfg, c.stage, c) : null;
   const handling = !!handler && handler.id === me.id;
   const approval = lastApproval(c, roundActions);
+  // 这一轮出纳点过打款（哪怕后来被反馈没收到），钱可能已经转出去了，申请人不能再撤回或作废
+  const paidOnce = roundActions.some(a => a.action === 'pay');
+  const awaitingReceipt = mine && c.status === 'paid';
   return {
     edit: editable,
     submit: editable,
     remove: mine && c.status === 'draft',
-    withdraw: mine && c.status === 'pending',
-    cancel: mine && ['pending', 'returned', 'withdrawn'].includes(c.status),
+    withdraw: mine && c.status === 'pending' && !paidOnce,
+    cancel: mine && (['returned', 'withdrawn'].includes(c.status) || (c.status === 'pending' && !paidOnce)),
     approve: handling && c.stage !== 'cashier' && !mine,
     return: handling,
     pay: handling && c.stage === 'cashier',
-    revoke: !!approval && actorOf(approval) === me.id,
+    // 反馈没收到会让那次打款不算数，财务的同意重新变成「最近一次」，但钱可能已经转出去了，不能再撤销
+    revoke: !!approval && actorOf(approval) === me.id && !paidOnce,
+    confirm: awaitingReceipt,
+    dispute: awaitingReceipt,
     upload: editable || (handling && c.stage === 'cashier'),
   };
 }
+
+/** 这一轮出纳已经点过打款，撤回 / 作废被拦下时给申请人的说明 */
+const PAID_LOCK = '出纳已经操作过打款，不能再撤回或作废；没收到钱请等出纳核实';
 
 const person = (id, name) => (id ? { id: Number(id), name: name || '已删除的账号' } : null);
 const yuan = cents => (Number(cents) / 100).toFixed(2);
@@ -211,7 +227,20 @@ function flowOf(c, cfg, roundActions) {
       ? person(last.actor_id ?? last.actorId, last.actor_name ?? last.actorName)
       : handlerOf(cfg, stage, c);
     return { stage, label: STAGE_LABEL[stage], state, handler: who };
-  });
+  }).concat(receiptStep(c, live));
+}
+
+/** 进度条最后一格：申请人确认收款。不是审批步骤，不进 STAGES，状态直接看单据 */
+function receiptStep(c, live) {
+  const confirmed = live.filter(a => a.action === 'confirm').at(-1);
+  return {
+    stage: 'receipt',
+    label: '确认收款',
+    state: c.status === 'completed' ? 'done' : c.status === 'paid' ? 'current' : 'waiting',
+    handler: confirmed
+      ? person(confirmed.actor_id ?? confirmed.actorId, confirmed.actor_name ?? confirmed.actorName)
+      : person(c.applicant_id, c.applicant_name),
+  };
 }
 
 function claimDto(c, me, cfg, { roundActions, actions = null, files = null, fileCount = 0 }) {
@@ -243,6 +272,7 @@ function claimDto(c, me, cfg, { roundActions, actions = null, files = null, file
     fileCount: files ? files.length : fileCount,
     submittedAt: c.submitted_at,
     paidAt: c.paid_at,
+    receivedAt: c.received_at,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
     can: permissions(c, me, cfg, roundActions),
@@ -424,6 +454,26 @@ async function notifyDropped(handler, c, actorId, verb) {
   });
 }
 
+/**
+ * 每日提醒：出纳已打款、申请人还没确认收到的报销单，每天给申请人发一条站内消息。
+ * reminded_at 在打款那一刻写入，所以第一条提醒在打款一天后；多进程同时跑也只会有一个抢到更新。
+ */
+export async function remindUnconfirmedReceipts() {
+  const { rows } = await query(`
+    UPDATE expense_claims SET reminded_at = now()
+     WHERE status = 'paid' AND (reminded_at IS NULL OR reminded_at <= now() - interval '1 day')
+     RETURNING id, applicant_id, category, amount_cents, title`);
+  for (const c of rows) {
+    await notifyUser(c.applicant_id, {
+      actorId: null, kind: 'expense', board: 'expenses', refId: Number(c.id),
+      title: '报销款已打款，收到后请确认',
+      body: `${summaryOf(c)} · 没收到可以在报销单里反馈给出纳`,
+    });
+  }
+  if (rows.length) publish('expense:updated', {});
+  return rows.length;
+}
+
 /* ================= 路由 ================= */
 
 export function mount(router) {
@@ -542,10 +592,12 @@ export function mount(router) {
     const scope = q(url, 'scope', 'mine');
     const isLeader = `EXISTS (SELECT 1 FROM expense_dept_leaders d WHERE d.dept = c.dept AND d.leader_id = $1)`;
     const isHolder = `EXISTS (SELECT 1 FROM expense_role_holders r WHERE r.user_id = $1)`;
-    const todo = `c.status = 'pending' AND (
+    // 待我处理：轮到我审批 / 打款的，加上我发起的、出纳已打款等我确认收到的
+    const todo = `((c.status = 'pending' AND (
         (c.stage = 'leader' AND ${isLeader})
      OR (c.stage <> 'leader' AND EXISTS (
-           SELECT 1 FROM expense_role_holders r WHERE r.role = c.stage AND r.user_id = $1)))`;
+           SELECT 1 FROM expense_role_holders r WHERE r.role = c.stage AND r.user_id = $1))))
+     OR (c.status = 'paid' AND c.applicant_id = $1))`;
     const where = scope === 'mine' ? 'c.applicant_id = $1'
       : scope === 'todo' ? todo
         : `(c.applicant_id = $1
@@ -801,14 +853,80 @@ export function mount(router) {
         `INSERT INTO expense_claim_actions(claim_id, round, stage, action, actor_id, comment)
          VALUES($1,$2,'cashier','pay',$3,$4)`, [id, c.round, me.id, comment]);
       await db.query(
-        `UPDATE expense_claims SET status = 'paid', stage = NULL, paid_at = now(), updated_at = now()
+        `UPDATE expense_claims SET status = 'paid', stage = NULL, paid_at = now(), reminded_at = now(),
+                updated_at = now()
           WHERE id = $1`, [id]);
       return c;
     });
     await notifyUser(c.applicant_id, {
       actorId: me.id, kind: 'expense', board: 'expenses', refId: id,
-      title: '你的报销单已打款', body: summaryOf(c),
+      title: '你的报销单已打款，收到后请确认',
+      body: `${summaryOf(c)}${comment ? ` · 出纳备注：${comment}` : ''}`,
     });
+    sendJson(res, 200, await loadDetail(id, me));
+    publish('expense:updated', {});
+  });
+
+  /* ---------- 申请人确认收到钱：流程到这里才算完成。规则见文件头第 8 条 ---------- */
+  router.post('/api/expenses/:id/confirm', async (req, res, params) => {
+    const me = await currentUser(req);
+    const id = Number(params.id);
+    const b = await readJson(req);
+    const comment = optText(b.comment, 1000, '收款备注');
+    const { c, payer } = await tx(async db => {
+      const { c, roundActions, can } = await lockClaim(db, id, me);
+      if (c.status !== 'paid') {
+        throw conflict(c.status === 'completed' ? '这张报销单已经确认收款了'
+          : '出纳还没确认打款，刷新看看最新状态');
+      }
+      if (!can.confirm) throw forbidden('只有申请人本人能确认收款');
+      await db.query(
+        `INSERT INTO expense_claim_actions(claim_id, round, stage, action, actor_id, comment)
+         VALUES($1,$2,NULL,'confirm',$3,$4)`, [id, c.round, me.id, comment]);
+      await db.query(
+        `UPDATE expense_claims SET status = 'completed', received_at = now(), updated_at = now() WHERE id = $1`, [id]);
+      const pay = liveRoundActions(roundActions).filter(a => a.action === 'pay').at(-1);
+      return { c, payer: pay ? actorOf(pay) : null };
+    });
+    if (payer && payer !== me.id) {
+      await notifyUser(payer, {
+        actorId: me.id, kind: 'expense', board: 'expenses', refId: id,
+        title: `${c.applicant_name}已确认收到报销款`, body: summaryOf(c),
+      });
+    }
+    sendJson(res, 200, await loadDetail(id, me));
+    publish('expense:updated', {});
+  });
+
+  /* ---------- 申请人反馈没收到：必须写情况，单子回到出纳打款这一步 ---------- */
+  router.post('/api/expenses/:id/dispute', async (req, res, params) => {
+    const me = await currentUser(req);
+    const id = Number(params.id);
+    const b = await readJson(req);
+    const comment = need(b, 'comment', { max: 1000, label: '没收到的情况' });
+    const { c, cashier } = await tx(async db => {
+      const { c, cfg, can } = await lockClaim(db, id, me);
+      if (c.status !== 'paid') {
+        throw conflict(c.status === 'completed' ? '这张报销单已经确认收款了'
+          : '这张报销单当前不在待确认收款，刷新看看最新状态');
+      }
+      if (!can.dispute) throw forbidden('只有申请人本人能反馈收款情况');
+      await db.query(
+        `INSERT INTO expense_claim_actions(claim_id, round, stage, action, actor_id, comment)
+         VALUES($1,$2,'cashier','dispute',$3,$4)`, [id, c.round, me.id, comment]);
+      await db.query(
+        `UPDATE expense_claims SET status = 'pending', stage = 'cashier', paid_at = NULL, reminded_at = NULL,
+                updated_at = now()
+          WHERE id = $1`, [id]);
+      return { c, cashier: handlerOf(cfg, 'cashier', c) };
+    });
+    if (cashier && cashier.id !== me.id) {
+      await notifyUser(cashier.id, {
+        actorId: me.id, kind: 'expense', board: 'expenses', refId: id,
+        title: `${c.applicant_name}反馈没收到报销款，请核实后重新打款`,
+        body: `${summaryOf(c)} · ${comment}`,
+      });
+    }
     sendJson(res, 200, await loadDetail(id, me));
     publish('expense:updated', {});
   });
@@ -824,8 +942,10 @@ export function mount(router) {
       const { c, cfg, can } = await lockClaim(db, id, me);
       assertStage(c, b);
       if (!can.withdraw) {
-        if (c.status === 'pending') throw forbidden('只有申请人本人能撤回报销单');
-        throw conflict(c.status === 'paid' ? '这张报销单已经打款，不能撤回'
+        const mine = Number(c.applicant_id) === me.id;
+        if (c.status === 'pending' && !mine) throw forbidden('只有申请人本人能撤回报销单');
+        if (c.status === 'pending' || c.status === 'paid') throw conflict(PAID_LOCK);
+        throw conflict(c.status === 'completed' ? '这张报销单已经完成，不能撤回'
           : '这张报销单当前不在审批中，刷新看看最新状态');
       }
       const handler = handlerOf(cfg, c.stage, c);
@@ -852,7 +972,8 @@ export function mount(router) {
       if (!can.cancel) {
         if (c.status === 'draft') throw badRequest('草稿直接删除即可');
         if (Number(c.applicant_id) !== me.id) throw forbidden('只有申请人本人能作废报销单');
-        throw conflict(c.status === 'paid' ? '这张报销单已经打款，不能作废' : '这张报销单已经作废了');
+        if (c.status === 'pending' || c.status === 'paid') throw conflict(PAID_LOCK);
+        throw conflict(c.status === 'completed' ? '这张报销单已经完成，不能作废' : '这张报销单已经作废了');
       }
       const handler = c.status === 'pending' ? handlerOf(cfg, c.stage, c) : null;
       await db.query(

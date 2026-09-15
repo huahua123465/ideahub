@@ -79,13 +79,14 @@ try {
       create: document.querySelector('#btnNewLabel')?.textContent,
       flowSteps: document.querySelectorAll('#v-expenses .exp-card:first-child .exp-flow li').length,
     }));
+    // 待我处理：两张等总经理审批，一张自己的单子等确认收款
     assert.equal(list.selected, 'todo');
-    assert.equal(list.cards, 2);
-    assert.equal(list.badge, '2');
+    assert.equal(list.cards, 3);
+    assert.equal(list.badge, '3');
     assert.equal(list.badgeHidden, false);
     assert.match(list.title, /报销审批/);
     assert.equal(list.create, '发起报销');
-    assert.equal(list.flowSteps, 4);
+    assert.equal(list.flowSteps, 5);
     let st = await pageState(page);
     assert.ok(st.overflow <= 1, `列表页横向溢出 ${JSON.stringify(st)}`);
     assert.equal(st.activeViews, 1);
@@ -123,7 +124,7 @@ try {
     await page.click('#btnExpDApprove');
     await waitToast(page, /已同意/);
     await page.waitForFunction(() => /财务审批中/.test(document.querySelector('#expDetailBody')?.textContent || ''));
-    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '1', { timeout: 5_000 });
+    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '2', { timeout: 5_000 });
     const after = await page.evaluate(() => ({
       approveGone: !document.querySelector('#btnExpDApprove'),
       timeline: document.querySelector('.exp-timeline li')?.textContent.replace(/\s+/g, ' '),
@@ -138,7 +139,7 @@ try {
     await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
     await page.click('#confirmSubmit');
     await page.waitForSelector('#expDetailModal.on #btnExpDApprove', { visible: true, timeout: 5_000 });
-    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '2', { timeout: 5_000 });
+    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '3', { timeout: 5_000 });
     const revoked = await page.evaluate(() => ({
       status: document.querySelector('#expDetailBody .exp-status')?.textContent,
       timeline: document.querySelector('.exp-timeline li')?.textContent.replace(/\s+/g, ' '),
@@ -150,7 +151,7 @@ try {
     await page.click('#btnExpDApprove');
     await page.waitForFunction(() => /财务审批中/.test(document.querySelector('#expDetailBody .exp-status')?.textContent || '')
       && document.querySelector('#btnExpDRevoke'), { timeout: 5_000 });
-    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '1', { timeout: 5_000 });
+    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '2', { timeout: 5_000 });
 
     // Esc 关闭，遮罩收起
     await page.keyboard.press('Escape');
@@ -235,6 +236,60 @@ try {
     await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
     await page.click('#confirmSubmit');
     await page.waitForFunction(() => /已作废/.test(document.querySelector('#expDetailBody .exp-status')?.textContent || ''), { timeout: 5_000 });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.modal.on') && !document.querySelector('#mask.on'));
+
+    // 确认收款：自己的单子出纳已打款（会议室投屏器），卡片上有提示；详情里只能确认收到或反馈没收到
+    // 作废后列表会在后台重绘，先等重绘完，否则点到的是马上被替换掉的旧卡片
+    await page.waitForFunction(() => [...document.querySelectorAll('#v-expenses .exp-card')]
+      .some(n => /打印机墨盒两套/.test(n.textContent) && /已作废/.test(n.textContent)), { timeout: 5_000 });
+    await settleDom(page);
+    assert.equal(await page.$$eval('#v-expenses .exp-card', ns => ns.some(n => /会议室投屏器/.test(n.textContent)
+      && /待确认收款/.test(n.textContent) && /出纳已打款/.test(n.textContent))), true);
+    await page.$$eval('#v-expenses .exp-card', ns => ns.find(n => /会议室投屏器/.test(n.textContent))
+      .querySelector('[data-exp-open]').click());
+    await page.waitForSelector('#expDetailModal.on #btnExpDConfirm', { visible: true });
+    await settleDom(page);
+    await modalInViewport(page, 'expDetailModal');
+    await buttonVisible(page, 'expDetailModal', '#btnExpDConfirm');
+    await buttonVisible(page, 'expDetailModal', '#btnExpDDispute');
+    const awaiting = await page.evaluate(() => ({
+      locked: !document.querySelector('#btnExpDWithdraw') && !document.querySelector('#btnExpDCancel'),
+      steps: [...document.querySelectorAll('#expDetailBody .exp-flow li')].map(li => li.className),
+      label: document.querySelector('label[for="expActComment"]')?.textContent,
+    }));
+    assert.equal(awaiting.locked, true, '出纳打款后不能撤回或作废');
+    assert.deepEqual(awaiting.steps, ['is-done', 'is-skipped', 'is-done', 'is-done', 'is-current']);
+    assert.match(awaiting.label, /收款情况/);
+    st = await pageState(page);
+    assert.ok(st.overflow <= 1, `确认收款详情横向溢出 ${JSON.stringify(st)}`);
+    await harness.screenshot(page, `expenses-receipt-${scene}`);
+    if (mobile) {
+      const small = await page.$$eval('#expDetailFoot .btn', ns => ns.map(n => n.getBoundingClientRect())
+        .filter(b => b.width > 0 && b.height < 44).length);
+      assert.equal(small, 0, '手机上确认收款的底部按钮高度至少 44px');
+    }
+    const firstLog = () => page.$eval('.exp-timeline li', n => n.textContent.replace(/\s+/g, ' '));
+    if (!mobile) {
+      // 没收到：不写情况被拦；写了之后单子回到出纳
+      await page.click('#btnExpDDispute');
+      await page.waitForFunction(() => /没收到请写明情况/.test(document.querySelector('#expDetailErr')?.textContent || ''));
+      await page.type('#expActComment', '工资卡没到账');
+      await page.click('#btnExpDDispute');
+      await waitToast(page, /已反馈给出纳/);
+      await page.waitForFunction(() => /待出纳打款/.test(document.querySelector('#expDetailBody .exp-status')?.textContent || ''), { timeout: 5_000 });
+      assert.match(await firstLog(), /陈屿 反馈未收到（出纳）/);
+      assert.equal(await page.$('#btnExpDConfirm'), null);
+    } else {
+      await page.click('#btnExpDConfirm');
+      await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
+      await page.click('#confirmSubmit');
+      await page.waitForFunction(() => /已完成/.test(document.querySelector('#expDetailBody .exp-status')?.textContent || ''), { timeout: 5_000 });
+      assert.match(await firstLog(), /陈屿 确认收到/);
+      assert.match(await page.$eval('#expDetailBody .exp-fields', n => n.textContent), /确认收款时间/);
+      await harness.screenshot(page, 'expenses-received-mobile');
+    }
+    await page.waitForFunction(() => document.querySelector('#expenseN')?.textContent === '1', { timeout: 5_000 });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.modal.on') && !document.querySelector('#mask.on'));
 
