@@ -246,6 +246,33 @@ export const api = {
   expenseConfigSave: (payload)     => call('PATCH',  '/api/expenses/config', payload),
   /** 指定某个部门的负责人；leaderId 传 null = 取消（部门暂不启用） */
   expenseDeptLeader: (dept, leaderId) => call('PATCH', '/api/expenses/dept-leaders', { dept, leaderId }),
+  /** 导出报销记录：kind = claims 单据明细 | actions 审批记录。
+      返回 { blob, filename, count }，由页面生成下载。按字节读，不用 text() —— 那会吃掉开头的 BOM，Excel 打开中文就乱码 */
+  expenseExport: async (kind, filters = {}) => {
+    const path = '/api/expenses/export' + qs({ kind, ...filters });
+    const type = 'text/csv;charset=utf-8';
+    if (state.mode === 'mock') {
+      const out = await mock.handle('GET', path);
+      return { blob: new Blob([out.text], { type }), filename: out.filename, count: out.count };
+    }
+    const r = await fetch(BASE + path, { credentials: 'include' });
+    logApi('GET', '/api/expenses/export', r.status);
+    if (r.status === 401) {
+      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+      throw new Error('请先登录');
+    }
+    if (!r.ok) {
+      let data = null;
+      try { data = await r.json(); } catch { /* 空响应体 */ }
+      throw Object.assign(new Error(data?.error || `导出失败（${r.status}）`), { status: r.status });
+    }
+    const m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get('content-disposition') || '');
+    return {
+      blob: new Blob([await r.arrayBuffer()], { type }),
+      filename: m ? decodeURIComponent(m[1]) : `报销记录-${kind}.csv`,
+      count: Number(r.headers.get('x-export-count') || 0),
+    };
+  },
   /** 给某个人设职能：role = gm / finance / cashier，null = 普通成员 */
   expenseRoleHolder: (userId, role) => call('PATCH', '/api/expenses/role-holders', { userId, role }),
   /** scope: mine 我发起的 | todo 待我处理 | all 我能看见的全部 */

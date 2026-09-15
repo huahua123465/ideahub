@@ -2458,6 +2458,10 @@ body.learning-fullscreen-open{overflow:hidden}
   .board-toolbar{display:grid;grid-template-columns:1fr auto;gap:8px;width:100%}
   .board-toolbar .bd-tabs{grid-column:1/-1;grid-row:1;width:100%}.board-toolbar .spacer{display:none}
   .board-toolbar .bd-n{grid-column:1;grid-row:2;margin:0;align-self:center}.board-toolbar .board-tool,.board-toolbar .bd-acct-toggle{grid-column:2;grid-row:2;margin:0}
+  /* 报销页工具栏有两个按钮（导出记录 + 管理员的审批设置），上面那条会把它们叠在同一格，互相挡住 */
+  .board-toolbar.exp-toolbar{grid-template-columns:1fr auto auto}
+  .board-toolbar.exp-toolbar .exp-export-btn{grid-column:2}
+  .board-toolbar.exp-toolbar .exp-config-btn{grid-column:3}
   .board-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-cell:nth-child(odd)::before{display:none}
   .record-menu{opacity:1}.record-menu summary{width:34px;height:34px}
   #poolGrid .idea-card{border-radius:16px}.idea-card-head{padding-top:15px}
@@ -3202,6 +3206,23 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-timeline li.a-skip::before{border-style:dashed}
 .exp-timeline li.a-withdraw::before,.exp-timeline li.a-revoke::before{border-color:var(--warn);background:var(--warn-bg)}
 .exp-flow li.is-withdrawn .exp-flow-label{color:var(--muted)}
+
+/* ---------- 报销：导出记录弹窗 ---------- */
+.exp-export-modal{width:min(560px,calc(100vw - 32px))}
+.exp-export-scope{margin-bottom:12px;padding:9px 12px;border-radius:var(--r-sm);background:var(--page);
+  color:var(--ink2);font-size:12.5px;line-height:1.6}
+.exp-export-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:560px){
+  .exp-export-modal{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}
+  .exp-export-filters{grid-template-columns:minmax(0,1fr)}
+  /* 手机上三个按钮两列排，「下载单据明细」排第一个，关闭独占最后一行 */
+  .exp-export-modal>footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .exp-export-modal>footer .spacer{display:none}
+  .exp-export-modal>footer .btn{justify-content:center;width:100%;height:44px}
+  #btnExpExportClaims{order:1}
+  #btnExpExportActions{order:2}
+  .exp-export-modal>footer [data-close]{order:3;grid-column:1/-1}
+}
 
 /* ---------- 采购：复用上面的 exp-* 组件，这里只有五段进度、付款记录、详情内表单和交付清单 ---------- */
 .exp-flow.pur-flow{grid-template-columns:repeat(5,minmax(0,1fr))}

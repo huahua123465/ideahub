@@ -10,6 +10,8 @@
  *  2. 能看见 = 申请人本人、经手过这张单的人、本部门负责人、总经理 / 财务 / 出纳。
  *     草稿只有申请人自己看得到。**管理员没有特权**：管理员只负责配置流程，
  *     不因为是管理员就能翻所有人的报销单。看不见的一律回 404，不承认单子存在。
+ *     例外只有「导出记录」（用户 2026-09-15 定的）：管理员、总经理、财务、出纳能导出全公司的记录，
+ *     但别人没提交的草稿照样不导出；其他人只导出自己能看见的单子。
  *  3. 本该由申请人自己审批的一步自动跳过；同一个人兼任连续两步（比如部门负责人就是总经理）
  *     时，后一步也自动跳过。出纳打款这一步永远不跳过。跳过都会留痕。
  *  4. 退回或撤回后申请人可以改信息、补附件、重新提交，从第一步重新走，round + 1；
@@ -483,6 +485,124 @@ export async function remindUnconfirmedReceipts() {
   return rows.length;
 }
 
+/* ================= 导出记录 ================= */
+
+const EXPORT_STATUS = ['draft', 'pending', 'returned', 'withdrawn', 'paid', 'completed', 'cancelled'];
+const CLAIMS_HEADER = ['单号', '申请人', '部门', '报销类型', '报销事项', '发生日期', '金额（元）', '状态', '当前处理人',
+  '第几次提交', '提交时间', '打款时间', '确认收款时间', '附件数', '附件', '备注', '创建时间', '最后更新时间'];
+const ACTIONS_HEADER = ['单号', '报销事项', '申请人', '时间', '第几次提交', '步骤', '操作', '操作人', '意见 / 说明'];
+
+// 数据库和容器都是 UTC，导出给人看的时间一律换成北京时间
+const BJ = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+function timeBj(d) {
+  if (!d) return '';
+  const p = Object.fromEntries(BJ.formatToParts(new Date(d)).map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+}
+
+/** 能导出全公司记录的人：管理员、总经理、财务、出纳（文件头第 2 条的例外） */
+const exportsAll = (cfg, me) => me.role === 'admin' || duties(cfg, me).roles.length > 0;
+
+/** 一个 CSV 单元格：统一加引号转义；= + - @ 开头的前面补 '，免得 Excel / WPS 把内容当公式执行 */
+function csvCell(v) {
+  let s = v === null || v === undefined ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+// 开头的 BOM 让 Excel 按 UTF-8 打开，中文不乱码
+const csvText = rows => `﻿${rows.map(r => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
+
+function exportFilters(url) {
+  const from = q(url, 'from');
+  const to = q(url, 'to');
+  const status = q(url, 'status');
+  const dept = q(url, 'dept');
+  if (from) parseDate(from);
+  if (to) parseDate(to);
+  if (from && to && from > to) throw badRequest('开始日期不能晚于结束日期');
+  if (status && !EXPORT_STATUS.includes(status)) throw badRequest('状态选得不对');
+  if (dept && dept.length > 40) throw badRequest('部门名称最多 40 个字');
+  return { from, to, status, dept };
+}
+
+/** 按权限和筛选条件取要导出的报销单。日期按提交那天（北京时间）算，没提交过的草稿在按日期筛时不出现 */
+async function exportClaims(me, f) {
+  const cfg = await loadConfig();
+  const params = [me.id];
+  const where = [`(c.status <> 'draft' OR c.applicant_id = $1)`];
+  if (!exportsAll(cfg, me)) {
+    where.push(`(c.applicant_id = $1
+      OR EXISTS (SELECT 1 FROM expense_claim_actions x WHERE x.claim_id = c.id AND x.actor_id = $1)
+      OR EXISTS (SELECT 1 FROM expense_dept_leaders d WHERE d.dept = c.dept AND d.leader_id = $1))`);
+  }
+  const add = (sql, v) => { params.push(v); where.push(sql.replace('?', `$${params.length}`)); };
+  if (f.from) add(`(c.submitted_at AT TIME ZONE 'Asia/Shanghai')::date >= ?::date`, f.from);
+  if (f.to) add(`(c.submitted_at AT TIME ZONE 'Asia/Shanghai')::date <= ?::date`, f.to);
+  if (f.status) add('c.status = ?', f.status);
+  if (f.dept) add('c.dept = ?', f.dept);
+  const { rows } = await query(`${CLAIM_SELECT} WHERE ${where.join(' AND ')} ORDER BY c.id`, params);
+  return { cfg, rows };
+}
+
+async function exportFiles(ids) {
+  const { rows } = await query(`
+    SELECT f.ref_id, f.side, f.orig_name, f.created_at, u.name AS uploader_name
+      FROM attachments f LEFT JOIN users u ON u.id = f.uploaded_by
+     WHERE f.scope = 'expense' AND f.ref_id = ANY($1::bigint[]) ORDER BY f.created_at, f.id`, [ids]);
+  return rows;
+}
+
+async function claimsCsv(claims, cfg) {
+  const files = await exportFiles(claims.map(c => c.id));
+  const rows = claims.map(c => {
+    const mine = files.filter(f => Number(f.ref_id) === Number(c.id));
+    const handler = c.status === 'pending' ? handlerOf(cfg, c.stage, c) : null;
+    return [
+      codeOf(c), c.applicant_name, c.dept, CATEGORY_LABEL[c.category] || c.category, c.title,
+      c.expense_date instanceof Date ? ymdLocal(c.expense_date) : String(c.expense_date).slice(0, 10),
+      yuan(c.amount_cents), statusLabel(c), handler?.name || '', c.round || '',
+      timeBj(c.submitted_at), timeBj(c.paid_at), timeBj(c.received_at), mine.length,
+      mine.map(f => `${f.side === 'review' ? '打款凭证：' : ''}${f.orig_name}`).join('；'),
+      c.note || '', timeBj(c.created_at), timeBj(c.updated_at),
+    ];
+  });
+  return csvText([CLAIMS_HEADER, ...rows]);
+}
+
+/** 审批记录：每一步操作一行，每次上传附件也记一行，按单号、时间排好 */
+async function actionsCsv(claims) {
+  const ids = claims.map(c => c.id);
+  const byId = new Map(claims.map(c => [Number(c.id), c]));
+  const [{ rows: actions }, files] = await Promise.all([
+    query(`
+      SELECT x.claim_id, x.round, x.stage, x.action, x.comment, x.created_at, x.id, u.name AS actor_name
+        FROM expense_claim_actions x LEFT JOIN users u ON u.id = x.actor_id
+       WHERE x.claim_id = ANY($1::bigint[])`, [ids]),
+    exportFiles(ids),
+  ]);
+  const STEP = { submit: '提交', confirm: '确认收款' };
+  const events = [
+    ...actions.map(a => ({
+      claimId: Number(a.claim_id), at: a.created_at, order: Number(a.id),
+      cells: [a.round, STAGE_LABEL[a.stage] || STEP[a.action] || '', ACTION_LABEL[a.action] || a.action,
+        a.actor_name || '已删除的账号', a.comment || ''],
+    })),
+    ...files.map(f => ({
+      claimId: Number(f.ref_id), at: f.created_at, order: 0,
+      cells: ['', f.side === 'review' ? '出纳' : '申请材料', f.side === 'review' ? '上传打款凭证' : '上传凭证',
+        f.uploader_name || '已删除的账号', f.orig_name],
+    })),
+  ].sort((a, b) => a.claimId - b.claimId || new Date(a.at) - new Date(b.at) || a.order - b.order);
+  const rows = events.map(e => {
+    const c = byId.get(e.claimId);
+    return [codeOf(c), c.title, c.applicant_name, timeBj(e.at), ...e.cells];
+  });
+  return csvText([ACTIONS_HEADER, ...rows]);
+}
+
 /* ================= 路由 ================= */
 
 export function mount(router) {
@@ -678,6 +798,26 @@ export function mount(router) {
       })),
       todoCount: count[0].n,
     });
+  });
+
+  /* ---------- 导出：单据明细 / 审批记录两份 CSV，Excel、WPS 双击就能打开 ----------
+     权限见文件头第 2 条的例外。筛选：from / to 提交日期，status 状态，dept 部门。
+     必须注册在 GET /api/expenses/:id 之前，否则 export 会被当成单据 id。 */
+  router.get('/api/expenses/export', async (req, res, _p, url) => {
+    const me = await currentUser(req);
+    const kind = q(url, 'kind', 'claims');
+    if (!['claims', 'actions'].includes(kind)) throw badRequest('导出类型只能是单据明细或审批记录');
+    const { cfg, rows } = await exportClaims(me, exportFilters(url));
+    const body = kind === 'claims' ? await claimsCsv(rows, cfg) : await actionsCsv(rows);
+    const name = `${kind === 'claims' ? '报销单据明细' : '报销审批记录'}-${timeBj(new Date()).slice(0, 10).replace(/-/g, '')}.csv`;
+    res.writeHead(200, {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-length': Buffer.byteLength(body),
+      'cache-control': 'no-store',
+      'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+      'x-export-count': String(rows.length),
+    });
+    res.end(body);
   });
 
   router.get('/api/expenses/:id', async (req, res, params) => {

@@ -921,6 +921,41 @@
   </footer>
 </div>
 
+<div class="modal exp-export-modal" id="expExportModal" role="dialog" aria-modal="true" aria-labelledby="expExportTitle">
+  <header>
+    <h2 id="expExportTitle">导出报销记录</h2>
+    <div class="hint">导出成 Excel / WPS 双击就能打开的表格。「单据明细」每张报销单一行；「审批记录」列出每一步谁在什么时间做了什么、写了什么意见，以及每次上传的附件。</div>
+  </header>
+  <div class="form">
+    <div class="exp-export-scope" id="expExportScope"></div>
+    <div class="exp-export-filters">
+      <div class="field">
+        <label for="expExportFrom">提交日期从</label>
+        <input class="inp" type="date" id="expExportFrom">
+      </div>
+      <div class="field">
+        <label for="expExportTo">到</label>
+        <input class="inp" type="date" id="expExportTo">
+      </div>
+      <div class="field">
+        <label for="expExportStatus">状态</label>
+        <select class="inp" id="expExportStatus"></select>
+      </div>
+      <div class="field">
+        <label for="expExportDept">部门</label>
+        <select class="inp" id="expExportDept"></select>
+      </div>
+    </div>
+    <div class="exp-error" id="expExportErr" role="alert" aria-live="polite"></div>
+  </div>
+  <footer>
+    <button class="btn btn-ghost" type="button" data-close>关闭</button>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" type="button" id="btnExpExportActions">下载审批记录</button>
+    <button class="btn btn-primary" type="button" id="btnExpExportClaims">下载单据明细</button>
+  </footer>
+</div>
+
 <div class="modal" id="pwModal" role="dialog" aria-modal="true" aria-labelledby="pwModalTitle">
   <header>
     <h2 id="pwModalTitle">修改密码</h2>

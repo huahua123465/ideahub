@@ -419,6 +419,101 @@ test('每天提醒申请人确认收款：打款一天后开始，每张单每�
   assert.equal(await reminders(), 1, '确认收到之后不再提醒');
 });
 
+/** 够测试用的 CSV 解析：引号包裹、双引号转义、逗号和换行在引号里 */
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if (ch !== '\r') cell += ch;
+  }
+  return rows;
+}
+
+test('导出记录：CSV 带 BOM、能按日期/状态/部门筛；管理员和总经理/财务/出纳导出全公司，其他人只导出自己能看见的', async () => {
+  assert.equal((await setConfig()).status, 200);
+  const exp = async (user, params) => {
+    const r = await fetch(`${BASE}/api/expenses/export?${new URLSearchParams(params)}`, { headers: { 'x-user-id': String(user) } });
+    const buf = Buffer.from(await r.arrayBuffer());
+    return {
+      status: r.status, headers: r.headers, buf,
+      rows: r.ok ? parseCsv(buf.toString('utf8').replace(/^﻿/, '')) : null,
+      error: r.ok ? null : JSON.parse(buf.toString('utf8')).error,
+    };
+  };
+  const c = await submitted(APP, { title: '=HYPERLINK("http://x") 导出测试', note: '含"引号",和逗号' });
+  await approvedToCashier(c);
+  assert.equal((await call(CASH, 'POST', `/api/expenses/${c.id}/pay`, { stage: 'cashier', comment: '已转账' })).status, 200);
+  const draft = await newClaim(APP, { title: '导出测试·草稿' });
+  const codes = r => r.rows.slice(1).map(x => x[0]);
+
+  // 格式：BOM、表头、下载文件名、条数
+  const fin = await exp(FIN, { kind: 'claims' });
+  assert.equal(fin.status, 200);
+  assert.match(fin.headers.get('content-type'), /text\/csv/);
+  assert.deepEqual([...fin.buf.subarray(0, 3)], [0xef, 0xbb, 0xbf], '带 BOM，Excel 打开中文不乱码');
+  assert.match(decodeURIComponent(fin.headers.get('content-disposition')), /attachment; filename\*=UTF-8''报销单据明细-\d{8}\.csv/);
+  assert.equal(fin.rows[0][0], '单号');
+  assert.equal(fin.rows[0].length, 18);
+  assert.equal(Number(fin.headers.get('x-export-count')), fin.rows.length - 1);
+
+  // 内容：公式开头的内容补 '，引号和逗号原样保留，状态和金额看得懂
+  const row = fin.rows.find(x => x[0] === c.code);
+  assert.ok(row, '财务能导出全公司的单子');
+  assert.equal(row[4], "'=HYPERLINK(\"http://x\") 导出测试");
+  assert.equal(row[15], '含"引号",和逗号');
+  assert.equal(row[1], '赵嘉一');
+  assert.equal(row[6], '553.50');
+  assert.equal(row[7], '待确认收款');
+  assert.match(row[11], /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/, '打款时间是北京时间');
+  assert.equal(row[13], '1');
+  assert.equal(row[14], '发票.png');
+  assert.ok(!codes(fin).includes(draft.code), '别人的草稿不导出');
+
+  // 权限：管理员也能导出全公司；申请人能导出自己的草稿；无关的人导不出别人的单子
+  assert.ok(codes(await exp(ADMIN, {})).includes(c.code));
+  const mine = await exp(APP, {});
+  assert.ok(codes(mine).includes(c.code) && codes(mine).includes(draft.code));
+  assert.ok(!codes(await exp(OUT, {})).includes(c.code));
+  assert.ok(codes(await exp(LEAD_P, {})).includes(c.code), '经手过的部门负责人能导出');
+
+  // 筛选
+  const bjToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+  const tomorrow = new Date(Date.parse(`${bjToday}T00:00:00Z`) + 86400e3).toISOString().slice(0, 10);
+  assert.ok(codes(await exp(FIN, { from: bjToday, to: bjToday })).includes(c.code));
+  assert.ok(!codes(await exp(FIN, { from: tomorrow })).includes(c.code));
+  assert.ok(codes(await exp(FIN, { status: 'paid' })).includes(c.code));
+  assert.ok(!codes(await exp(FIN, { status: 'completed' })).includes(c.code));
+  assert.ok(!codes(await exp(FIN, { dept: '技术部' })).includes(c.code));
+  assert.ok(!codes(await exp(APP, { from: bjToday })).includes(draft.code), '按日期筛时没提交过的草稿不出现');
+  for (const [params, re] of [
+    [{ from: '2026-13-01' }, /日期/], [{ from: '2026-09-10', to: '2026-09-01' }, /开始日期/],
+    [{ status: 'bogus' }, /状态/], [{ kind: 'bogus' }, /导出类型/],
+  ]) {
+    const bad = await exp(FIN, params);
+    assert.equal(bad.status, 400, JSON.stringify(params));
+    assert.match(bad.error, re);
+  }
+
+  // 审批记录：每一步谁在什么时候做了什么，附件上传也有记录
+  const log = await exp(FIN, { kind: 'actions' });
+  assert.equal(log.status, 200);
+  assert.match(decodeURIComponent(log.headers.get('content-disposition')), /报销审批记录-\d{8}\.csv/);
+  assert.deepEqual(log.rows[0], ['单号', '报销事项', '申请人', '时间', '第几次提交', '步骤', '操作', '操作人', '意见 / 说明']);
+  const steps = log.rows.filter(x => x[0] === c.code).map(x => `${x[5]}|${x[6]}|${x[7]}`);
+  assert.deepEqual(steps, [
+    '申请材料|上传凭证|赵嘉一', '提交|提交|赵嘉一', '部门负责人|审批通过|苏禾', '总经理|审批通过|何叙',
+    '财务|审批通过|周未', '出纳|确认打款|叶昭']);
+  assert.equal(log.rows.find(x => x[0] === c.code && x[6] === '确认打款')[8], '已转账');
+});
+
 test('用户管理里设职能：换人立刻生效；让职能空出来时有单子在等就拦下', async () => {
   const duty = (userId, role, as = ADMIN) => call(as, 'PATCH', '/api/expenses/role-holders', { userId, role });
   assert.equal((await setConfig()).status, 200);

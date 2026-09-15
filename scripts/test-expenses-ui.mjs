@@ -293,6 +293,67 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.modal.on') && !document.querySelector('#mask.on'));
 
+    // 导出记录：演示身份是管理员，能导出全公司；日期填反被拦；下载的是带 BOM 的 CSV
+    // 手机上 page.click 只把按钮滚到屏幕边缘，底部的演示模式提示和聊天按钮会挡住它：先滚到中间，确认没被挡再点
+    await page.$eval('#v-expenses .exp-export-btn', b => b.scrollIntoView({ block: 'center' }));
+    await settleDom(page);
+    const cover = await page.$eval('#v-expenses .exp-export-btn', b => {
+      const r = b.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return top === b || b.contains(top) ? '' : (top?.outerHTML || '无').slice(0, 160);
+    });
+    assert.equal(cover, '', `导出记录按钮被挡住了：${cover}`);
+    await page.click('#v-expenses .exp-export-btn');
+    await page.waitForSelector('#expExportModal.on #btnExpExportClaims', { visible: true });
+    await settleDom(page);
+    await modalInViewport(page, 'expExportModal');
+    await buttonVisible(page, 'expExportModal', '#btnExpExportClaims');
+    await buttonVisible(page, 'expExportModal', '#btnExpExportActions');
+    const exportView = await page.evaluate(() => ({
+      scope: document.querySelector('#expExportScope').textContent,
+      statuses: document.querySelectorAll('#expExportStatus option').length,
+      depts: [...document.querySelectorAll('#expExportDept option')].map(o => o.value),
+    }));
+    assert.match(exportView.scope, /全公司/);
+    assert.equal(exportView.statuses, 8);
+    assert.ok(exportView.depts.includes('产品部') && exportView.depts.includes('运营部'));
+    await harness.screenshot(page, `expenses-export-${scene}`);
+    if (mobile) {
+      const small = await page.$$eval('#expExportModal footer .btn', ns => ns.map(n => n.getBoundingClientRect())
+        .filter(b => b.width > 0 && b.height < 44).length);
+      assert.equal(small, 0, '手机上导出弹窗按钮高度至少 44px');
+    }
+    await page.$eval('#expExportFrom', n => { n.value = '2026-09-10'; });
+    await page.$eval('#expExportTo', n => { n.value = '2026-09-01'; });
+    await page.click('#btnExpExportClaims');
+    await page.waitForFunction(() => /开始日期不能晚于结束日期/.test(document.querySelector('#expExportErr')?.textContent || ''));
+    await page.$eval('#expExportFrom', n => { n.value = ''; });
+    await page.$eval('#expExportTo', n => { n.value = ''; });
+    // 拦下链接点击，记录下载的文件名和内容，不真的弹下载
+    await page.evaluate(() => {
+      window.__downloads = [];
+      HTMLAnchorElement.prototype.click = function () { if (this.download) window.__downloads.push({ name: this.download, href: this.href }); };
+    });
+    await page.select('#expExportStatus', 'completed');
+    await page.click('#btnExpExportClaims');
+    await waitToast(page, /已导出 \d+ 张报销单的单据明细/);
+    await page.click('#btnExpExportActions');
+    await waitToast(page, /审批记录/);
+    const files = await page.evaluate(async () => Promise.all(window.__downloads.map(async d => {
+      const bytes = new Uint8Array(await (await fetch(d.href)).arrayBuffer());
+      return { name: d.name, bom: [...bytes.slice(0, 3)], text: new TextDecoder().decode(bytes) };
+    })));
+    assert.equal(files.length, 2);
+    assert.match(files[0].name, /^报销单据明细-\d{8}\.csv$/);
+    assert.match(files[1].name, /^报销审批记录-\d{8}\.csv$/);
+    assert.deepEqual(files[0].bom, [0xef, 0xbb, 0xbf]);
+    assert.match(files[0].text, /"单号","申请人"/);
+    assert.match(files[0].text, /8 月杭州展会住宿.*已完成/);
+    assert.doesNotMatch(files[0].text, /9 月上海客户拜访/, '按状态筛掉了审批中的单子');
+    assert.match(files[1].text, /"确认打款","林知远","已银行转账"/);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.modal.on') && !document.querySelector('#mask.on'));
+
     // 管理员：审批设置
     await page.click('#v-expenses .exp-config-btn');
     await page.waitForSelector('#expConfigModal.on .exp-cfg-row', { visible: true });

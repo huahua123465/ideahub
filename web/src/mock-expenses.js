@@ -227,6 +227,44 @@ export function handleExpenses(method, p, q, body, me) {
     else CFG.depts.push([dept, Number(body.leaderId)]);
     return configDto(me);
   }
+  if (p === '/api/expenses/export' && method === 'GET') {
+    // 表头、权限、筛选照抄后端；返回文本，由 api.js 包成 Blob
+    const kind = q.get('kind') || 'claims';
+    if (!['claims', 'actions'].includes(kind)) throw fail('导出类型只能是单据明细或审批记录');
+    const [from, to, status, dept] = ['from', 'to', 'status', 'dept'].map(k => q.get(k) || '');
+    if (from && to && from > to) throw fail('开始日期不能晚于结束日期');
+    const all = me.role === 'admin' || STAGES.slice(1).some(s => CFG.roles[s] === me.id);
+    const bjDay = iso => new Date(new Date(iso).getTime() + 8 * 3600e3).toISOString().slice(0, 10);
+    const bjTime = iso => (iso ? new Date(new Date(iso).getTime() + 8 * 3600e3).toISOString().slice(0, 19).replace('T', ' ') : '');
+    const items = CLAIMS
+      .filter(c => (c.status !== 'draft' || c.applicantId === me.id) && (all || canSee(c, me)))
+      .filter(c => (!from || (c.submittedAt && bjDay(c.submittedAt) >= from)) && (!to || (c.submittedAt && bjDay(c.submittedAt) <= to)))
+      .filter(c => (!status || c.status === status) && (!dept || c.dept === dept))
+      .sort((a, b) => a.id - b.id);
+    const cell = v => {
+      let s = v == null ? '' : String(v);
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+    const rows = kind === 'claims'
+      ? [['单号', '申请人', '部门', '报销类型', '报销事项', '发生日期', '金额（元）', '状态', '当前处理人',
+        '第几次提交', '提交时间', '打款时间', '确认收款时间', '附件数', '附件', '备注', '创建时间', '最后更新时间'],
+      ...items.map(c => {
+        const d = dto(c, me, false);
+        return [d.code, d.applicant?.name, d.dept, d.categoryLabel, d.title, d.expenseDate, d.amount, d.statusLabel,
+          d.handler?.name || '', d.round || '', bjTime(d.submittedAt), bjTime(d.paidAt), bjTime(d.receivedAt), c.files.length,
+          c.files.map(f => `${f.side === 'review' ? '打款凭证：' : ''}${f.name}`).join('；'), d.note, bjTime(d.createdAt), bjTime(d.updatedAt)];
+      })]
+      : [['单号', '报销事项', '申请人', '时间', '第几次提交', '步骤', '操作', '操作人', '意见 / 说明'],
+        ...items.flatMap(c => c.actions.map(a => [`BX-2026-${String(c.id).padStart(4, '0')}`, c.title, NAMES[c.applicantId],
+          bjTime(a.createdAt), a.round, STAGE_LABEL[a.stage] || { submit: '提交', confirm: '确认收款' }[a.action] || '',
+          ACTION_LABEL[a.action], NAMES[a.actorId] || '', a.comment || '']))];
+    return {
+      text: `﻿${rows.map(r => r.map(cell).join(',')).join('\r\n')}\r\n`,
+      filename: `${kind === 'claims' ? '报销单据明细' : '报销审批记录'}-${bjDay(new Date().toISOString()).replace(/-/g, '')}.csv`,
+      count: items.length,
+    };
+  }
   if (p === '/api/expenses/role-holders' && method === 'PATCH') {
     if (me.role !== 'admin') throw fail('只有管理员可以做这个操作', 403);
     const userId = Number(body?.userId);

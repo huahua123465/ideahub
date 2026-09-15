@@ -96,6 +96,7 @@ function build(root) {
       </div>
       <div class="spacer"></div>
       <span class="bd-n"><b class="exp-count">0</b> 张</span>
+      <button class="board-tool exp-export-btn" type="button">导出记录</button>
       ${me.role === 'admin' ? '<button class="board-tool exp-config-btn" type="button">审批设置</button>' : ''}
     </div>
     <div class="bd-body exp-body" aria-live="polite"></div>`;
@@ -108,6 +109,7 @@ function build(root) {
     loadList({ skeleton: true });
   });
   root.querySelector('.exp-config-btn')?.addEventListener('click', openConfig);
+  root.querySelector('.exp-export-btn').addEventListener('click', openExport);
   root.addEventListener('click', e => {
     const open = e.target.closest('[data-exp-open]');
     if (open) return openDetail(Number(open.dataset.expOpen));
@@ -829,6 +831,79 @@ function bindConfig() {
   });
 }
 
+/* ================= 导出记录 ================= */
+
+const EXPORT_STATUS = [
+  ['', '全部状态'], ['pending', '审批中（含待出纳打款）'], ['paid', '待确认收款'], ['completed', '已完成'],
+  ['returned', '已退回'], ['withdrawn', '已撤回'], ['cancelled', '已作废'], ['draft', '草稿（只有自己的）'],
+];
+
+function exportError(msg) {
+  showError($('#expExportErr'), msg);
+}
+
+/** 能导出全公司的人和后端保持一致：管理员、总经理、财务、出纳 */
+async function openExport() {
+  closeModals();
+  exportError('');
+  let cfg = state.config;
+  try { cfg = await ensureConfig(); } catch { /* 读不到配置也能导出，只是部门下拉退回默认部门 */ }
+  const all = me.role === 'admin' || (cfg?.myDuties?.roles || []).length > 0;
+  $('#expExportScope').textContent = all
+    ? '你可以导出全公司的报销记录（别人还没提交的草稿不包含）。'
+    : '你可以导出自己发起的、经手过的，以及你负责的部门的报销记录。';
+  $('#expExportStatus').innerHTML = EXPORT_STATUS.map(([v, label]) => `<option value="${v}">${esc(label)}</option>`).join('');
+  const depts = [...new Set([...(cfg?.depts || []).map(d => d.dept), ...DEFAULT_DEPTS])];
+  $('#expExportDept').innerHTML = `<option value="">全部部门</option>${depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('')}`;
+  $('#expExportTo').max = today();
+  $('#expExportModal').classList.add('on');
+  $('#mask').classList.add('on');
+}
+
+async function downloadExport(kind, btn) {
+  if (busy) return;
+  const filters = {
+    from: $('#expExportFrom').value, to: $('#expExportTo').value,
+    status: $('#expExportStatus').value, dept: $('#expExportDept').value,
+  };
+  if (filters.from && filters.to && filters.from > filters.to) {
+    exportError('开始日期不能晚于结束日期');
+    $('#expExportFrom').focus();
+    return;
+  }
+  const buttons = [$('#btnExpExportClaims'), $('#btnExpExportActions')];
+  const original = btn.textContent;
+  busy = true;
+  buttons.forEach(b => { b.disabled = true; });
+  btn.textContent = '正在导出…';
+  exportError('');
+  try {
+    const out = await api.expenseExport(kind, filters);
+    const url = URL.createObjectURL(out.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = out.filename;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    toast('ok', out.count
+      ? `已导出 ${out.count} 张报销单的${kind === 'claims' ? '单据明细' : '审批记录'}`
+      : '没有符合条件的报销单，下载的表格只有表头');
+  } catch (e) {
+    exportError(e.message || '导出失败，请重试');
+  } finally {
+    busy = false;
+    buttons.forEach(b => { b.disabled = false; });
+    btn.textContent = original;
+  }
+}
+
+function bindExport() {
+  $('#btnExpExportClaims').addEventListener('click', e => downloadExport('claims', e.currentTarget));
+  $('#btnExpExportActions').addEventListener('click', e => downloadExport('actions', e.currentTarget));
+}
+
 /* ================= 生命周期 ================= */
 
 let bound = false;
@@ -838,17 +913,20 @@ export function bind() {
   bindDetail();
   bindEditor();
   bindConfig();
+  bindExport();
 }
+
+const MODALS = ['expEditModal', 'expDetailModal', 'expConfigModal', 'expExportModal'];
 
 /** 关掉本模块的弹窗；没有别的弹窗 / 抽屉开着时顺手收起遮罩（打开下一个弹窗时会再加回来） */
 function closeModals() {
-  for (const id of ['expEditModal', 'expDetailModal', 'expConfigModal']) $(`#${id}`).classList.remove('on');
+  for (const id of MODALS) $(`#${id}`).classList.remove('on');
   if (!document.querySelector('.modal.on,.drawer.on')) $('#mask').classList.remove('on');
 }
 
 /** 给 main.js 的 closeAll 用（Esc / 点遮罩）。正在提交时不让关，免得用户以为没提交上 */
 export function close() {
-  const open = ['expEditModal', 'expDetailModal', 'expConfigModal'].some(id => $(`#${id}`).classList.contains('on'));
+  const open = MODALS.some(id => $(`#${id}`).classList.contains('on'));
   if (!open) return;
   if (busy) {
     // closeAll 里排在前面的模块已经把遮罩收了，这里补回来，弹窗不能悬空
