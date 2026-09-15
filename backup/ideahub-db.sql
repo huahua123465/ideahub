@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dXKI73ELig7sp8zInrFAT7nOR45hEc1srmNqIvB5ashIhxHAtflkpktKjnR7VFq
+\restrict atfO4ryoFBXz06S9d3Ynt4DVkyohb9ir36rUNsnVtTU56FRMi976gg9EeER1Nw9
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -2636,7 +2636,7 @@ CREATE TABLE public.expense_claim_actions (
     actor_id bigint,
     comment text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT expense_claim_actions_action_check CHECK ((action = ANY (ARRAY['submit'::text, 'approve'::text, 'skip'::text, 'return'::text, 'pay'::text, 'cancel'::text]))),
+    CONSTRAINT expense_claim_actions_action_check CHECK ((action = ANY (ARRAY['submit'::text, 'approve'::text, 'skip'::text, 'return'::text, 'pay'::text, 'cancel'::text, 'withdraw'::text, 'revoke'::text, 'confirm'::text, 'dispute'::text]))),
     CONSTRAINT expense_claim_actions_comment_check CHECK (((comment IS NULL) OR (length(comment) <= 1000))),
     CONSTRAINT expense_claim_actions_round_check CHECK ((round >= 0)),
     CONSTRAINT expense_claim_actions_stage_check CHECK ((stage = ANY (ARRAY['leader'::text, 'gm'::text, 'finance'::text, 'cashier'::text])))
@@ -2682,6 +2682,8 @@ CREATE TABLE public.expense_claims (
     paid_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    received_at timestamp with time zone,
+    reminded_at timestamp with time zone,
     CONSTRAINT expense_claims_amount_cents_check CHECK (((amount_cents > 0) AND (amount_cents <= '9999999999'::bigint))),
     CONSTRAINT expense_claims_category_check CHECK ((category = ANY (ARRAY['office'::text, 'daily'::text, 'travel'::text, 'entertainment'::text, 'other'::text]))),
     CONSTRAINT expense_claims_dept_check CHECK (((length(btrim(dept)) >= 1) AND (length(btrim(dept)) <= 40))),
@@ -2689,7 +2691,7 @@ CREATE TABLE public.expense_claims (
     CONSTRAINT expense_claims_round_check CHECK ((round >= 0)),
     CONSTRAINT expense_claims_stage_check CHECK ((stage = ANY (ARRAY['leader'::text, 'gm'::text, 'finance'::text, 'cashier'::text]))),
     CONSTRAINT expense_claims_stage_ck CHECK (((status = 'pending'::text) = (stage IS NOT NULL))),
-    CONSTRAINT expense_claims_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'pending'::text, 'returned'::text, 'paid'::text, 'cancelled'::text]))),
+    CONSTRAINT expense_claims_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'pending'::text, 'returned'::text, 'withdrawn'::text, 'paid'::text, 'completed'::text, 'cancelled'::text]))),
     CONSTRAINT expense_claims_title_check CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 120)))
 );
 
@@ -2991,6 +2993,150 @@ CREATE SEQUENCE public.playbook_items_id_seq
 --
 
 ALTER SEQUENCE public.playbook_items_id_seq OWNED BY public.playbook_items.id;
+
+
+--
+-- Name: purchase_actions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.purchase_actions (
+    id bigint NOT NULL,
+    request_id bigint NOT NULL,
+    payment_id bigint,
+    round integer NOT NULL,
+    stage text,
+    action text NOT NULL,
+    actor_id bigint,
+    comment text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT purchase_actions_action_check CHECK ((action = ANY (ARRAY['submit'::text, 'approve'::text, 'skip'::text, 'return'::text, 'revoke'::text, 'withdraw'::text, 'cancel'::text, 'account'::text, 'pay'::text, 'deliver'::text]))),
+    CONSTRAINT purchase_actions_comment_check CHECK (((comment IS NULL) OR (length(comment) <= 1000))),
+    CONSTRAINT purchase_actions_round_check CHECK ((round >= 0)),
+    CONSTRAINT purchase_actions_stage_check CHECK ((stage = ANY (ARRAY['leader'::text, 'gm'::text, 'finance'::text, 'account'::text, 'cashier'::text])))
+);
+
+
+--
+-- Name: purchase_actions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.purchase_actions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: purchase_actions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.purchase_actions_id_seq OWNED BY public.purchase_actions.id;
+
+
+--
+-- Name: purchase_payments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.purchase_payments (
+    id bigint NOT NULL,
+    request_id bigint NOT NULL,
+    seq integer NOT NULL,
+    amount_cents bigint NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    stage text,
+    payee_name text,
+    payee_account text,
+    payee_bank text,
+    note text,
+    paid_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT purchase_payments_amount_cents_check CHECK (((amount_cents > 0) AND (amount_cents <= '9999999999'::bigint))),
+    CONSTRAINT purchase_payments_note_check CHECK (((note IS NULL) OR (length(note) <= 1000))),
+    CONSTRAINT purchase_payments_payee_account_check CHECK (((payee_account IS NULL) OR ((length(btrim(payee_account)) >= 1) AND (length(btrim(payee_account)) <= 64)))),
+    CONSTRAINT purchase_payments_payee_bank_check CHECK (((payee_bank IS NULL) OR (length(payee_bank) <= 100))),
+    CONSTRAINT purchase_payments_payee_name_check CHECK (((payee_name IS NULL) OR ((length(btrim(payee_name)) >= 1) AND (length(btrim(payee_name)) <= 100)))),
+    CONSTRAINT purchase_payments_seq_check CHECK ((seq >= 1)),
+    CONSTRAINT purchase_payments_stage_check CHECK ((stage = ANY (ARRAY['account'::text, 'finance'::text, 'cashier'::text]))),
+    CONSTRAINT purchase_payments_stage_ck CHECK (((status = 'pending'::text) = (stage IS NOT NULL))),
+    CONSTRAINT purchase_payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'paid'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: purchase_payments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.purchase_payments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: purchase_payments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.purchase_payments_id_seq OWNED BY public.purchase_payments.id;
+
+
+--
+-- Name: purchase_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.purchase_requests (
+    id bigint NOT NULL,
+    applicant_id bigint NOT NULL,
+    dept text NOT NULL,
+    pay_type text NOT NULL,
+    title text NOT NULL,
+    apply_date date NOT NULL,
+    amount_cents bigint NOT NULL,
+    note text,
+    status text DEFAULT 'draft'::text NOT NULL,
+    stage text,
+    round integer DEFAULT 0 NOT NULL,
+    submitted_at timestamp with time zone,
+    approved_at timestamp with time zone,
+    delivery_note text,
+    completed_at timestamp with time zone,
+    reminded_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT purchase_requests_amount_cents_check CHECK (((amount_cents > 0) AND (amount_cents <= '9999999999'::bigint))),
+    CONSTRAINT purchase_requests_delivery_note_check CHECK (((delivery_note IS NULL) OR (length(delivery_note) <= 2000))),
+    CONSTRAINT purchase_requests_dept_check CHECK (((length(btrim(dept)) >= 1) AND (length(btrim(dept)) <= 40))),
+    CONSTRAINT purchase_requests_note_check CHECK (((note IS NULL) OR (length(note) <= 2000))),
+    CONSTRAINT purchase_requests_pay_type_check CHECK ((pay_type = ANY (ARRAY['one_time'::text, 'installment'::text]))),
+    CONSTRAINT purchase_requests_round_check CHECK ((round >= 0)),
+    CONSTRAINT purchase_requests_stage_check CHECK ((stage = ANY (ARRAY['leader'::text, 'gm'::text, 'finance'::text]))),
+    CONSTRAINT purchase_requests_stage_ck CHECK (((status = 'pending'::text) = (stage IS NOT NULL))),
+    CONSTRAINT purchase_requests_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'pending'::text, 'returned'::text, 'withdrawn'::text, 'executing'::text, 'completed'::text, 'cancelled'::text]))),
+    CONSTRAINT purchase_requests_title_check CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 120)))
+);
+
+
+--
+-- Name: purchase_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.purchase_requests_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: purchase_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.purchase_requests_id_seq OWNED BY public.purchase_requests.id;
 
 
 --
@@ -5625,6 +5771,27 @@ ALTER TABLE ONLY public.playbook_items ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: purchase_actions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_actions ALTER COLUMN id SET DEFAULT nextval('public.purchase_actions_id_seq'::regclass);
+
+
+--
+-- Name: purchase_payments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_payments ALTER COLUMN id SET DEFAULT nextval('public.purchase_payments_id_seq'::regclass);
+
+
+--
+-- Name: purchase_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_requests ALTER COLUMN id SET DEFAULT nextval('public.purchase_requests_id_seq'::regclass);
+
+
+--
 -- Name: research_account_aliases id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -6126,6 +6293,16 @@ COPY public.attachments (id, scope, ref_id, side, orig_name, stored_name, mime, 
 80	client	115	submit	乐乐_V5_客户重点简报.html	f2c5a39eddfc8d5b9e30490884636282.html	text/html; charset=utf-8	4350	Tech2 V5 人工确认版的重点简报；只含基础资料与重点结论。	\N	2026-09-07 08:35:02.808338+00	\N
 81	expense	2	submit	已生成图像 1 (2).png	251a4a2b0b681c8f7d7922a3f661bf85.png	image/png	3302452	\N	1	2026-09-11 06:33:56.733873+00	\N
 82	expense	3	submit	IMG_20260910_082514.png	a86762ca763d9945e9227bd20642db2e.png	image/png	3686811	\N	30	2026-09-14 02:47:38.328444+00	\N
+83	expense	4	submit	1789370324823.jpg	dad4fb4b0d8d5b6cba5b4896b5ef0e44.jpg	image/jpeg	2943869	\N	30	2026-09-14 07:19:02.548785+00	\N
+84	purchase	1	submit	1789373007933.jpg	a43b6a5d429b4311ae8d158597a1952a.jpg	image/jpeg	1904728	\N	30	2026-09-14 08:03:41.598765+00	\N
+85	purchase	1	delivery	1789374670258.jpg	c4d57d901c4cdee3c63440da7233dacd.jpg	image/jpeg	2014228	\N	30	2026-09-14 08:31:17.111542+00	\N
+86	purchase	2	submit	微信图片_20260914164959_123_2.png	12d7c9658f4e5c32cba81cb861a92e97.png	image/png	1113657	\N	11	2026-09-14 08:51:21.988924+00	\N
+87	purchase	2	delivery	cf116380b0abc131f822df61d7bf6664.jpg	f39a95a82bf4aea556324cab2124bbf8.jpg	image/jpeg	97566	\N	11	2026-09-14 09:19:27.109088+00	\N
+88	purchase	3	submit	453ac5f0860588be14d52e3a4dce9c81.jpg	564200e19c59b1dc3d27b3fc847f90ad.jpg	image/jpeg	63014	\N	11	2026-09-14 09:20:28.120317+00	\N
+89	purchase	3	delivery	cf116380b0abc131f822df61d7bf6664.jpg	51b014719a11b37c02d2747c1a96cfd0.jpg	image/jpeg	97566	\N	11	2026-09-14 09:22:48.252965+00	\N
+90	expense	5	submit	cf116380b0abc131f822df61d7bf6664.jpg	30013561a0b311f0d5e70607a7387928.jpg	image/jpeg	97566	\N	11	2026-09-14 09:23:38.711165+00	\N
+91	expense	5	submit	453ac5f0860588be14d52e3a4dce9c81.jpg	85e1f0a9a7529d400a4963136b96d50e.jpg	image/jpeg	63014	\N	11	2026-09-14 09:23:38.945434+00	\N
+92	expense	5	submit	d993fcbb495396aa342de783e4a501ac.jpg	4fe66e79f6e76442ac84760cabb68582.jpg	image/jpeg	79400	\N	11	2026-09-14 09:23:39.879349+00	\N
 \.
 
 
@@ -6485,6 +6662,19 @@ COPY public.expense_claim_actions (id, claim_id, round, stage, action, actor_id,
 1	2	1	\N	submit	1	\N	2026-09-11 06:41:53.929661+00
 2	3	1	\N	submit	30	\N	2026-09-14 02:47:38.752062+00
 3	3	1	leader	skip	30	申请人本人，自动跳过	2026-09-14 02:47:38.752062+00
+4	2	1	leader	withdraw	1	\N	2026-09-14 06:49:00.159699+00
+5	2	2	\N	submit	1	\N	2026-09-14 06:49:05.085227+00
+6	2	2	leader	cancel	1	\N	2026-09-14 06:49:12.479861+00
+7	3	1	gm	withdraw	30	\N	2026-09-14 07:10:11.702819+00
+8	3	1	\N	cancel	30	\N	2026-09-14 07:10:16.456675+00
+9	4	1	\N	submit	30	\N	2026-09-14 07:19:02.965901+00
+10	4	1	leader	skip	30	申请人本人，自动跳过	2026-09-14 07:19:02.965901+00
+11	4	1	gm	withdraw	30	\N	2026-09-14 07:19:17.473268+00
+12	5	1	\N	submit	11	\N	2026-09-14 09:23:40.316139+00
+13	5	1	leader	skip	11	申请人本人，自动跳过	2026-09-14 09:23:40.316139+00
+14	5	1	gm	approve	28	\N	2026-09-14 09:24:09.934794+00
+15	5	1	finance	approve	30	\N	2026-09-14 09:24:33.127141+00
+16	5	1	cashier	pay	30	银行已转至个人账户	2026-09-14 09:25:13.165989+00
 \.
 
 
@@ -6492,9 +6682,11 @@ COPY public.expense_claim_actions (id, claim_id, round, stage, action, actor_id,
 -- Data for Name: expense_claims; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.expense_claims (id, applicant_id, dept, category, title, expense_date, amount_cents, note, status, stage, round, submitted_at, paid_at, created_at, updated_at) FROM stdin;
-2	1	运营部	office	6022	2026-09-11	54200	fsf	pending	leader	1	2026-09-11 06:41:53.929661+00	\N	2026-09-11 06:33:47.505305+00	2026-09-11 06:41:53.929661+00
-3	30	财务部	travel	高铁票	2026-09-12	20000	单独出行，已报备	pending	gm	1	2026-09-14 02:47:38.752062+00	\N	2026-09-14 02:47:36.315728+00	2026-09-14 02:47:38.752062+00
+COPY public.expense_claims (id, applicant_id, dept, category, title, expense_date, amount_cents, note, status, stage, round, submitted_at, paid_at, created_at, updated_at, received_at, reminded_at) FROM stdin;
+2	1	运营部	office	6022	2026-09-11	54200	fsf	cancelled	\N	2	2026-09-14 06:49:05.085227+00	\N	2026-09-11 06:33:47.505305+00	2026-09-14 06:49:12.479861+00	\N	\N
+3	30	财务部	travel	高铁票	2026-09-12	20000	单独出行，已报备	cancelled	\N	1	2026-09-14 02:47:38.752062+00	\N	2026-09-14 02:47:36.315728+00	2026-09-14 07:10:16.456675+00	\N	\N
+4	30	财务部	daily	绿植发财树10棵	2026-09-14	180000	\N	withdrawn	\N	1	2026-09-14 07:19:02.965901+00	\N	2026-09-14 07:19:00.689541+00	2026-09-14 07:19:17.473268+00	\N	\N
+5	11	行政部	daily	采购了清洁用品	2026-09-14	15000	\N	completed	\N	1	2026-09-14 09:23:40.316139+00	2026-09-14 09:25:13.165989+00	2026-09-14 09:23:38.282605+00	2026-09-14 09:25:13.165989+00	\N	\N
 \.
 
 
@@ -6779,20 +6971,20 @@ COPY public.ideas (id, code, title, content, category, tags, status, author_id, 
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	164	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.009164863	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.022606954	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.2283026	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.1031044	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.008594265	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.021363698	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.2159293	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.09751646	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	18	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
 10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.00916506	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.015968613	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.022610107	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.05537823	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.008594441	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.014562015	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.02136657	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.051915023	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
 8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	10	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
 \.
@@ -6834,6 +7026,39 @@ COPY public.notifications (id, user_id, actor_id, kind, title, body, board, ref_
 25	10	4	report_feedback	朱涛 反馈了你的「表格」	1	reports	23	2026-08-31 03:32:14.679111+00	2026-08-28 06:39:12.429015+00
 27	4	1	expense	华俊杰提交了报销单，等你审批	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-11 06:41:53.955299+00
 28	28	30	expense	温欣颖提交了报销单，等你审批	差旅费 · ¥200.00 · 高铁票	expenses	3	\N	2026-09-14 02:47:38.770917+00
+29	4	1	expense	华俊杰撤回了报销单，暂时不用你处理	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-14 06:49:00.182346+00
+30	4	1	expense	华俊杰提交了报销单，等你审批	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-14 06:49:05.252547+00
+31	4	1	expense	华俊杰作废了报销单，暂时不用你处理	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-14 06:49:12.513973+00
+32	28	30	expense	温欣颖撤回了报销单，暂时不用你处理	差旅费 · ¥200.00 · 高铁票	expenses	3	\N	2026-09-14 07:10:11.729899+00
+33	28	30	expense	温欣颖提交了报销单，等你审批	日用费 · ¥1800.00 · 绿植发财树10棵	expenses	4	\N	2026-09-14 07:19:02.982339+00
+34	28	30	expense	温欣颖撤回了报销单，暂时不用你处理	日用费 · ¥1800.00 · 绿植发财树10棵	expenses	4	\N	2026-09-14 07:19:17.490437+00
+35	28	30	purchase	温欣颖提交了采购申请，等你审批	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:03:42.168129+00
+36	28	30	purchase	温欣颖撤回了采购申请，暂时不用你处理	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:11:42.744315+00
+37	28	30	purchase	温欣颖提交了采购申请，等你审批	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:12:18.178182+00
+38	30	28	purchase	采购立项已通过，可以发起付款	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:26:04.102448+00
+39	28	11	purchase	李敏提交了采购申请，等你审批	非一次性支付 · ¥200.00 · 发财树（测试）	purchases	2	2026-09-14 08:59:10.807972+00	2026-09-14 08:51:22.58024+00
+40	30	28	purchase	李敏提交了采购申请，等你审批	非一次性支付 · ¥200.00 · 发财树（测试）	purchases	2	\N	2026-09-14 09:00:57.687141+00
+41	11	28	purchase	你的采购申请已通过总经理审批	发财树（测试） · 下一步：财务审批（温欣颖）	purchases	2	\N	2026-09-14 09:00:57.693187+00
+42	11	30	purchase	采购立项已通过，可以发起付款	非一次性支付 · ¥200.00 · 发财树（测试）	purchases	2	\N	2026-09-14 09:03:53.194264+00
+43	30	11	purchase	李敏的采购第 1 笔付款等你审批	发财树（测试） · 本笔 ¥100.00	purchases	2	\N	2026-09-14 09:15:13.797015+00
+44	11	30	purchase	采购第 1 笔付款已通过财务审批	发财树（测试） · 本笔 ¥100.00 · 下一步：出纳转款	purchases	2	\N	2026-09-14 09:16:00.05477+00
+45	11	30	purchase	采购第 1 笔付款已转款	发财树（测试） · 本笔 ¥100.00	purchases	2	\N	2026-09-14 09:16:12.428452+00
+46	30	11	purchase	李敏的采购第 2 笔付款等你审批	发财树（测试） · 本笔 ¥100.00	purchases	2	\N	2026-09-14 09:18:08.195907+00
+47	11	30	purchase	采购第 2 笔付款已通过财务审批	发财树（测试） · 本笔 ¥100.00 · 下一步：出纳转款	purchases	2	\N	2026-09-14 09:18:15.168745+00
+48	11	30	purchase	采购第 2 笔付款已转款	发财树（测试） · 本笔 ¥100.00	purchases	2	\N	2026-09-14 09:18:25.251849+00
+49	30	11	purchase	李敏的采购已交付完成	发财树（测试） · 交付清单已提交	purchases	2	\N	2026-09-14 09:19:29.536872+00
+50	28	11	purchase	李敏提交了采购申请，等你审批	一次性支付 · ¥249.00 · 绿萝100盆（测试）	purchases	3	\N	2026-09-14 09:20:28.597636+00
+51	30	28	purchase	李敏提交了采购申请，等你审批	一次性支付 · ¥249.00 · 绿萝100盆（测试）	purchases	3	\N	2026-09-14 09:20:58.209798+00
+52	11	28	purchase	你的采购申请已通过总经理审批	绿萝100盆（测试） · 下一步：财务审批（温欣颖）	purchases	3	\N	2026-09-14 09:20:58.215199+00
+53	11	30	purchase	采购立项已通过，请提交收款方账户	一次性支付 · ¥249.00 · 绿萝100盆（测试）	purchases	3	\N	2026-09-14 09:21:28.073646+00
+54	30	11	purchase	李敏的采购第 1 笔付款等你转款	绿萝100盆（测试） · 本笔 ¥249.00	purchases	3	\N	2026-09-14 09:22:12.155324+00
+55	11	30	purchase	采购款已支付完成，交付完成后请提交交付清单	绿萝100盆（测试） · 本笔 ¥249.00	purchases	3	\N	2026-09-14 09:22:21.897599+00
+56	30	11	purchase	李敏的采购已交付完成	绿萝100盆（测试） · 交付清单已提交	purchases	3	\N	2026-09-14 09:22:50.150605+00
+57	28	11	expense	李敏提交了报销单，等你审批	日用费 · ¥150.00 · 采购了清洁用品	expenses	5	\N	2026-09-14 09:23:40.337367+00
+58	30	28	expense	李敏提交了报销单，等你审批	日用费 · ¥150.00 · 采购了清洁用品	expenses	5	\N	2026-09-14 09:24:09.947902+00
+59	11	28	expense	你的报销单已通过总经理审批	采购了清洁用品 · 下一步：财务审批（温欣颖）	expenses	5	\N	2026-09-14 09:24:09.951377+00
+60	11	30	expense	你的报销单已通过财务审批	采购了清洁用品 · 下一步：出纳打款（温欣颖）	expenses	5	\N	2026-09-14 09:24:33.141428+00
+61	11	30	expense	你的报销单已打款	日用费 · ¥150.00 · 采购了清洁用品	expenses	5	\N	2026-09-14 09:25:13.201588+00
 \.
 
 
@@ -6879,6 +7104,66 @@ COPY public.playbook_items (id, board, section, label, title, body, meta, sort, 
 35	delivery	flow	节点 7	进入下一节点	闭环，回到阶段判断。	{"负责人": "后端咨询师"}	70	\N	2026-08-21 04:19:32.32856+00	2026-08-21 04:19:32.32856+00	\N
 36	delivery	flow	交付原则	陪跑的价值必须从「代聊」中脱离	低价值形态：客户问一句咨询师回一句、高度依赖即时在线、可复制性差、容易陷入情绪劳动。\n高价值形态：先判断关系再决定动作、每个关键节点有目标与验证标准、根据反馈动态调整、客户逐渐获得自己的判断能力。	{"负责人": "—"}	80	\N	2026-08-21 04:19:32.330052+00	2026-08-21 04:19:32.330052+00	\N
 140	sales	rule	测试	智能导入全路径自测-1787555517124-规则	测试	{"sourceUrl": "", "importedBy": "smart-import"}	0	1	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.272671+00
+\.
+
+
+--
+-- Data for Name: purchase_actions; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.purchase_actions (id, request_id, payment_id, round, stage, action, actor_id, comment, created_at) FROM stdin;
+1	1	\N	1	\N	submit	30	\N	2026-09-14 08:03:42.028983+00
+2	1	\N	1	leader	skip	30	申请人本人，自动跳过	2026-09-14 08:03:42.028983+00
+3	1	\N	1	gm	withdraw	30	\N	2026-09-14 08:11:42.726122+00
+4	1	\N	2	\N	submit	30	\N	2026-09-14 08:12:18.094267+00
+5	1	\N	2	leader	skip	30	申请人本人，自动跳过	2026-09-14 08:12:18.094267+00
+6	1	\N	2	gm	approve	28	\N	2026-09-14 08:26:03.909775+00
+7	1	\N	2	finance	skip	30	申请人本人，自动跳过	2026-09-14 08:26:03.909775+00
+8	1	1	2	account	account	30	\N	2026-09-14 08:29:13.843207+00
+9	1	1	2	finance	skip	30	申请人本人，自动跳过	2026-09-14 08:29:13.843207+00
+10	1	1	2	cashier	pay	30	\N	2026-09-14 08:30:26.901627+00
+11	1	\N	2	\N	deliver	30	广告牌已到公司，验收完毕，现正安装	2026-09-14 08:31:19.786364+00
+12	2	\N	1	\N	submit	11	\N	2026-09-14 08:51:22.561732+00
+13	2	\N	1	leader	skip	11	申请人本人，自动跳过	2026-09-14 08:51:22.561732+00
+14	2	\N	1	gm	approve	28	\N	2026-09-14 09:00:57.670625+00
+15	2	\N	1	finance	approve	30	出纳核对收款信息并备注	2026-09-14 09:03:53.139567+00
+16	2	2	1	account	account	11	\N	2026-09-14 09:15:13.770148+00
+17	2	2	1	finance	approve	30	付款备注定金	2026-09-14 09:16:00.03987+00
+18	2	2	1	cashier	pay	30	\N	2026-09-14 09:16:12.414049+00
+19	2	3	1	account	account	11	\N	2026-09-14 09:18:08.150175+00
+20	2	3	1	finance	approve	30	\N	2026-09-14 09:18:15.145718+00
+21	2	3	1	cashier	pay	30	\N	2026-09-14 09:18:25.2322+00
+22	2	\N	1	\N	deliver	11	树已投入使用	2026-09-14 09:19:29.52284+00
+23	3	\N	1	\N	submit	11	\N	2026-09-14 09:20:28.575113+00
+24	3	\N	1	leader	skip	11	申请人本人，自动跳过	2026-09-14 09:20:28.575113+00
+25	3	\N	1	gm	approve	28	\N	2026-09-14 09:20:58.196534+00
+26	3	\N	1	finance	approve	30	\N	2026-09-14 09:21:27.996039+00
+27	3	4	1	account	account	11	\N	2026-09-14 09:22:12.111553+00
+28	3	4	1	cashier	pay	30	\N	2026-09-14 09:22:21.878807+00
+29	3	\N	1	\N	deliver	11	一到公司，已签收	2026-09-14 09:22:50.138248+00
+\.
+
+
+--
+-- Data for Name: purchase_payments; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.purchase_payments (id, request_id, seq, amount_cents, status, stage, payee_name, payee_account, payee_bank, note, paid_at, created_at, updated_at) FROM stdin;
+1	1	1	130000	paid	\N	重庆噱简广告有限公司	0121014210001769	重庆三峡银行股份有限公司李家沱支行	定金1300，尾款1200	2026-09-14 08:30:26.901627+00	2026-09-14 08:29:13.843207+00	2026-09-14 08:30:26.901627+00
+2	2	1	10000	paid	\N	886	789456123078954	农业银行	定金	2026-09-14 09:16:12.414049+00	2026-09-14 09:15:13.770148+00	2026-09-14 09:16:12.414049+00
+3	2	2	10000	paid	\N	886	789456123078954	农业银行	尾款结清	2026-09-14 09:18:25.2322+00	2026-09-14 09:18:08.150175+00	2026-09-14 09:18:25.2322+00
+4	3	1	24900	paid	\N	888	7896541230256887	建设银行	全额	2026-09-14 09:22:21.878807+00	2026-09-14 09:21:27.996039+00	2026-09-14 09:22:21.878807+00
+\.
+
+
+--
+-- Data for Name: purchase_requests; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.purchase_requests (id, applicant_id, dept, pay_type, title, apply_date, amount_cents, note, status, stage, round, submitted_at, approved_at, delivery_note, completed_at, reminded_at, created_at, updated_at) FROM stdin;
+1	30	财务部	installment	广告牌制作	2026-09-14	130000	（测试用）	completed	\N	2	2026-09-14 08:12:18.094267+00	2026-09-14 08:26:03.909775+00	广告牌已到公司，验收完毕，现正安装	2026-09-14 08:31:19.786364+00	2026-09-14 08:30:26.901627+00	2026-09-14 08:03:21.510284+00	2026-09-14 08:31:19.786364+00
+2	11	行政部	installment	发财树（测试）	2026-09-14	20000	00	completed	\N	1	2026-09-14 08:51:22.561732+00	2026-09-14 09:03:53.139567+00	树已投入使用	2026-09-14 09:19:29.52284+00	2026-09-14 09:18:25.2322+00	2026-09-14 08:49:13.126347+00	2026-09-14 09:19:29.52284+00
+3	11	行政部	one_time	绿萝100盆（测试）	2026-09-14	24900	公司绿化用	completed	\N	1	2026-09-14 09:20:28.575113+00	2026-09-14 09:21:27.996039+00	一到公司，已签收	2026-09-14 09:22:50.138248+00	2026-09-14 09:22:21.878807+00	2026-09-14 09:20:27.804434+00	2026-09-14 09:22:50.138248+00
 \.
 
 
@@ -8769,11 +9054,11 @@ COPY public.samples (id, canonical_key, platform, platform_content_id, source_ur
 --
 
 COPY public.sessions (id, user_id, created_at, expires_at, user_agent) FROM stdin;
+f94df4246b55053fd5fffc02623f95400a63a41a708dc8052e6721e57c3779a3	30	2026-09-14 09:24:21.431077+00	2026-10-14 09:24:21.431077+00	Mozilla/5.0 (Linux; Android 16; 24115RA8EC Build/BP2A.250605.031.A3; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.7871.189 Mobile Safari/537.36 XWEB/1500117 MMWEBSDK/20260604 MMWEBID/1466 REV/21bd8b32bf605ffbf0e340d26d4b8c156584802a MicroMessenger/8.0.77.3160(0x28004D38) WeCha
 25f58c9e91760056fbe7b119edcbd6784ccf62a0b928c091613265cc7cc28fda	3	2026-08-21 01:09:55.492798+00	2026-09-20 01:09:55.492798+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 5817952f843fe7a151a837e1f93ff8d86b7773034a3bc2ba16d1ed5b1ea64908	1	2026-08-22 01:57:29.848889+00	2026-09-21 01:57:29.848889+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 7657f87b6ab7c6c8e0af982b6bab2029df951ec3feec42cce6e3a2331030c44c	3	2026-08-24 02:17:02.741483+00	2026-09-23 02:17:02.741483+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 89a169ddcd5753978e52cfa92cdc74d255f9c3729fe443c42c66338c48bfa4d1	8	2026-08-24 02:19:59.365008+00	2026-09-23 02:19:59.365008+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36
-d7722dcd9b0f6ea1af42dc2cdfb7cd9322aaf6334cb80479e9df7c30fc283939	11	2026-08-24 02:21:10.670578+00	2026-09-23 02:21:10.670578+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 f7fc32f152d018eae3ebb873700b3dbe3f555a6fe1c8a1cacbfa990fee560e9b	10	2026-08-24 02:28:03.97465+00	2026-09-23 02:28:03.97465+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 f5c117d585f0f2c2ee1a34db6710aebfc75aa87b896ae81774c4c808bd447654	9	2026-08-24 02:30:51.149598+00	2026-09-23 02:30:51.149598+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
 7b02d6f9c5ebab849f88a73078e79094dd83b8e40f5ae4597dd600c59fad12eb	7	2026-08-24 02:32:27.33623+00	2026-09-23 02:32:27.33623+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
@@ -8785,7 +9070,6 @@ b2f37573ea229a209cf53592a3a442c08205ad3e73579adfeb90055c48ff2d9a	7	2026-08-24 07
 5f4483541ba868e9622805d3bdbc0e4dcd9da4ff07c63767aea52cb8739322fc	9	2026-08-21 07:21:38.180986+00	2026-09-20 07:21:38.180986+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
 c3bc58fef5f019556b7dcb17d3c2dde7668f15b0865e6e700597581827fc8499	10	2026-08-21 07:22:16.066883+00	2026-09-20 07:22:16.066883+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 173f054fb41b12a64797685afac485b5e7412a9306de7ca0d05cea37571e7c68	10	2026-08-21 07:48:35.968229+00	2026-09-20 07:48:35.968229+00	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.69(0x18004539) NetType/WIFI Language/zh_CN
-cd9fddfdc000407d655cccc505aac2821cc1d332c8b2b63123ff30ee14273fbf	11	2026-08-21 07:50:55.69515+00	2026-09-20 07:50:55.69515+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 d634e5de751a0724fc96eb23b3bfa3c7f696ae6069df854be9ba62c30b093b12	4	2026-08-25 07:24:42.142342+00	2026-09-24 07:24:42.142342+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36
 2f76581ed0b3a64361027d8500b4c7899fc68d1831f59afe04be72b741942a8e	3	2026-08-25 07:48:43.749617+00	2026-09-24 07:48:43.749617+00	Mozilla/5.0 (iPhone; CPU iPhone OS 18_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1
 e1692cf1a064282b0a96422d7dc47958817858e0edafd639afbd7b59a5ef6429	3	2026-08-25 08:05:07.157223+00	2026-09-24 08:05:07.157223+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36
@@ -8793,12 +9077,13 @@ e1692cf1a064282b0a96422d7dc47958817858e0edafd639afbd7b59a5ef6429	3	2026-08-25 08
 096cbdb57940320b506c98a0ac6de18703d7450b3fe25637e10e55076ecccd86	10	2026-08-26 03:26:51.207066+00	2026-09-25 03:26:51.207066+00	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.69(0x18004539) NetType/WIFI Language/zh_CN
 0aa74116bc33e74098a7efd77fd2a2de70a1df917feeefa974271c999668b5f7	1	2026-08-26 03:39:29.196865+00	2026-09-25 03:39:29.196865+00	Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.75(0x18004b62) NetType/WIFI Language/zh_CN
 a56a0ffe9a859925df9a342d97a1bc11e225a40121d0ae8b98f20916755e1535	1	2026-08-26 04:59:55.257048+00	2026-09-25 04:59:55.257048+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
-3ee879534f63e78fe630d5f1ff8b3f82e002df69f33569fe52fbf1edbd8cf28d	28	2026-09-01 07:55:22.859947+00	2026-10-01 07:55:22.859947+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36
 135b5f4f6b8644865efe2aac7f9f6304149f44d2274075f1c75bc9bffaefacfb	28	2026-09-01 08:51:14.06036+00	2026-10-01 08:51:14.06036+00	Mozilla/5.0 (Phone; OpenHarmony 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 ArkWeb/6.0.0.46SP3 Mobile MicroMessenger/8.0.19.35(0xf3801323) Weixin NetType/4G Language/zh_CN MMWEBID/1327 MMWEBSDK/202606050006 XWEB/1320225
 eb99728b19ee1cf1693b176bec24135c292a238966abeea076fbbf6d30ff8ec1	1	2026-09-01 09:46:10.484263+00	2026-10-01 09:46:10.484263+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 60a60b9a4ca29a7bc378a4c158c30aa1e5ba5e1e8070620a7544d43dba3c88c1	29	2026-09-03 08:35:49.22924+00	2026-10-03 08:35:49.22924+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 63fd73a5057ce4560182f2e5fb46a9a241b8623c907b83692392a8faef61161b	30	2026-09-11 03:48:25.52883+00	2026-10-11 03:48:25.52883+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
-4bff36d67488f1d5de1d8da2d343f083e8754c7a9f4068fcb3a1a683e6f25cfd	30	2026-09-11 06:35:09.94772+00	2026-10-11 06:35:09.94772+00	Mozilla/5.0 (Linux; Android 16; 24115RA8EC Build/BP2A.250605.031.A3; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.7871.189 Mobile Safari/537.36 XWEB/1500117 MMWEBSDK/20260604 MMWEBID/1466 REV/21bd8b32bf605ffbf0e340d26d4b8c156584802a MicroMessenger/8.0.77.3160(0x28004D38) WeCha
+79ec185bc2b7f7dbfdff16d202f0a03b5740982dbbaf38eb8b2a3710b7b2d7d1	28	2026-09-14 08:14:40.180597+00	2026-10-14 08:14:40.180597+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
+b84618db1db376272c8335e17d7eb744f83de038447060d21de0970d8aad6570	31	2026-09-14 08:45:31.629865+00	2026-10-14 08:45:31.629865+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
+e1e54f1f2342391c7f079bfbfeb85d2d69431e3a2a8d134b6b4f02ae1dff1f5b	11	2026-09-14 08:48:25.35803+00	2026-10-14 08:48:25.35803+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
 \.
 
 
@@ -8892,14 +9177,15 @@ COPY public.users (id, name, dept, role, avatar_hue, created_at, username, passw
 8	刘大增	运营部	reviewer	\N	2026-08-21 06:02:11.821697+00	刘大增	scrypt$16384$8$1$cd958f1c038dbd9a1297e9cf97e107a5$4a13803a1a1827108e2995d4651dc77be5f18e8410a14dcf1ce736f682d1ae55	2026-08-25 08:42:01.629454+00	private
 9	杨俊杰	运营部	reviewer	\N	2026-08-21 07:21:38.171351+00	杨俊杰	scrypt$16384$8$1$742d62188e40a936f6cda838ef4d31c6$ef71a9d1f96f8b5e688fbcabc839b417c57683d9f5e7ef7348d79db52297cef7	2026-08-24 02:30:51.146294+00	private
 10	杨池	运营部	admin	\N	2026-08-21 07:22:15.994905+00	杨池	scrypt$16384$8$1$ac914aad522fa20dc071cdc501f90146$7e9a997c2b2daf056de0775af3fde591d18027379dd05ed72bb1d9b807acc7aa	2026-08-26 03:26:51.201646+00	private
-11	李敏	行政部	reviewer	\N	2026-08-21 07:50:55.686453+00	李敏	scrypt$16384$8$1$1a350d58d171ea3d76993b4d1e275955$3de4db9da0985e94c5e85970f5c036b5810d819e8b73c7d5a9723225d8905cce	2026-08-24 02:21:10.667228+00	private
-30	温欣颖	财务部	member	\N	2026-09-11 03:48:25.517755+00	温欣颖	scrypt$16384$8$1$02eb5ec63fff3f206b1fff373a2b77fd$60a2201d145d0fea2f15e953c968c9f9837df69c9159c215f6774df039335c9b	2026-09-11 06:35:09.940457+00	private
 1	华俊杰	运营部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-09-03 08:35:17.376568+00	private
 13	技术1-测试（系统）	外部系统	member	\N	2026-08-24 02:46:14.568649+00	\N	\N	\N	private
 12	测试	\N	reviewer	\N	2026-08-22 01:58:20.620055+00	测试	scrypt$16384$8$1$cd9981c8fb86140dd475fced8b2f2e6f$591db77d097dd0da6a0adf03f20667649294527b3ecd844314d1ae57e9e4e789	\N	private
 4	朱涛	运营部	reviewer	\N	2026-08-21 02:53:08.628673+00	ZT123	scrypt$16384$8$1$729731c5d25da09a91af09928a28247e$490d0f6c15ada13e58714dd30bd6ba412ac6c224669c33ae80f72f7e1f1b558e	2026-08-25 07:24:42.140389+00	private
-28	李总	\N	member	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-01 08:51:13.977175+00	private
+31	3321489624li@gmail.com	\N	member	\N	2026-09-14 08:45:31.620964+00	3321489624li@gmail.com	scrypt$16384$8$1$ee198851f4506c14e5f5737e4196e723$cd8693bd3ba870f558eed348cbfc5c6168f8298cce3bc3c11c5982eacfda236e	\N	private
+11	李敏	行政部	reviewer	\N	2026-08-21 07:50:55.686453+00	李敏	scrypt$16384$8$1$678111ce19f4286c69d1b9254270cc7a$2453a4183542519defe51453661bbc2f0f3804ef3191423830342efcccda0f28	2026-09-14 08:48:25.333115+00	private
 29	花花	\N	member	\N	2026-09-03 08:35:49.21917+00	花花	scrypt$16384$8$1$87721f59891bd9d9f584a1e1aa1b93bb$7393411cd5550787bf4d0c852eedacc76ce83cb5b33dabd4ae150bf63f767a66	\N	private
+28	李总	\N	member	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-14 09:24:00.636275+00	private
+30	温欣颖	财务部	member	\N	2026-09-11 03:48:25.517755+00	温欣颖	scrypt$16384$8$1$02eb5ec63fff3f206b1fff373a2b77fd$60a2201d145d0fea2f15e953c968c9f9837df69c9159c215f6774df039335c9b	2026-09-14 09:24:21.424828+00	private
 \.
 
 
@@ -8943,6 +9229,7 @@ COPY public.work_reports (id, author_id, reviewer_id, report_date, title, summar
 22	10	4	2026-08-25	作品	标题：0-3岁没有被满足的安全感，会影响90%的亲密关系\n文案：有些女性并不是没有感情，而是不习惯面对和表达自己的恐惧、委屈、孤独、羞耻与愤怒。\n她可能关心伴侣的工作、生活和安排，却很少主动谈论彼此的感受。面对情绪时，她常说：\n“没事。”\n“别想太多。”\n“我自己消化一下就好。”\n“我也不知道自己怎么了。”\n这不一定代表冷漠，更可能是她长期习惯了压低、切断或隐藏情绪。\n常见表现\n- 很难说清自己真实的感受\n- 难过时习惯独自消化，不愿求助\n- 表达需求时感到羞耻，担心给别人添麻烦\n- 能处理现实问题，却不知道如何面对情绪\n- 被关心、安慰或拥抱时，反而僵硬、尴尬或想逃\n- 讲事情很清楚，却很少谈自己的感受\n- 发生冲突后沉默、转移话题或暂时退出关系\n在亲密关系中的复现\n她可能渴望被理解，却不知道怎样直接表达需要；期待伴侣主动看懂自己，但当对方真正靠近时，又会感到不自在。\n她也可能更容易被情绪不可得的人吸引，因为冷淡是熟悉的，而持续、稳定的温柔反而让她无所适从。\n关系中的核心矛盾是：\n渴望被看见，却不知道如何让别人看见；渴望靠近，又害怕靠近后的脆弱。\n如何判断是不是情感回避？\n不要因为一次沉默、冷淡或争吵就下结论，而要观察这种模式是否：\n- 在亲密关系中长期存在\n- 面对情绪和冲突时反复出现\n- 伴随僵硬、逃避、麻木或强颜欢笑等反应\n- 已经影响需求表达、接受安慰和建立亲密连接的能力\n可以试着观察：\n- 她难过时，会不会允许伴侣听她说完？\n- 发生冲突后，她是表达感受，还是立刻关闭自己？\n- 被关心时，她感到安心，还是尴尬、警惕甚至想逃？\n- 她能否直接说出“我需要你陪我”或“这件事让我受伤”？\n情感回避不等于她不爱，也不能仅凭几个表现给一个人贴标签。\n它更可能意味着：她有感受，也渴望连接，只是还没有学会识别、表达和接住自己的情绪。\n看见这种模式，不是为了责怪谁，而是为了让关系有机会从回避走向理解。	1	2026-08-28 06:39:22.497575+00	4	2026-08-25 09:27:41.47813+00	2026-08-28 06:39:22.497575+00	\N	\N	\N	private
 27	1	\N	2026-09-10	今天主要是针对ai生成视频的进行了调整，现在至少在画面上有了很大的提升，视频有吸睛的看点，明天继续要完善	\N	\N	\N	\N	2026-09-10 14:11:39.50483+00	2026-09-10 14:11:39.50483+00	\N	\N	\N	private
 28	1	\N	2026-09-11	9.11	今日主要做的就是内部的工作平台的财务报销流程的完善，以及视频生成的相关的学习，一条完整的视频需要找到  素材库  音效库  字体库  MG动画库以及后续需要完善的素材准备	\N	\N	\N	2026-09-11 02:10:47.871555+00	2026-09-11 07:51:32.490635+00	\N	\N	\N	private
+29	1	\N	2026-09-14	9.14	今日主要是针对，音频的处理合成要相识人声的相关处理	\N	\N	\N	2026-09-14 06:08:11.252464+00	2026-09-14 06:08:11.252464+00	\N	\N	\N	private
 \.
 
 
@@ -9075,7 +9362,7 @@ SELECT pg_catalog.setval('public.api_keys_id_seq', 23, true);
 -- Name: attachments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.attachments_id_seq', 82, true);
+SELECT pg_catalog.setval('public.attachments_id_seq', 92, true);
 
 
 --
@@ -9201,14 +9488,14 @@ SELECT pg_catalog.setval('public.demands_id_seq', 30, true);
 -- Name: expense_claim_actions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.expense_claim_actions_id_seq', 3, true);
+SELECT pg_catalog.setval('public.expense_claim_actions_id_seq', 16, true);
 
 
 --
 -- Name: expense_claims_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.expense_claims_id_seq', 3, true);
+SELECT pg_catalog.setval('public.expense_claims_id_seq', 5, true);
 
 
 --
@@ -9250,7 +9537,7 @@ SELECT pg_catalog.setval('public.links_id_seq', 24, true);
 -- Name: notifications_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.notifications_id_seq', 28, true);
+SELECT pg_catalog.setval('public.notifications_id_seq', 61, true);
 
 
 --
@@ -9258,6 +9545,27 @@ SELECT pg_catalog.setval('public.notifications_id_seq', 28, true);
 --
 
 SELECT pg_catalog.setval('public.playbook_items_id_seq', 140, true);
+
+
+--
+-- Name: purchase_actions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.purchase_actions_id_seq', 29, true);
+
+
+--
+-- Name: purchase_payments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.purchase_payments_id_seq', 4, true);
+
+
+--
+-- Name: purchase_requests_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.purchase_requests_id_seq', 3, true);
 
 
 --
@@ -9600,14 +9908,14 @@ SELECT pg_catalog.setval('public.tags_id_seq', 172, true);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 30, true);
+SELECT pg_catalog.setval('public.users_id_seq', 31, true);
 
 
 --
 -- Name: work_reports_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.work_reports_id_seq', 28, true);
+SELECT pg_catalog.setval('public.work_reports_id_seq', 29, true);
 
 
 --
@@ -10247,6 +10555,38 @@ ALTER TABLE ONLY public.notifications
 
 ALTER TABLE ONLY public.playbook_items
     ADD CONSTRAINT playbook_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: purchase_actions purchase_actions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_actions
+    ADD CONSTRAINT purchase_actions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: purchase_payments purchase_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_payments
+    ADD CONSTRAINT purchase_payments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: purchase_payments purchase_payments_seq_uq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_payments
+    ADD CONSTRAINT purchase_payments_seq_uq UNIQUE (request_id, seq);
+
+
+--
+-- Name: purchase_requests purchase_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_requests
+    ADD CONSTRAINT purchase_requests_pkey PRIMARY KEY (id);
 
 
 --
@@ -11610,6 +11950,48 @@ CREATE INDEX idx_playbook ON public.playbook_items USING btree (board, section, 
 --
 
 CREATE INDEX idx_playbook_items_alive ON public.playbook_items USING btree (id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: idx_purchase_actions; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_purchase_actions ON public.purchase_actions USING btree (request_id, id);
+
+
+--
+-- Name: idx_purchase_actions_actor; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_purchase_actions_actor ON public.purchase_actions USING btree (actor_id, request_id);
+
+
+--
+-- Name: idx_purchase_payments_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_purchase_payments_pending ON public.purchase_payments USING btree (stage, request_id) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: idx_purchase_requests_applicant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_purchase_requests_applicant ON public.purchase_requests USING btree (applicant_id, id DESC);
+
+
+--
+-- Name: idx_purchase_requests_executing; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_purchase_requests_executing ON public.purchase_requests USING btree (id) WHERE (status = 'executing'::text);
+
+
+--
+-- Name: idx_purchase_requests_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_purchase_requests_pending ON public.purchase_requests USING btree (stage, dept) WHERE (status = 'pending'::text);
 
 
 --
@@ -13635,6 +14017,46 @@ ALTER TABLE ONLY public.playbook_items
 
 
 --
+-- Name: purchase_actions purchase_actions_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_actions
+    ADD CONSTRAINT purchase_actions_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: purchase_actions purchase_actions_payment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_actions
+    ADD CONSTRAINT purchase_actions_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.purchase_payments(id) ON DELETE SET NULL;
+
+
+--
+-- Name: purchase_actions purchase_actions_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_actions
+    ADD CONSTRAINT purchase_actions_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.purchase_requests(id) ON DELETE CASCADE;
+
+
+--
+-- Name: purchase_payments purchase_payments_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_payments
+    ADD CONSTRAINT purchase_payments_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.purchase_requests(id) ON DELETE CASCADE;
+
+
+--
+-- Name: purchase_requests purchase_requests_applicant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.purchase_requests
+    ADD CONSTRAINT purchase_requests_applicant_id_fkey FOREIGN KEY (applicant_id) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: research_account_aliases research_account_aliases_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -14814,5 +15236,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dXKI73ELig7sp8zInrFAT7nOR45hEc1srmNqIvB5ashIhxHAtflkpktKjnR7VFq
+\unrestrict atfO4ryoFBXz06S9d3Ynt4DVkyohb9ir36rUNsnVtTU56FRMi976gg9EeER1Nw9
 
