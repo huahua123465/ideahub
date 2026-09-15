@@ -367,6 +367,14 @@ try {
     // 部门负责人开关：设为负责人 → 按下并出现标签；再点一次确认取消
     const leadSel = '#usersModal [data-lead-user]';
     assert.equal(await page.$eval(leadSel, b => b.disabled), false);
+    // 职能下拉：演示身份陈屿是总经理；普通成员 + 三个职能，别人担任的带上现任名字
+    const dutySel = '#usersModal [data-duty-user]';
+    const dutyView = await page.$eval(dutySel, s => ({
+      value: s.value, label: s.getAttribute('aria-label'), options: [...s.options].map(o => o.textContent),
+    }));
+    assert.equal(dutyView.value, 'gm');
+    assert.match(dutyView.label, /的职能$/);
+    assert.deepEqual(dutyView.options, ['普通成员', '总经理', '财务（叶昭）', '出纳（林知远）']);
     if (!mobile) {
       const pressed = () => page.$eval(leadSel, b => b.getAttribute('aria-pressed'));
       if (await pressed() === 'true') {
@@ -393,9 +401,19 @@ try {
       await waitToast(page, /先指定新的负责人/);
       await page.waitForFunction(s => document.querySelector(s)?.getAttribute('aria-pressed') === 'true'
         && !document.querySelector(s).disabled, { timeout: 5_000 }, leadSel);
+      // 改职能：总经理这一步还有单子在等，改成财务会让总经理空着 → 先确认（会写清换掉谁），提交后被拦下，下拉回到总经理
+      await page.select(dutySel, 'finance');
+      await page.waitForSelector('#confirmLayer.on #confirmSubmit', { visible: true });
+      assert.match(await page.$eval('#confirmLayer', n => n.textContent), /从叶昭换成陈屿.*不再担任总经理/);
+      await page.click('#confirmSubmit');
+      await waitToast(page, /等总经理处理/);
+      await page.waitForFunction(s => document.querySelector(s)?.value === 'gm' && !document.querySelector(s).disabled,
+        { timeout: 5_000 }, dutySel);
     } else {
       const h = await page.$eval(leadSel, n => n.getBoundingClientRect().height);
       assert.ok(h >= 44, `手机上负责人开关高度 ${h}`);
+      const dh = await page.$eval(dutySel, n => n.getBoundingClientRect().height);
+      assert.ok(dh >= 44, `手机上职能下拉高度 ${dh}`);
     }
     await modalInViewport(page, 'usersModal');
     st = await pageState(page);

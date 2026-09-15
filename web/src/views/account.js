@@ -208,6 +208,8 @@ async function renderUsers() {
       <button type="button" class="ulead${isLeader ? ' on' : ''}" data-lead-user="${u.id}" aria-pressed="${isLeader}"${
         u.dept ? ` title="${isLeader ? `点击取消${esc(u.name)}的${esc(u.dept)}负责人` : `设为${esc(u.dept)}的负责人`}"`
           : ' disabled title="先给这个人选部门"'}>部门负责人</button>
+      <select class="inp uduty" data-duty-user="${u.id}" aria-label="${esc(u.name)}的职能"
+        title="报销和采购审批里担任的职能，每个职能只有一个人">${dutyOptions(u, cfg)}</select>
       <div class="roles">
         ${['member', 'reviewer', 'admin'].map(r => `
           <button data-role="${r}" class="${u.role === r ? 'on' : ''}"${
@@ -220,7 +222,9 @@ async function renderUsers() {
 
   $('#userList').onchange = e => {
     const sel = e.target.closest('[data-dept-user]');
-    if (sel) changeDept(sel);
+    if (sel) return changeDept(sel);
+    const duty = e.target.closest('[data-duty-user]');
+    if (duty) return changeDuty(duty, items, cfg);
   };
   $('#userList').onclick = async e => {
     const leadBtn = e.target.closest('[data-lead-user]');
@@ -230,6 +234,54 @@ async function renderUsers() {
     const resetBtn = e.target.closest('[data-reset]');
     if (resetBtn) return resetPassword(Number(resetBtn.dataset.reset), items);
   };
+}
+
+/** 职能下拉：普通成员 + 总经理 / 财务 / 出纳，别人担任着的在括号里写上现任，换人前心里有数 */
+function dutyOptions(u, cfg) {
+  const held = Object.keys(EXPENSE_ROLE_CN).find(k => cfg?.roles?.[k]?.id === u.id) || '';
+  return `<option value=""${held ? '' : ' selected'}>普通成员</option>${Object.entries(EXPENSE_ROLE_CN).map(([k, label]) => {
+    const holder = cfg?.roles?.[k];
+    const note = holder && holder.id !== u.id ? `（${holder.name}）` : '';
+    return `<option value="${k}"${k === held ? ' selected' : ''}>${esc(label)}${esc(note)}</option>`;
+  }).join('')}`;
+}
+
+/** 用户管理里的「职能」下拉：会换掉别人或让某个职能空出来时先确认，规则见 routes/expenses.mjs */
+async function changeDuty(sel, items, cfg) {
+  const id = Number(sel.dataset.dutyUser);
+  const u = items.find(x => x.id === id);
+  if (!u) return;
+  const role = sel.value || null;
+  const current = role ? cfg?.roles?.[role] : null;
+  const lose = Object.keys(EXPENSE_ROLE_CN).filter(k => k !== role && cfg?.roles?.[k]?.id === id).map(k => EXPENSE_ROLE_CN[k]);
+  const notes = [];
+  if (current && current.id !== id) {
+    notes.push(`${EXPENSE_ROLE_CN[role]}会从${current.name}换成${u.name}，正在等${EXPENSE_ROLE_CN[role]}处理的单子会转给${u.name}。`);
+  }
+  if (lose.length) {
+    notes.push(`${u.name}不再担任${lose.join('、')}，${lose.join('、')}会空着；空着的时候大家提交不了报销，记得再指定一个人。`);
+  }
+  if (notes.length) {
+    const ok = await confirmAction({
+      eyebrow: '更改职能',
+      title: role ? `把${u.name}设为${EXPENSE_ROLE_CN[role]}？` : `把${u.name}改成普通成员？`,
+      message: notes.join(''), confirmLabel: '确认更改',
+    });
+    if (!ok) {
+      await renderUsers();
+      $(`#userList [data-duty-user="${id}"]`)?.focus();
+      return;
+    }
+  }
+  sel.disabled = true;
+  try {
+    await api.expenseRoleHolder(id, role);
+    toast('ok', role ? `${u.name} 现在是${EXPENSE_ROLE_CN[role]}` : `${u.name} 现在是普通成员`);
+  } catch (e) {
+    toast('info', e.message || '保存失败');
+  }
+  await renderUsers();
+  $(`#userList [data-duty-user="${id}"]`)?.focus();
 }
 
 /** 用户管理里的「部门负责人」开关：设为 / 取消这个人所在部门的负责人 */

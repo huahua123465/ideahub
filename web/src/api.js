@@ -246,6 +246,8 @@ export const api = {
   expenseConfigSave: (payload)     => call('PATCH',  '/api/expenses/config', payload),
   /** 指定某个部门的负责人；leaderId 传 null = 取消（部门暂不启用） */
   expenseDeptLeader: (dept, leaderId) => call('PATCH', '/api/expenses/dept-leaders', { dept, leaderId }),
+  /** 给某个人设职能：role = gm / finance / cashier，null = 普通成员 */
+  expenseRoleHolder: (userId, role) => call('PATCH', '/api/expenses/role-holders', { userId, role }),
   /** scope: mine 我发起的 | todo 待我处理 | all 我能看见的全部 */
   expenses:          (opts = {})   => call('GET',    '/api/expenses' + qs(opts)),
   expense:           (id)          => call('GET',    `/api/expenses/${id}`),

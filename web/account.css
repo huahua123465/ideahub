@@ -54,7 +54,9 @@
 .roles button[disabled]{cursor:not-allowed;opacity:.45}
 
 /* 部门：报销单按它找部门负责人审批。手机上挤不下就换到第二行 */
-.urow .udept{flex:none;width:176px;height:32px;padding:0 8px;font-size:12.5px}
+.urow .udept{flex:none;width:150px;height:32px;padding:0 8px;font-size:12.5px}
+/* 职能：总经理 / 财务 / 出纳 / 普通成员，报销和采购审批按它找人 */
+.urow .uduty{flex:none;width:112px;height:32px;padding:0 8px;font-size:12.5px}
 /* 部门负责人开关：按下 = 这个人是他所在部门的负责人 */
 .urow .ulead{flex:none;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);
   color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap;transition:.12s}
@@ -77,6 +79,8 @@
   /* 部门 + 负责人开关独占一行，角色和重置密码换到下一行，下拉框不会被挤没 */
   .urow .udept{order:3;flex:1 1 calc(100% - 132px);width:auto;min-width:0;height:44px}
   .urow .ulead{order:3;flex:0 0 120px;height:44px}
+  /* 职能下拉和站内角色同一行 */
+  .urow .uduty{order:4;flex:0 0 128px;width:auto;height:44px}
   .urow .roles{order:4}
   .urow .more{order:5;min-height:44px}
 }

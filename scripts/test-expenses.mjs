@@ -419,6 +419,44 @@ test('每天提醒申请人确认收款：打款一天后开始，每张单每�
   assert.equal(await reminders(), 1, '确认收到之后不再提醒');
 });
 
+test('用户管理里设职能：换人立刻生效；让职能空出来时有单子在等就拦下', async () => {
+  const duty = (userId, role, as = ADMIN) => call(as, 'PATCH', '/api/expenses/role-holders', { userId, role });
+  assert.equal((await setConfig()).status, 200);
+  assert.equal((await duty(OUT, 'cashier', GM)).status, 403, '非管理员不能设职能');
+  assert.equal((await duty(OUT, 'boss')).status, 400);
+  assert.equal((await duty(99999999, 'cashier')).status, 400);
+
+  // 换人：出纳从叶昭换成王明轩，叶昭自动卸任
+  const swap = await duty(OUT, 'cashier');
+  assert.equal(swap.status, 200, JSON.stringify(swap.data));
+  assert.equal(swap.data.roles.cashier.id, OUT);
+  // 一个人只担任一个职能：王明轩改成财务，出纳空出来（这时没有单子在等出纳）
+  const move = await duty(OUT, 'finance');
+  assert.equal(move.status, 200, JSON.stringify(move.data));
+  assert.equal(move.data.roles.finance.id, OUT);
+  assert.equal(move.data.roles.cashier, null);
+  assert.deepEqual(move.data.missing, ['出纳']);
+  // 改回普通成员：财务也空出来
+  const none = await duty(OUT, null);
+  assert.equal(none.status, 200);
+  assert.equal(none.data.roles.finance, null);
+
+  // 有单子在等出纳时，不能让出纳空着（改成普通成员、改成别的职能都算）；直接换给别人可以，在途单子立刻转过去
+  assert.equal((await setConfig()).status, 200);
+  const c = await submitted(APP);
+  await approvedToCashier(c);
+  const blocked = await duty(CASH, null);
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.data.error, /等出纳处理/);
+  assert.equal((await duty(CASH, 'finance')).status, 409);
+  assert.equal((await call(ADMIN, 'GET', '/api/expenses/config')).data.roles.finance.id, FIN, '被拦下时什么都没改');
+  assert.equal((await duty(OUT, 'cashier')).status, 200);
+  const moved = await call(OUT, 'GET', `/api/expenses/${c.id}`);
+  assert.equal(moved.data.handler.id, OUT);
+  assert.equal(moved.data.can.pay, true);
+  assert.equal((await setConfig()).status, 200);
+});
+
 test('自动跳过：申请人本人是负责人；同一人兼任连续两步', async () => {
   // 苏禾自己就是产品部负责人 → 直接到总经理
   const own = await submitted(LEAD_P);

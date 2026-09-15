@@ -227,6 +227,20 @@ export function handleExpenses(method, p, q, body, me) {
     else CFG.depts.push([dept, Number(body.leaderId)]);
     return configDto(me);
   }
+  if (p === '/api/expenses/role-holders' && method === 'PATCH') {
+    if (me.role !== 'admin') throw fail('只有管理员可以做这个操作', 403);
+    const userId = Number(body?.userId);
+    const role = body?.role || null;
+    if (role && !STAGES.slice(1).includes(role)) throw fail('职能只能是总经理、财务、出纳或普通成员');
+    const vacated = STAGES.slice(1).filter(s => s !== role && CFG.roles[s] === userId);
+    for (const s of vacated) {
+      const n = CLAIMS.filter(c => c.status === 'pending' && c.stage === s).length;
+      if (n) throw fail(`还有 ${n} 张单子在等${STAGE_LABEL[s]}处理，先把${STAGE_LABEL[s]}指定给别人，再改这个人的职能`, 409);
+    }
+    for (const s of vacated) CFG.roles[s] = null;
+    if (role) CFG.roles[role] = userId;
+    return configDto(me);
+  }
   if (p === '/api/expenses' && method === 'GET') {
     const scope = q.get('scope') || 'mine';
     const todo = c => (c.status === 'pending' && handlerId(c, c.stage) === me.id)

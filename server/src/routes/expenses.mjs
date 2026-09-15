@@ -454,6 +454,15 @@ async function notifyDropped(handler, c, actorId, verb) {
   });
 }
 
+/** 某个职能（gm / finance / cashier）这一步正在等着处理的报销单、采购立项和采购付款一共几张 */
+async function waitingAt(db, role) {
+  const { rows } = await db.query(`
+    SELECT (SELECT count(*) FROM expense_claims WHERE status = 'pending' AND stage = $1)
+         + (SELECT count(*) FROM purchase_requests WHERE status = 'pending' AND stage = $1)
+         + (SELECT count(*) FROM purchase_payments WHERE status = 'pending' AND stage = $1) AS n`, [role]);
+  return Number(rows[0].n);
+}
+
 /**
  * 每日提醒：出纳已打款、申请人还没确认收到的报销单，每天给申请人发一条站内消息。
  * reminded_at 在打款那一刻写入，所以第一条提醒在打款一天后；多进程同时跑也只会有一个抢到更新。
@@ -583,6 +592,45 @@ export function mount(router) {
     });
     sendJson(res, 200, await configResponse(me));
     publish('expense:updated', {});
+  });
+
+  /* ---------- 单独给某个人设职能（用户管理里每个人的「职能」下拉） ----------
+     一个人在这里只担任一个职能：总经理 / 财务 / 出纳，或者 null = 普通成员。
+     选了某个职能，原来担任它的人自动卸任，在途的单子立刻转给这个人；这个人原来担任的其他职能会空出来。
+     空出来的职能如果还有报销单 / 采购在那一步等着，整次操作拦下，免得单子没人处理。
+     和「审批设置」改的是同一份配置，同样要注册在 PATCH /api/expenses/:id 之前。 */
+  router.patch('/api/expenses/role-holders', async (req, res) => {
+    const me = await currentUser(req);
+    assertAdmin(me);
+    const b = await readJson(req);
+    const userId = Number(b.userId);
+    if (!Number.isInteger(userId) || userId <= 0) throw badRequest('人选得不对');
+    const role = b.role === null || b.role === undefined || b.role === '' ? null : String(b.role);
+    if (role !== null && !STAGES.slice(1).includes(role)) throw badRequest('职能只能是总经理、财务、出纳或普通成员');
+
+    await tx(async db => {
+      await db.query(`SELECT pg_advisory_xact_lock(hashtextextended('expense-config', 0))`);
+      const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
+      if (!rows[0]) throw badRequest('这个账号已经不存在了，刷新后重试');
+      const { rows: held } = await db.query('SELECT role FROM expense_role_holders WHERE user_id = $1', [userId]);
+      for (const { role: vacated } of held.filter(r => r.role !== role)) {
+        const n = await waitingAt(db, vacated);
+        if (n) {
+          const label = STAGE_LABEL[vacated];
+          throw conflict(`还有 ${n} 张单子在等${label}处理，先把${label}指定给别人，再改这个人的职能`);
+        }
+        await db.query('DELETE FROM expense_role_holders WHERE role = $1', [vacated]);
+      }
+      if (role) {
+        await db.query(`
+          INSERT INTO expense_role_holders(role, user_id) VALUES($1,$2)
+          ON CONFLICT (role) DO UPDATE SET user_id = EXCLUDED.user_id, updated_at = now()`,
+          [role, userId]);
+      }
+    });
+    sendJson(res, 200, await configResponse(me));
+    publish('expense:updated', {});
+    publish('purchase:updated', {});
   });
 
   /* ---------- 列表 ----------
