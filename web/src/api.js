@@ -76,6 +76,52 @@ async function call(method, path, body, extraHeaders = {}) {
   return data;
 }
 
+/**
+ * 附件上传。用 XMLHttpRequest 而不是 fetch：只有 xhr.upload 报告进度，
+ * 而手机上传一张几 MB 的照片要好几秒，没有进度用户会以为页面卡死（2026-09-16 用户反馈）。
+ * onProgress(0~1) 在字节发出去的过程中被调用；到 1 只表示发完了，后端还要写盘落库。
+ */
+function uploadFile(path, file, onProgress) {
+  if (state.mode === 'mock') return mockUpload(path, file, onProgress);
+  const logPath = path.split('?')[0];
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', BASE + path);
+    xhr.withCredentials = true;      // 登录态在 HttpOnly cookie 里
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', e => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      });
+      xhr.upload.addEventListener('load', () => onProgress(1));
+    }
+    xhr.addEventListener('load', () => {
+      logApi('POST', logPath, xhr.status);
+      let d = null;
+      try { d = JSON.parse(xhr.responseText); } catch { /* 空响应体 */ }
+      if (xhr.status === 401) {
+        location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+        reject(new Error('请先登录'));
+      } else if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(d?.error || `上传失败（${xhr.status}）`));
+      } else {
+        resolve(d);
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('上传失败，网络断了，检查一下再重试')));
+    xhr.addEventListener('abort', () => reject(new Error('上传被中断了')));
+    xhr.send(file);
+  });
+}
+
+/** mock 模式也走一遍进度，界面和验收脚本看到的才是真实的上传过程 */
+async function mockUpload(path, file, onProgress) {
+  for (const r of [0.3, 0.65, 1]) {
+    await new Promise(done => setTimeout(done, 120));
+    onProgress?.(r);
+  }
+  return mock.handle('POST', path, file);
+}
+
 const qs = o => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(o)) if (v !== '' && v != null) p.set(k, v);
@@ -283,20 +329,9 @@ export const api = {
   expenseDelete:     (id)          => call('DELETE', `/api/expenses/${id}`),
   /** action: submit | approve | return | pay | cancel。流转类动作带上 stage 防重复处理 */
   expenseAct:        (id, action, payload = {}) => call('POST', `/api/expenses/${id}/${action}`, payload),
-  expenseUpload: async (id, file) => {
-    const path = `/api/expenses/${id}/files?name=${encodeURIComponent(file.name)}`;
-    if (state.mode === 'mock') return mock.handle('POST', path, file);
-    const r = await fetch(BASE + path, { method: 'POST', body: file, credentials: 'include' });
-    logApi('POST', `/api/expenses/${id}/files`, r.status);
-    let d = null;
-    try { d = await r.json(); } catch { /* 空响应体 */ }
-    if (r.status === 401) {
-      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
-      throw new Error('请先登录');
-    }
-    if (!r.ok) throw new Error(d?.error || `上传失败（${r.status}）`);
-    return d;
-  },
+  /** onProgress(0~1) 可选，给弹窗里的进度条用 */
+  expenseUpload: (id, file, onProgress) =>
+    uploadFile(`/api/expenses/${id}/files?name=${encodeURIComponent(file.name)}`, file, onProgress),
 
   /* ---------- 采购申请 ---------- */
   /** scope: mine 我发起的 | todo 待我处理 | all 我能看见的全部 */
@@ -309,20 +344,9 @@ export const api = {
       | payment-approve | payment-return | pay | payment-cancel | deliver。
       立项动作带 stage，付款动作带 paymentId + paymentStage，防重复处理 */
   purchaseAct:    (id, action, payload = {}) => call('POST', `/api/purchases/${id}/${action}`, payload),
-  purchaseUpload: async (id, file) => {
-    const path = `/api/purchases/${id}/files?name=${encodeURIComponent(file.name)}`;
-    if (state.mode === 'mock') return mock.handle('POST', path, file);
-    const r = await fetch(BASE + path, { method: 'POST', body: file, credentials: 'include' });
-    logApi('POST', `/api/purchases/${id}/files`, r.status);
-    let d = null;
-    try { d = await r.json(); } catch { /* 空响应体 */ }
-    if (r.status === 401) {
-      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
-      throw new Error('请先登录');
-    }
-    if (!r.ok) throw new Error(d?.error || `上传失败（${r.status}）`);
-    return d;
-  },
+  /** onProgress(0~1) 可选，给弹窗里的进度条用 */
+  purchaseUpload: (id, file, onProgress) =>
+    uploadFile(`/api/purchases/${id}/files?name=${encodeURIComponent(file.name)}`, file, onProgress),
 
   /* ---------- 站内消息 ---------- */
   notifications: ()   => call('GET',  '/api/notifications'),

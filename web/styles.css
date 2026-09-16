@@ -3268,6 +3268,21 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-act label .opt{margin-left:4px;color:var(--muted);font-weight:400}
 .exp-act textarea.inp{height:76px}
 
+/* 附件上传进度条（web/src/upload-progress.js）。
+   报销、采购的填单弹窗和详情里都用它：没有它，手机传照片那几秒界面完全没反应，
+   用户会以为是自己手机卡了，反复点提交或者直接关页面。 */
+.up-progress{margin-top:10px;padding:10px 12px;border:1px solid var(--blue-200);border-radius:var(--r-sm);
+  background:var(--blue-100)}
+.up-bar{height:6px;border-radius:999px;background:var(--surface);overflow:hidden}
+.up-bar i{display:block;height:100%;border-radius:999px;background:var(--grad-primary);
+  transition:width .18s var(--spring)}
+.up-text{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;margin-top:7px;
+  color:var(--ink2);font-size:12.5px}
+.up-text em{flex:1;min-width:0;color:var(--ink);font-style:normal;font-weight:600;overflow-wrap:anywhere}
+.up-text b{color:var(--blue-dk);font-weight:700;font-variant-numeric:tabular-nums}
+.up-note{margin-top:3px;color:var(--muted);font-size:11.5px}
+@media (prefers-reduced-motion:reduce){ .up-bar i{transition:none} }
+
 .exp-config-modal{width:600px}
 .exp-cfg-label{margin-bottom:6px;color:var(--ink2);font-size:12.5px;font-weight:600}
 .exp-cfg-stats{margin:-2px 0 9px;color:var(--muted);font-size:12px;line-height:1.6}

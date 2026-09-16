@@ -30,6 +30,7 @@
 <link rel="modulepreload" href="./src/pdf-reader.js">
 <link rel="modulepreload" href="./src/tagstore.js">
 <link rel="modulepreload" href="./src/toast.js">
+<link rel="modulepreload" href="./src/upload-progress.js">
 <link rel="modulepreload" href="./src/util.js">
 <link rel="modulepreload" href="./src/views/account-research.js">
 <link rel="modulepreload" href="./src/views/account.js">
@@ -43,7 +44,6 @@
 <link rel="modulepreload" href="./src/views/dashboard.js">
 <link rel="modulepreload" href="./src/views/drawer.js">
 <link rel="modulepreload" href="./src/views/expenses.js">
-<link rel="modulepreload" href="./src/views/purchases.js">
 <link rel="modulepreload" href="./src/views/formal.js">
 <link rel="modulepreload" href="./src/views/function-tree.js">
 <link rel="modulepreload" href="./src/views/funnel.js">
@@ -53,6 +53,7 @@
 <link rel="modulepreload" href="./src/views/modal.js">
 <link rel="modulepreload" href="./src/views/notify.js">
 <link rel="modulepreload" href="./src/views/pool.js">
+<link rel="modulepreload" href="./src/views/purchases.js">
 <link rel="modulepreload" href="./src/views/review.js">
 <link rel="modulepreload" href="./src/views/sample-comparison.js">
 <link rel="modulepreload" href="./src/views/sample-components.js">
@@ -793,6 +794,7 @@
         <span>支持图片、PDF、Word、Excel，单个不超过 20MB</span>
       </label>
       <div class="exp-file-list" id="purEditFiles"></div>
+      <div class="up-progress" id="purUploadProgress" role="status" aria-live="polite" hidden></div>
     </div>
     <div class="exp-error" id="purEditErr" role="alert" aria-live="polite"></div>
   </div>
@@ -862,6 +864,7 @@
         <span>支持图片、PDF、Word、Excel，单个不超过 20MB</span>
       </label>
       <div class="exp-file-list" id="expEditFiles"></div>
+      <div class="up-progress" id="expUploadProgress" role="status" aria-live="polite" hidden></div>
     </div>
     <div class="exp-error" id="expEditErr" role="alert" aria-live="polite"></div>
   </div>

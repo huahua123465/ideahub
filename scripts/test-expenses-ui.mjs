@@ -32,7 +32,10 @@ async function modalInViewport(page, id) {
 }
 
 /** 按钮完整落在弹窗和视口里：没被裁掉、没被挤出屏幕 */
-async function buttonVisible(page, modalId, buttonSel) {
+const buttonVisible = elementVisible;
+
+/** 这个元素完整落在弹窗和视口里 —— 看不见的提示等于没有提示 */
+async function elementVisible(page, modalId, buttonSel) {
   const r = await page.evaluate((m, b) => {
     const box = document.querySelector(`#${m}`).getBoundingClientRect();
     const btn = document.querySelector(b).getBoundingClientRect();
@@ -187,7 +190,21 @@ try {
     await buttonVisible(page, 'expEditModal', '#btnExpDelete');
     await harness.screenshot(page, `expenses-edit-${scene}`);
     await page.click('#btnExpSubmit');
+    // 上传要好几秒，期间必须看得见进度条和百分比，否则用户会以为是自己手机卡了
+    const uploading = await page.waitForFunction(() => {
+      const box = document.querySelector('#expUploadProgress');
+      if (!box || box.hidden || !/%/.test(box.textContent)) return null;
+      return { text: box.textContent.replace(/\s+/g, ' ').trim(),
+        btn: document.querySelector('#btnExpSubmit').textContent,
+        bar: !!document.querySelector('#expUploadProgress .up-bar i') };
+    }, { timeout: 5_000 }).then(h => h.jsonValue());
+    assert.equal(uploading.bar, true, '进度条本身要画出来');
+    await elementVisible(page, 'expEditModal', '#expUploadProgress');
+    assert.match(uploading.text, /别关页面/);
+    assert.match(uploading.btn, /正在上传附件/);
+    await harness.screenshot(page, `expenses-uploading-${scene}`);
     await waitToast(page, /已提交/);
+    assert.equal(await page.$eval('#expUploadProgress', n => n.hidden), true, '传完要收起来');
     await page.waitForFunction(() => !document.querySelector('#expEditModal.on'));
     await page.waitForFunction(() => {
       const tab = document.querySelector('#v-expenses [role="tab"][aria-selected="true"]');

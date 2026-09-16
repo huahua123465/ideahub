@@ -18,6 +18,7 @@ import { ICON } from '../icons.js';
 import { confirmAction } from '../confirm.js';
 // 免总经理审批的额度是报销那边的「审批设置」管的，文案也跟着共用一份
 import { gmFreeHint } from './expenses.js';
+import { uploadProgress } from '../upload-progress.js';
 
 const TABS = [
   { key: 'todo', label: '待我处理' },
@@ -461,6 +462,7 @@ function paintDetail(c) {
         <time datetime="${esc(a.createdAt)}" title="${esc(timeText(a.createdAt))}">${esc(fromNow(a.createdAt))}</time>
       </li>`).join('')}</ol>
     </section>` : ''}
+    <div class="up-progress" id="purDetailProgress" role="status" aria-live="polite" hidden></div>
     <div class="exp-error" id="purDetailErr" role="alert" aria-live="polite"></div>`;
 
   for (const [key, value] of Object.entries(drafts)) {
@@ -683,8 +685,11 @@ function bindDetail() {
     if (!input || !detail) return;
     const files = [...input.files];
     input.value = '';
-    await uploadAll(detail.id, files, detailError);
-    await openDetail(detail.id, { quiet: true });
+    const id = detail.id;
+    busy = true;                       // 传的过程中别让 Esc / 点遮罩把弹窗关掉
+    try { await uploadAll(id, files, detailError, '#purDetailProgress'); }
+    finally { busy = false; }
+    await openDetail(id, { quiet: true });
     loadListIfOpen();
   });
   $('#purDetailBody').addEventListener('click', async e => {
@@ -702,13 +707,24 @@ function bindDetail() {
   });
 }
 
-/** 逐个上传，返回没传上的；失败原因写到 onError */
-async function uploadAll(id, files, onError) {
-  const failed = [];
-  for (const f of files) {
-    if (f.size > MAX_FILE) { failed.push(`${f.name}：超过 20MB`); continue; }
-    try { await api.purchaseUpload(id, f); }
-    catch (e) { failed.push(`${f.name}：${e.message || '上传失败'}`); }
+/**
+ * 逐个上传，返回没传上的；失败原因写到 onError，boxSel 是进度条容器。
+ * 进度条是必须的：手机传照片要好几秒，没有它用户会以为卡住了，
+ * 反复点提交或者直接关掉页面，材料就真的没传上去。
+ */
+async function uploadAll(id, files, onError, boxSel) {
+  const failed = files.filter(f => f.size > MAX_FILE).map(f => `${f.name}：超过 20MB`);
+  const queue = files.filter(f => f.size <= MAX_FILE);
+  const progress = uploadProgress($(boxSel));
+  progress.start(queue);
+  try {
+    for (const [i, f] of queue.entries()) {
+      progress.tick(i, 0);
+      try { await api.purchaseUpload(id, f, r => progress.tick(i, r)); }
+      catch (e) { failed.push(`${f.name}：${e.message || '上传失败'}`); }
+    }
+  } finally {
+    progress.stop();
   }
   onError(failed.length ? `有 ${failed.length} 个附件没传上 —— ${failed.join('；')}` : '');
   return failed;
@@ -833,7 +849,9 @@ async function saveEditor(submit) {
     // 先记下来：后面附件或提交失败时，再点一次是改这张，不会重复建单
     editing = saved;
     const files = pendingFiles.filter(f => f.size <= MAX_FILE);
-    const failed = await uploadAll(saved.id, files, editError);
+    if (files.length) btn.textContent = '正在上传材料…';
+    const failed = await uploadAll(saved.id, files, editError, '#purUploadProgress');
+    btn.textContent = submit ? '正在提交…' : '正在保存…';
     pendingFiles = pendingFiles.filter(f => f.size > MAX_FILE || failed.some(m => m.startsWith(`${f.name}：`)));
     const fresh = await api.purchase(saved.id);
     editing = fresh;

@@ -32,7 +32,10 @@ async function modalInViewport(page, id) {
   assert.ok(r.left >= -1 && r.top >= -1 && r.right <= r.w + 1 && r.bottom <= r.h + 1, `${id} 超出视口：${JSON.stringify(r)}`);
 }
 
-async function buttonVisible(page, modalId, buttonSel) {
+const buttonVisible = elementVisible;
+
+/** 这个元素完整落在弹窗和视口里 —— 看不见的提示等于没有提示 */
+async function elementVisible(page, modalId, buttonSel) {
   const r = await page.evaluate((m, b) => {
     const box = document.querySelector(`#${m}`).getBoundingClientRect();
     const btn = document.querySelector(b).getBoundingClientRect();
@@ -221,7 +224,21 @@ try {
     await buttonVisible(page, 'purEditModal', '#btnPurSubmit');
     await harness.screenshot(page, `purchases-edit-${scene}`);
     await page.click('#btnPurSubmit');
+    // 上传要好几秒，期间必须看得见进度条和百分比，否则用户会以为是自己手机卡了
+    const uploading = await page.waitForFunction(() => {
+      const box = document.querySelector('#purUploadProgress');
+      if (!box || box.hidden || !/%/.test(box.textContent)) return null;
+      return { text: box.textContent.replace(/\s+/g, ' ').trim(),
+        btn: document.querySelector('#btnPurSubmit').textContent,
+        bar: !!document.querySelector('#purUploadProgress .up-bar i') };
+    }, { timeout: 5_000 }).then(h => h.jsonValue());
+    assert.equal(uploading.bar, true, '进度条本身要画出来');
+    await elementVisible(page, 'purEditModal', '#purUploadProgress');
+    assert.match(uploading.text, /别关页面/);
+    assert.match(uploading.btn, /正在上传材料/);
+    await harness.screenshot(page, `purchases-uploading-${scene}`);
     await page.waitForFunction(() => !document.querySelector('#purEditModal.on'), { timeout: 5_000 });
+    assert.equal(await page.$eval('#purUploadProgress', n => n.hidden), true, '传完要收起来');
     await page.waitForFunction(() => {
       const tab = document.querySelector('#v-purchases [role="tab"][aria-selected="true"]');
       const card = [...document.querySelectorAll('#v-purchases .exp-card')].find(n => /界面测试·采购机械键盘/.test(n.textContent));
