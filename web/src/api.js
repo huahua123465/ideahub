@@ -81,13 +81,14 @@ async function call(method, path, body, extraHeaders = {}) {
  * 而手机上传一张几 MB 的照片要好几秒，没有进度用户会以为页面卡死（2026-09-16 用户反馈）。
  * onProgress(0~1) 在字节发出去的过程中被调用；到 1 只表示发完了，后端还要写盘落库。
  */
-function uploadFile(path, file, onProgress) {
+function uploadFile(path, file, onProgress, headers) {
   if (state.mode === 'mock') return mockUpload(path, file, onProgress);
   const logPath = path.split('?')[0];
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', BASE + path);
     xhr.withCredentials = true;      // 登录态在 HttpOnly cookie 里
+    for (const [k, v] of Object.entries(headers || {})) xhr.setRequestHeader(k, v);
     if (onProgress) {
       xhr.upload.addEventListener('progress', e => {
         if (e.lengthComputable) onProgress(e.loaded / e.total);
@@ -163,16 +164,9 @@ export const api = {
   setStatus: (id, status, extra = {}) => call('PATCH', `/api/ideas/${id}/status`, { status, ...extra }),
   similar:   (q)           => call('GET',   '/api/ideas/similar' + qs({ q })),
   ideaFiles: (id)          => call('GET',   `/api/ideas/${id}/files`),
-  ideaFileUpload:async(id,file)=>{
-    const path=`/api/ideas/${id}/files?name=${encodeURIComponent(file.name)}`;
-    if(state.mode==='mock')return mock.handle('POST',path,file);
-    const r=await fetch(`${BASE}${path}`,{method:'POST',body:file,credentials:'include'});
-    logApi('POST',`/api/ideas/${id}/files`,r.status);
-    let data=null;try{data=await r.json();}catch{/* 空响应体 */}
-    if(r.status===401){location.replace('/login.html?next='+encodeURIComponent(location.pathname+location.search));throw new Error('请先登录');}
-    if(!r.ok)throw new Error(data?.error||`上传失败（${r.status}）`);
-    return data;
-  },
+  /** onProgress(0~1) 可选，给弹窗里的进度条用 */
+  ideaFileUpload: (id, file, onProgress) =>
+    uploadFile(`/api/ideas/${id}/files?name=${encodeURIComponent(file.name)}`, file, onProgress),
   stats:     ()            => call('GET',   '/api/stats/overview'),
   ideaDelete:(id, purge)   => call('DELETE', `/api/ideas/${id}${purge ? '?purge=1' : ''}`),
 
@@ -254,19 +248,11 @@ export const api = {
      文件是当原始字节直接发的（服务端也是这么读的），所以单独写一个。 */
   clientFiles:  (id)      => call('GET',    `/api/clients/${id}/files`),
   fileDelete:   (fileId)  => call('DELETE', `/api/files/${fileId}`),
-  fileUpload:   async (id, file, note) => {
-    const qs2 = new URLSearchParams({ name: file.name });
-    if (note) qs2.set('note', note);
-    const r = await fetch(`${BASE}/api/clients/${id}/files?${qs2}`, {
-      method: 'POST',
-      body: file,                 // 原始字节，不包 multipart
-      credentials: 'include',
-    });
-    logApi('POST', `/api/clients/${id}/files`, r.status);
-    let d = null;
-    try { d = await r.json(); } catch { /* 空响应体 */ }
-    if (!r.ok) throw new Error(d?.error || `上传失败（${r.status}）`);
-    return d;
+  /** 原始字节，不包 multipart。onProgress(0~1) 可选，给附件区的进度条用 */
+  fileUpload:   (id, file, note, onProgress) => {
+    const params = new URLSearchParams({ name: file.name });
+    if (note) params.set('note', note);
+    return uploadFile(`/api/clients/${id}/files?${params}`, file, onProgress);
   },
 
   /* ---------- 工作提交 ---------- */
@@ -277,15 +263,8 @@ export const api = {
   /** 一键把我已经写过的日报全部改成公开 / 全部收回私密。只作用于自己写的。 */
   reportsVisibilityAll: (visibility) => call('POST', '/api/reports/visibility', { visibility }),
   reportFiles:   (id)          => call('GET',    `/api/reports/${id}/files`),
-  reportUpload:  async (id, file) => {
-    const r = await fetch(`${BASE}/api/reports/${id}/files?name=${encodeURIComponent(file.name)}`,
-      { method: 'POST', body: file, credentials: 'include' });
-    logApi('POST', `/api/reports/${id}/files`, r.status);
-    let d = null;
-    try { d = await r.json(); } catch { /* 空响应体 */ }
-    if (!r.ok) throw new Error(d?.error || `上传失败（${r.status}）`);
-    return d;
-  },
+  reportUpload:  (id, file, note, onProgress) =>
+    uploadFile(`/api/reports/${id}/files?name=${encodeURIComponent(file.name)}`, file, onProgress),
 
   /* ---------- 报销审批 ---------- */
   expenseConfig:     ()            => call('GET',    '/api/expenses/config'),
@@ -490,26 +469,14 @@ export const api = {
   sampleInsightRun:     (id) => call('GET', `/api/sample-insight-runs/${encodeURIComponent(id)}`),
   sampleInsightStatistics:(id, opts = {}) => call('GET', `/api/sample-insight-runs/${encodeURIComponent(id)}/statistics` + qs(opts)),
   sampleInsightRunCancel:(id, idempotencyKey = `insight-cancel-${id}-${Date.now()}`) => call('POST', `/api/sample-insight-runs/${encodeURIComponent(id)}/cancel`, {}, { 'Idempotency-Key':idempotencyKey }),
-  sampleAssetUpload:    async (sampleId, file, meta = {}) => {
+  sampleAssetUpload:    (sampleId, file, meta = {}, onProgress) => {
     const path = sampleId ? `/api/samples/${encodeURIComponent(sampleId)}/assets` : '/api/samples/assets';
     const params = new URLSearchParams({ name:file.name, title:meta.title || file.name });
     for (const [key, value] of Object.entries(meta)) {
       if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
     }
-    if (state.mode === 'mock') return mock.handle('POST', `${path}?${params}`, file);
-    const r = await fetch(`${BASE}${path}?${params}`, {
-      method:'POST', body:file, credentials:'include',
-      headers:{ 'content-type':file.type || 'application/octet-stream' },
-    });
-    logApi('POST', path, r.status);
-    let data = null;
-    try { data = await r.json(); } catch { /* 空响应体 */ }
-    if (r.status === 401) {
-      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
-      throw new Error('请先登录');
-    }
-    if (!r.ok) throw new Error(data?.error || `上传失败（${r.status}）`);
-    return data;
+    return uploadFile(`${path}?${params}`, file, onProgress,
+      { 'content-type': file.type || 'application/octet-stream' });
   },
 };
 

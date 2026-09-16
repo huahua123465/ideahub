@@ -1,5 +1,6 @@
 /** 详情抽屉：正文 + 讨论 + 流转记录 + 评审操作 */
 import { api } from '../api.js';
+import { uploadProgress } from '../upload-progress.js';
 import { avatarColor, initial, fromNow, esc, PILL, $ } from '../util.js';
 import { countTo, pulse, ring } from '../anim.js';
 import { toast } from '../toast.js';
@@ -157,15 +158,20 @@ function fileSize(value){const n=Number(value||0);return n>=1024*1024?`${(n/1024
 function renderIdeaFiles(d){
   const box=$('#dFiles'),files=d.files||[];box.hidden=!files.length&&!d.canManageFiles;
   if(box.hidden)return;
-  box.innerHTML=`<div class="sec-title">附件${files.length?` · ${files.length}`:''}</div>${files.length?`<div class="idea-drawer-file-list">${files.map(file=>`<div class="idea-drawer-file"><i>${esc(file.name.split('.').pop()?.toUpperCase()||'FILE')}</i><a href="${esc(file.url)}" target="_blank" rel="noopener">${esc(file.name)}</a><small>${fileSize(file.size)}</small><a class="idea-file-download" href="${esc(file.url)}?download=1">下载</a>${d.canManageFiles?`<button type="button" data-idea-file-delete="${file.id}" aria-label="删除 ${esc(file.name)}">×</button>`:''}</div>`).join('')}</div>`:'<p class="dim">还没有附件。</p>'}${d.canManageFiles?`<label class="idea-drawer-upload"><input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx"><span>＋ 继续上传 PDF / Word / Excel</span></label><p class="dim" data-idea-file-status></p>`:''}`;
+  box.innerHTML=`<div class="sec-title">附件${files.length?` · ${files.length}`:''}</div>${files.length?`<div class="idea-drawer-file-list">${files.map(file=>`<div class="idea-drawer-file"><i>${esc(file.name.split('.').pop()?.toUpperCase()||'FILE')}</i><a href="${esc(file.url)}" target="_blank" rel="noopener">${esc(file.name)}</a><small>${fileSize(file.size)}</small><a class="idea-file-download" href="${esc(file.url)}?download=1">下载</a>${d.canManageFiles?`<button type="button" data-idea-file-delete="${file.id}" aria-label="删除 ${esc(file.name)}">×</button>`:''}</div>`).join('')}</div>`:'<p class="dim">还没有附件。</p>'}${d.canManageFiles?`<label class="idea-drawer-upload"><input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx"><span>＋ 继续上传 PDF / Word / Excel</span></label><p class="dim" data-idea-file-status></p><div class="up-progress" data-idea-file-progress role="status" aria-live="polite" hidden></div>`:''}`;
   const input=box.querySelector('input[type="file"]');
   input?.addEventListener('change',async event=>{
     const selected=[...(event.target.files||[])];if(!selected.length)return;
     const status=box.querySelector('[data-idea-file-status]');let uploaded=0,failed=0;
-    for(const [index,file]of selected.entries()){
-      status.textContent=`正在上传 ${file.name}（${index+1}/${selected.length}）`;
-      try{await api.ideaFileUpload(d.id,file);uploaded+=1;}catch(error){failed+=1;toast('info',`${file.name}：${error.message}`);}
-    }
+    const progress=uploadProgress(box.querySelector('[data-idea-file-progress]'));
+    progress.start(selected);
+    try{
+      for(const [index,file]of selected.entries()){
+        status.textContent=`正在上传 ${file.name}（${index+1}/${selected.length}）`;
+        try{await api.ideaFileUpload(d.id,file,r=>progress.tick(index,r));uploaded+=1;}
+        catch(error){failed+=1;toast('info',`${file.name}：${error.message}`);}
+      }
+    }finally{progress.stop();status.textContent='';}
     const fresh=await api.idea(d.id);cur=fresh;paint(fresh,{partial:false});
     if(uploaded)toast(failed?'info':'ok',failed?`已上传 ${uploaded} 个，${failed} 个失败`:'附件已更新');
   });

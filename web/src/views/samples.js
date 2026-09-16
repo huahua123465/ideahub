@@ -1,5 +1,6 @@
 /** 内容样本库：原始归档入口 + 第二阶段内容研究工作台。 */
 import { api } from '../api.js';
+import { uploadProgress } from '../upload-progress.js';
 import { $, esc, fromNow } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
@@ -290,6 +291,7 @@ function paintIntake() {
       <label><span>内容类型</span><select name="contentType"><option value="video">视频</option><option value="image_post">图文</option><option value="audio">音频</option></select></label><label><span>原始链接</span><input name="sourceUrl" type="url" placeholder="https://…"></label>
       <label class="samples-file samples-wide"><span>原始媒体 *</span><input name="media" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp4,audio/wav,audio/aac,audio/ogg" required></label>
       <label class="samples-file samples-wide"><span>封面图片（可选）</span><input name="cover" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif"></label>
+      <div class="up-progress" id="sampleUploadProgress" role="status" aria-live="polite" hidden></div>
       <button class="btn btn-primary" type="submit">上传并归档</button></form>`;
   }
   if (current && intakeMode === 'manual') {
@@ -599,18 +601,22 @@ async function submitUpload(form) {
   const button=form.querySelector('button[type="submit"]'); const data=new FormData(form); const media=data.get('media'); const cover=data.get('cover');
   if(!(media instanceof File)||!media.size)return;
   button.disabled=true;button.textContent='上传中…';
+  // 视频动辄几十上百 MB，没有进度条用户只会看到一个不动的按钮
+  const parts=[media,...(cover instanceof File&&cover.size?[cover]:[])];
+  const progress=uploadProgress(form.querySelector('#sampleUploadProgress'));
+  progress.start(parts);
   let uploaded=null;
   try{
     const info=await mediaMetadata(media); const kind=media.type.startsWith('image/')?'image':media.type.startsWith('video/')?'video':media.type.startsWith('audio/')?'audio':'other';
     const targetId=data.get('sampleId')?Number(data.get('sampleId')):null;
-    uploaded=await api.sampleAssetUpload(targetId,media,{title:data.get('title'),platform:data.get('platform'),contentType:data.get('contentType'),sourceUrl:data.get('sourceUrl'),kind,archiveQuality:'user_upload',...info});
+    uploaded=await api.sampleAssetUpload(targetId,media,{title:data.get('title'),platform:data.get('platform'),contentType:data.get('contentType'),sourceUrl:data.get('sourceUrl'),kind,archiveQuality:'user_upload',...info},r=>progress.tick(0,r));
     if(cover instanceof File&&cover.size){
-      try{const coverInfo=await mediaMetadata(cover);await api.sampleAssetUpload(uploaded.sampleId,cover,{kind:'cover',captureId:uploaded.captureId,archiveQuality:'user_upload',...coverInfo});}
+      try{const coverInfo=await mediaMetadata(cover);await api.sampleAssetUpload(uploaded.sampleId,cover,{kind:'cover',captureId:uploaded.captureId,archiveQuality:'user_upload',...coverInfo},r=>progress.tick(1,r));}
       catch(error){form.reset();await loadSamples();selectSample(uploaded.sampleId);toast('info',`原始媒体已保存，但封面失败：${error.message||'请稍后补传'}`);return;}
     }
     form.reset();if(!targetId)page=1;await loadSamples();selectSample(uploaded.sampleId);toast('ok',targetId?'媒体已补充到当前样本':'原始媒体已经永久归档');
   }catch(error){
     if(uploaded?.sampleId){await loadSamples();selectSample(uploaded.sampleId);toast('info','原始媒体已保存，后续步骤失败，可继续补充');}
     else toast('info',error.message||'媒体归档失败');
-  }finally{button.disabled=false;button.textContent='上传并归档';}
+  }finally{progress.stop();button.disabled=false;button.textContent='上传并归档';}
 }

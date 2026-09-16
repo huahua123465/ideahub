@@ -1019,6 +1019,12 @@ export async function handle(method, path, body) {
     };
   }
 
+  // 演示模式也让附件真的“传上去”：上传进度条要有东西可画，验收脚本也要能点完整流程
+  if (/^\/api\/(clients|reports)\/\d+\/files$/.test(p) && method === 'POST') {
+    return { id: ++seq, name: q.get('name') || body?.name || '附件', mime: body?.type || 'application/octet-stream',
+      size: Number(body?.size || 1024), createdAt: new Date().toISOString(), url: '#' };
+  }
+
   if (/^\/api\/(clients|reports)\/\d+\/files$/.test(p) && method === 'GET') {
     const isReviewDemo = p === '/api/reports/802/files';
     if (!isReviewDemo) return { items: [] };

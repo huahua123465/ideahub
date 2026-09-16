@@ -1,5 +1,6 @@
 /** 提交弹窗：表单 + 实时查重 */
 import { api } from '../api.js';
+import { uploadProgress } from '../upload-progress.js';
 import { esc, $ } from '../util.js';
 import { toast } from '../toast.js';
 import { tagDict, KIND_ORDER, KIND_LABEL, SOURCE_OPTIONS } from '../tagstore.js';
@@ -136,10 +137,16 @@ export async function submit() {
     const idea = await api.create({
       title, content, category, tags, isAnonymous, tagIds, sourceType, sourceUrl });
     const failed=[];
-    for(const [index,file]of pendingFiles.entries()){
-      btn.textContent=`上传附件 ${index+1}/${pendingFiles.length}`;
-      try{await api.ideaFileUpload(idea.id,file);}catch(error){failed.push(`${file.name}：${error.message}`);}
-    }
+    // 上传期间界面必须有反应，否则用户以为卡住了，会反复点提交
+    const progress=uploadProgress($('#fUploadProgress'));
+    progress.start(pendingFiles);
+    try{
+      for(const [index,file]of pendingFiles.entries()){
+        btn.textContent=`上传附件 ${index+1}/${pendingFiles.length}`;
+        try{await api.ideaFileUpload(idea.id,file,r=>progress.tick(index,r));}
+        catch(error){failed.push(`${file.name}：${error.message}`);}
+      }
+    }finally{progress.stop();}
     close();
     reset();
     toast(failed.length?'info':'ok',failed.length?`灵感已提交，但有 ${failed.length} 个附件上传失败：${failed[0]}`:'灵感和附件已提交');

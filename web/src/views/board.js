@@ -6,6 +6,7 @@
  * 那会变成五份互相抄的东西，改一个列宽要改五个地方。
  */
 import { api, state } from '../api.js';
+import { uploadProgress } from '../upload-progress.js';
 import { esc, $ } from '../util.js';
 import { toast } from '../toast.js';
 import { BOARDS, STAGE } from '../boards.js';
@@ -993,10 +994,17 @@ function paintLoadedFiles(clientId, boardKey, scope, items, API) {
     const files = [...(e.target.files || [])];
     if (!files.length) return;
     const msg = $('#bdFileMsg');
-    for (const [i, file] of files.entries()) {
-      msg.textContent = `正在上传 ${file.name}…（${i + 1}/${files.length}）`;
-      try { await API.up(clientId, file); }
-      catch (err) { toast('info', `${file.name}：${err.message || '上传失败'}`); }
+    // 传一张手机照片要好几秒，没有进度条用户会以为卡住了
+    const progress = uploadProgress($('#bdUploadProgress'));
+    progress.start(files);
+    try {
+      for (const [i, file] of files.entries()) {
+        msg.textContent = `正在上传 ${file.name}…（${i + 1}/${files.length}）`;
+        try { await API.up(clientId, file, undefined, r => progress.tick(i, r)); }
+        catch (err) { toast('info', `${file.name}：${err.message || '上传失败'}`); }
+      }
+    } finally {
+      progress.stop();
     }
     msg.textContent = '';
     toast('ok', files.length > 1 ? `已上传 ${files.length} 个` : '已上传');
@@ -1133,9 +1141,15 @@ export async function saveEdit() {
       const scope = typeof b.files === 'string' ? b.files : 'clients';
       const up = scope === 'reports' ? api.reportUpload : api.fileUpload;
       const failed = [];
-      for (const f of pendingFiles) {
-        try { await up(saved.id, f); }
-        catch (e) { failed.push(`${f.name}：${e.message}`); }
+      const progress = uploadProgress($('#bdUploadProgress'));
+      progress.start(pendingFiles);
+      try {
+        for (const [i, f] of pendingFiles.entries()) {
+          try { await up(saved.id, f, undefined, r => progress.tick(i, r)); }
+          catch (e) { failed.push(`${f.name}：${e.message}`); }
+        }
+      } finally {
+        progress.stop();
       }
       pendingFiles = [];
       // 记录已经存好了，附件传失败不该让人以为整条都没保存 —— 分开说清楚

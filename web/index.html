@@ -477,6 +477,7 @@
         <b>＋ 选择文件</b><span>PDF、Word、Excel · 单个最大 20MB</span>
       </label>
       <div class="idea-pending-files" id="fFileList"></div>
+      <div class="up-progress" id="fUploadProgress" role="status" aria-live="polite" hidden></div>
       <p class="idea-file-privacy">匿名提交时，请同时检查文件名和文档作者信息，避免暴露身份。</p>
     </div>
   </div>
@@ -560,6 +561,7 @@
   <div class="form">
     <div class="bdgrid" id="bdForm"></div>
     <div class="bdfiles" id="bdFiles" hidden></div>
+    <div class="up-progress" id="bdUploadProgress" role="status" aria-live="polite" hidden></div>
     <!-- 关联资料（任务 8）。和附件区一样，只在编辑已存在的记录时出现 —— 
          还没保存的记录没有 id，关联挂不上去。 -->
     <div class="bdlinks" id="bdLinks" hidden></div>
