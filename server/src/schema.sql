@@ -3687,6 +3687,18 @@ CREATE TABLE IF NOT EXISTS expense_role_holders (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 小额免总经理审批的额度（2026-09-16 加，迁移见 scripts/migrations/20260916-approval-thresholds.sql）。
+--   金额 ≤ 额度 的单子自动跳过「总经理」这一步，其余各步照走。
+--   kind：expense 报销 | purchase 采购，两边各一条。
+-- 没有行 = 用代码里的默认值（报销 300 元、采购 2000 元，见 routes/expenses.mjs 的 GM_FREE_DEFAULT_CENTS）；
+-- 管理员在「审批设置」里手动填过才写行，写了就以行里的值为准；额度 0 表示所有单子都要过总经理。
+CREATE TABLE IF NOT EXISTS approval_thresholds (
+  kind          TEXT PRIMARY KEY CHECK (kind IN ('expense', 'purchase')),
+  gm_free_cents BIGINT NOT NULL CHECK (gm_free_cents >= 0 AND gm_free_cents <= 9999999999),
+  updated_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- 报销单。一单一个类型、一个金额。
 --   status：draft 草稿 | pending 审批中 | returned 已退回 | withdrawn 已撤回
 --           | paid 出纳已打款、待申请人确认收款 | completed 申请人已确认收款（流程完成） | cancelled 已作废

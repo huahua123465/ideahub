@@ -13,7 +13,9 @@
  *     例外只有「导出记录」（用户 2026-09-15 定的）：管理员、总经理、财务、出纳能导出全公司的记录，
  *     但别人没提交的草稿照样不导出；其他人只导出自己能看见的单子。
  *  3. 本该由申请人自己审批的一步自动跳过；同一个人兼任连续两步（比如部门负责人就是总经理）
- *     时，后一步也自动跳过。出纳打款这一步永远不跳过。跳过都会留痕。
+ *     时，后一步也自动跳过。金额不超过「免总经理审批额度」的小额单子，总经理那一步也自动跳过
+ *     （默认 300 元，管理员可在「审批设置」里改，见 GM_FREE_DEFAULT_CENTS）。
+ *     出纳打款这一步永远不跳过。跳过都会留痕。
  *  4. 退回或撤回后申请人可以改信息、补附件、重新提交，从第一步重新走，round + 1；
  *     不想报了就作废。审批中（出纳确认打款之前）申请人可以随时撤回，也可以直接作废。
  *     草稿可以直接删，提交过的单子只能作废不能删 —— 财务单据要留痕。
@@ -67,19 +69,47 @@ const MAX_CENTS = 9_999_999_999;
 
 /* ================= 配置 ================= */
 
+/**
+ * 小额免总经理审批的默认额度（分）：报销 300 元、采购 2000 元。
+ * 管理员在「审批设置」里填过就以 approval_thresholds 表里的值为准，没填过一直用这里的默认值。
+ * 额度 0 表示不免审，所有单子都要过总经理。
+ */
+export const GM_FREE_DEFAULT_CENTS = { expense: 30_000, purchase: 200_000 };
+const GM_FREE_KINDS = Object.keys(GM_FREE_DEFAULT_CENTS);
+
 async function loadConfig(db = { query }) {
-  const [{ rows: depts }, { rows: roles }] = await Promise.all([
+  const [{ rows: depts }, { rows: roles }, { rows: limits }] = await Promise.all([
     db.query(`SELECT d.dept, d.leader_id, u.name AS leader_name
                 FROM expense_dept_leaders d JOIN users u ON u.id = d.leader_id
                ORDER BY d.sort, d.dept`),
     db.query(`SELECT r.role, r.user_id, u.name
                 FROM expense_role_holders r JOIN users u ON u.id = r.user_id`),
+    db.query('SELECT kind, gm_free_cents FROM approval_thresholds'),
   ]);
-  const cfg = { depts: new Map(), roles: {} };
+  const cfg = { depts: new Map(), roles: {}, gmFree: {} };
   for (const d of depts) cfg.depts.set(d.dept, { id: Number(d.leader_id), name: d.leader_name });
   for (const r of roles) cfg.roles[r.role] = { id: Number(r.user_id), name: r.name };
+  const set = new Map(limits.map(r => [r.kind, Number(r.gm_free_cents)]));
+  for (const kind of GM_FREE_KINDS) {
+    cfg.gmFree[kind] = set.has(kind)
+      ? { cents: set.get(kind), custom: true }
+      : { cents: GM_FREE_DEFAULT_CENTS[kind], custom: false };
+  }
   return cfg;
 }
+
+/** 这一类单据当前的免审额度（配置读不出来时退回默认值，流程不能因此卡住） */
+const gmFree = (cfg, kind) =>
+  cfg.gmFree?.[kind] || { cents: GM_FREE_DEFAULT_CENTS[kind], custom: false };
+
+/** 够不够小，小到不用过总经理。额度 0 = 不免审 */
+function skipsGm(cfg, kind, cents) {
+  const limit = gmFree(cfg, kind).cents;
+  return limit > 0 && Number(cents) <= limit;
+}
+
+/** 写进审批记录的跳过原因，申请人和审批人都会在时间线上看到 */
+const gmFreeReason = (cfg, kind) => `金额不超过 ¥${yuan(gmFree(cfg, kind).cents)}，免总经理审批，自动跳过`;
 
 const handlerOf = (cfg, stage, c) =>
   (stage === 'leader' ? cfg.depts.get(c.dept) : cfg.roles[stage]) || null;
@@ -101,6 +131,12 @@ function configDto(cfg, me) {
     stages: STAGES.map(key => ({ key, label: STAGE_LABEL[key] })),
     depts: [...cfg.depts].map(([dept, leader]) => ({ dept, leader })),
     roles: Object.fromEntries(STAGES.slice(1).map(s => [s, cfg.roles[s] || null])),
+    gmFree: Object.fromEntries(GM_FREE_KINDS.map(kind => [kind, {
+      amount: yuan(gmFree(cfg, kind).cents),
+      amountCents: gmFree(cfg, kind).cents,
+      custom: gmFree(cfg, kind).custom,
+      defaultAmount: yuan(GM_FREE_DEFAULT_CENTS[kind]),
+    }])),
     ready: missing.length === 0,
     missing,
     myDept: me.dept || null,
@@ -361,6 +397,21 @@ function parseAmount(v) {
   return cents;
 }
 
+/**
+ * 免总经理审批的额度。和金额不一样：允许 0（0 = 不免审，所有单子都过总经理），
+ * 留空 / null 表示恢复默认值（返回 null，保存时把那一行删掉），没传（undefined）表示这次不动它。
+ */
+function parseGmFree(v, label) {
+  if (v === undefined) return undefined;
+  const s = String(v ?? '').trim().replace(/,/g, '');
+  if (!s) return null;
+  if (!/^\d{1,8}(\.\d{1,2})?$/.test(s)) throw badRequest(`${label}格式不对，填数字，最多两位小数`);
+  const [int, frac = ''] = s.split('.');
+  const cents = Number(int) * 100 + Number(frac.padEnd(2, '0'));
+  if (cents > MAX_CENTS) throw badRequest(`${label}超出上限`);
+  return cents;
+}
+
 function parseDate(v) {
   const s = String(v ?? '').trim();
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
@@ -408,6 +459,13 @@ async function advance(db, c, cfg, fromIndex) {
   for (let i = fromIndex + 1; i < STAGES.length; i++) {
     const stage = STAGES[i];
     const h = handlerOf(cfg, stage, c);
+    // 小额免总经理审批：额度按这一刻的配置算，跳过也要留痕（h 为空是配置被删了，记录照写）
+    if (stage === 'gm' && skipsGm(cfg, 'expense', c.amount_cents)) {
+      await db.query(
+        `INSERT INTO expense_claim_actions(claim_id, round, stage, action, actor_id, comment)
+         VALUES($1,$2,$3,'skip',$4,$5)`, [c.id, c.round, stage, h?.id ?? null, gmFreeReason(cfg, 'expense')]);
+      continue;
+    }
     if (stage !== 'cashier' && h) {
       const reason = h.id === Number(c.applicant_id) ? '申请人本人，自动跳过'
         : approved.has(h.id) ? '同一人已在前一步审批通过，自动跳过' : null;
@@ -639,6 +697,9 @@ export function mount(router) {
       roleIds[s] = id;
     }
     const ids = [...new Set([...depts.map(d => d.leaderId), ...Object.values(roleIds).filter(Boolean)])];
+    // 免总经理审批的额度：没传的不动，传空的恢复默认（删行），传了数字的按数字存
+    const gmFreeIn = Object.fromEntries(GM_FREE_KINDS.map(kind => [kind,
+      parseGmFree(b[`${kind}GmFreeAmount`], `${kind === 'expense' ? '报销' : '采购'}免总经理审批额度`)]));
 
     await tx(async db => {
       // 串行化并发的配置保存；报销单流转读配置不加锁，改完立即生效
@@ -671,9 +732,24 @@ export function mount(router) {
           await db.query('DELETE FROM expense_role_holders WHERE role = $1', [s]);
         }
       }
+      for (const kind of GM_FREE_KINDS) {
+        const cents = gmFreeIn[kind];
+        if (cents === undefined) continue;
+        if (cents === null) {
+          await db.query('DELETE FROM approval_thresholds WHERE kind = $1', [kind]);
+        } else {
+          await db.query(`
+            INSERT INTO approval_thresholds(kind, gm_free_cents, updated_by) VALUES($1,$2,$3)
+            ON CONFLICT (kind) DO UPDATE
+              SET gm_free_cents = EXCLUDED.gm_free_cents, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+            [kind, cents, me.id]);
+        }
+      }
     });
     sendJson(res, 200, await configResponse(me));
     publish('expense:updated', {});
+    // 审批人和免审额度采购也在用，那边的页面同样要刷新
+    publish('purchase:updated', {});
   });
 
   /* ---------- 单独指定 / 取消某个部门的负责人 ----------
@@ -1218,8 +1294,8 @@ export function mount(router) {
   });
 }
 
-// 采购申请（routes/purchases.mjs）复用同一套审批人配置、撤销同意规则和输入校验
+// 采购申请（routes/purchases.mjs）复用同一套审批人配置、免审额度、撤销同意规则和输入校验
 export {
   loadConfig, handlerOf, duties, liveRoundActions, actorOf, person, yuan, ymdLocal,
-  parseAmount, parseDate, optText,
+  parseAmount, parseDate, optText, gmFree, skipsGm, gmFreeReason,
 };

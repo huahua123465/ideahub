@@ -27,6 +27,8 @@ const EMPTY = {
   all: ['还没有你能看到的报销单', '你发起的、经手过的，以及你负责审批的报销单都会出现在这里。'],
 };
 const MAX_FILE = 20 * 1024 * 1024;
+// 填单弹窗顶部那句话；小额免总经理审批的额度接在后面（见 gmFreeHint）
+const EDIT_HINT = '填好信息、传上凭证，提交后依次由部门负责人、总经理、财务审批，最后由出纳打款。';
 
 let me = { id: 0, role: 'member' };
 export const setMe = u => { me = u; };
@@ -601,6 +603,7 @@ function openEditor(c, cfg) {
   pendingFiles = [];
   fillOptions(cfg, c);
   $('#expEditTitle').textContent = c ? `修改报销单 · ${c.code}` : '发起报销';
+  $('#expEditHint').textContent = `${EDIT_HINT}${gmFreeHint(cfg, 'expense')}`;
   $('#expTitle').value = c?.title || '';
   $('#expDate').value = c?.expenseDate || today();
   $('#expDate').max = today();
@@ -726,9 +729,45 @@ function bindEditor() {
   });
 }
 
+/* ================= 小额免总经理审批 ================= */
+
+/** 后端把额度按「元」发过来（300.00），界面上整数额度不显示那两个零 */
+const trimAmount = a => String(a ?? '').replace(/\.00$/, '');
+
+/** 设置页那一行状态说明：现在的额度是多少、是默认的还是管理员设过的 */
+export function gmFreeText(cfg, kind) {
+  const f = cfg?.gmFree?.[kind];
+  if (!f) return '';
+  return Number(f.amountCents)
+    ? `不超过 ¥${trimAmount(f.amount)} 免总经理审批${f.custom ? '' : '（默认）'}`
+    : '所有单子都要经总经理审批';
+}
+
+/** 填单弹窗顶部那句提醒，金额够小的单子会少走一步，填之前就该知道 */
+export function gmFreeHint(cfg, kind) {
+  const f = cfg?.gmFree?.[kind];
+  return Number(f?.amountCents) ? `金额不超过 ${trimAmount(f.amount)} 元的免总经理审批，直接由财务接手。` : '';
+}
+
 /* ================= 审批设置（管理员） ================= */
 
 let people = [];
+const GM_FREE_FIELDS = [
+  ['expense', '#expCfgExpenseFree', '报销'],
+  ['purchase', '#expCfgPurchaseFree', '采购'],
+];
+
+/** 手动设过的额度填进输入框，没设过留空 —— 空着就是「用默认值」，保存时也按这个语义走 */
+function fillGmFree(cfg) {
+  for (const [kind, sel] of GM_FREE_FIELDS) {
+    const f = cfg.gmFree?.[kind];
+    const inp = $(sel);
+    inp.value = f?.custom ? trimAmount(f.amount) : '';
+    inp.placeholder = f ? `默认 ${trimAmount(f.defaultAmount)}` : '';
+  }
+  $('#expCfgFreeState').innerHTML = GM_FREE_FIELDS
+    .map(([kind, , label]) => `${label}：${esc(gmFreeText(cfg, kind))}`).join('；');
+}
 /** 公司现有的部门。设置里总会列出这几行，管理员只需要给每个部门选负责人；
     没选负责人的部门先不启用，可以分几次配完。以后有新部门用「添加部门」补。 */
 export const DEFAULT_DEPTS = ['运营部', '财务部', '行政部'];
@@ -776,6 +815,7 @@ export async function openConfig() {
     $('#expCfgGm').innerHTML = personOptions(cfg.roles.gm?.id, '选择总经理');
     $('#expCfgFinance').innerHTML = personOptions(cfg.roles.finance?.id, '选择财务');
     $('#expCfgCashier').innerHTML = personOptions(cfg.roles.cashier?.id, '选择出纳');
+    fillGmFree(cfg);
   } catch (e) {
     $('#expCfgDepts').innerHTML = '';
     cfgError(`读取失败：${e.message || '网络异常'}`);
@@ -802,6 +842,14 @@ function bindConfig() {
       cfgError('有一行选了负责人但没填部门名称，补上名称或删掉这一行');
       return;
     }
+    const free = GM_FREE_FIELDS.map(([kind, sel, label]) =>
+      ({ kind, sel, label, value: $(sel).value.trim().replace(/,/g, '') }));
+    const badFree = free.find(f => f.value && !/^\d{1,8}(\.\d{1,2})?$/.test(f.value));
+    if (badFree) {
+      cfgError(`${badFree.label}额度填的不是金额，填数字，最多两位小数；留空就是用默认值`);
+      $(badFree.sel).focus();
+      return;
+    }
     // 没选负责人的部门先不启用：后端要求每个启用的部门都有负责人，一起发过去会整张表保存失败
     const skipped = rows.filter(r => r.dept && !r.leaderId).map(r => r.dept);
     const payload = {
@@ -809,6 +857,8 @@ function bindConfig() {
       gmId: Number($('#expCfgGm').value) || null,
       financeId: Number($('#expCfgFinance').value) || null,
       cashierId: Number($('#expCfgCashier').value) || null,
+      // 额度留空 = 恢复默认值（后端把那一行删掉）
+      ...Object.fromEntries(free.map(f => [`${f.kind}GmFreeAmount`, f.value])),
     };
     btn.disabled = true;
     btn.textContent = '正在保存…';

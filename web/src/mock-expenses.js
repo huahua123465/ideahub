@@ -22,9 +22,13 @@ const STATUS_LABEL = {
 const FLOW_STATE = { approve: 'done', pay: 'done', skip: 'skipped', return: 'returned', withdraw: 'withdrawn' };
 const NAMES = { 1: '陈屿', 2: '苏禾', 3: '叶昭', 4: '林知远', 6: '何叙', 7: '赵嘉一' };
 
+/** 免总经理审批的默认额度（分），和 server/src/routes/expenses.mjs 的 GM_FREE_DEFAULT_CENTS 一致 */
+const GM_FREE_DEFAULT_CENTS = { expense: 30_000, purchase: 200_000 };
 const CFG = {
   depts: [['产品部', 2], ['内容组', 2], ['技术组', 4]],
   roles: { gm: 1, finance: 3, cashier: 4 },
+  // null = 没手动设过，用默认额度
+  gmFree: { expense: null, purchase: null },
 };
 /** 采购申请和报销共用一套审批人配置（mock-purchases.js 用）；返回的是同一个对象，审批设置改了两边一起变 */
 export const mockExpenseConfig = () => CFG;
@@ -75,6 +79,12 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 const person = id => (id ? { id, name: NAMES[id] || `用户 ${id}` } : null);
 const deptLeader = dept => CFG.depts.find(d => d[0] === dept)?.[1] || null;
 const handlerId = (c, stage) => (stage === 'leader' ? deptLeader(c.dept) : CFG.roles[stage] || null);
+const yuan = cents => (Number(cents) / 100).toFixed(2);
+
+/** 小额免总经理审批：额度 0 = 不免审。采购（mock-purchases.js）用的是同一份配置 */
+export const gmFreeCents = kind => (CFG.gmFree[kind] === null ? GM_FREE_DEFAULT_CENTS[kind] : CFG.gmFree[kind]);
+export const skipsGm = (kind, cents) => gmFreeCents(kind) > 0 && cents <= gmFreeCents(kind);
+export const gmFreeReason = kind => `金额不超过 ¥${yuan(gmFreeCents(kind))}，免总经理审批，自动跳过`;
 
 function configDto(me) {
   const missing = [];
@@ -85,6 +95,10 @@ function configDto(me) {
     stages: STAGES.map(key => ({ key, label: STAGE_LABEL[key] })),
     depts: CFG.depts.map(([dept, id]) => ({ dept, leader: person(id) })),
     roles: Object.fromEntries(STAGES.slice(1).map(s => [s, person(CFG.roles[s])])),
+    gmFree: Object.fromEntries(Object.keys(GM_FREE_DEFAULT_CENTS).map(kind => [kind, {
+      amount: yuan(gmFreeCents(kind)), amountCents: gmFreeCents(kind),
+      custom: CFG.gmFree[kind] !== null, defaultAmount: yuan(GM_FREE_DEFAULT_CENTS[kind]),
+    }])),
     ready: !missing.length, missing,
     myDept: me.dept || null,
     myDeptReady: CFG.depts.some(d => d[0] === me.dept),
@@ -190,6 +204,10 @@ function advance(c, fromIndex) {
   for (let i = fromIndex + 1; i < STAGES.length; i++) {
     const stage = STAGES[i];
     const h = handlerId(c, stage);
+    if (stage === 'gm' && skipsGm('expense', c.cents)) {
+      c.actions.push(act(c.round, stage, 'skip', h, gmFreeReason('expense'), 0));
+      continue;
+    }
     if (stage !== 'cashier' && h && (h === c.applicantId || approved.has(h))) {
       c.actions.push(act(c.round, stage, 'skip', h, h === c.applicantId ? '申请人本人，自动跳过' : '同一人已在前一步审批通过，自动跳过', 0));
       continue;
@@ -211,6 +229,15 @@ export function handleExpenses(method, p, q, body, me) {
       return [String(d.dept).trim(), Number(d.leaderId)];
     });
     for (const s of STAGES.slice(1)) CFG.roles[s] = body[`${s}Id`] ? Number(body[`${s}Id`]) : null;
+    // 额度：没传的不动，传空的恢复默认（null），传了数字的按数字存
+    for (const kind of Object.keys(GM_FREE_DEFAULT_CENTS)) {
+      const v = body[`${kind}GmFreeAmount`];
+      if (v === undefined) continue;
+      const s = String(v ?? '').trim().replace(/,/g, '');
+      if (!s) { CFG.gmFree[kind] = null; continue; }
+      if (!/^\d{1,8}(\.\d{1,2})?$/.test(s)) throw fail('免总经理审批额度格式不对，填数字，最多两位小数');
+      CFG.gmFree[kind] = Math.round(Number(s) * 100);
+    }
     return configDto(me);
   }
   if (p === '/api/expenses/dept-leaders' && method === 'PATCH') {

@@ -8,7 +8,9 @@
  *     每一步都按当前配置实时算。
  *  2. 能看见 = 申请人本人、经手过这张单的人、本部门负责人、总经理 / 财务 / 出纳。
  *     草稿只有申请人自己看得到。**管理员没有特权**。看不见的一律回 404。
- *  3. 立项审批的规矩和报销一样：本人那一步、同一人兼任的后一步自动跳过；处理人可以退回（必须写原因）；
+ *  3. 立项审批的规矩和报销一样：本人那一步、同一人兼任的后一步自动跳过；金额不超过「免总经理审批额度」
+ *     的小额采购总经理那一步也自动跳过（默认 2000 元，管理员在「报销审批 → 审批设置」里改）；
+ *     处理人可以退回（必须写原因）；
  *     立项审批中申请人可以撤回或作废；最近一次同意的人在下一步处理前可以撤销同意。
  *  4. 财务通过后进入付款（status = executing）：
  *     一次性支付 —— 自动生成一笔全额付款，申请人填收款方账户 → 出纳转款。
@@ -37,7 +39,7 @@ import { notifyUser } from './notifications.mjs';
 import { kindOf, saveBody, fileRow, UPLOAD_DIR } from './files.mjs';
 import {
   loadConfig, handlerOf, duties, liveRoundActions, actorOf, person, yuan, ymdLocal,
-  parseAmount, parseDate, optText,
+  parseAmount, parseDate, optText, skipsGm, gmFreeReason,
 } from './expenses.mjs';
 
 const APPROVAL_STAGES = ['leader', 'gm', 'finance'];
@@ -363,12 +365,14 @@ async function advance(db, r, cfg, fromIndex) {
   for (let i = fromIndex + 1; i < APPROVAL_STAGES.length; i++) {
     const stage = APPROVAL_STAGES[i];
     const h = handlerOf(cfg, stage, r);
-    const reason = !h ? null : h.id === Number(r.applicant_id) ? '申请人本人，自动跳过'
-      : approved.has(h.id) ? '同一人已在前一步审批通过，自动跳过' : null;
+    // 小额免总经理审批：额度按这一刻的配置算，跳过也要留痕（h 为空是配置被删了，记录照写）
+    const reason = stage === 'gm' && skipsGm(cfg, 'purchase', r.amount_cents) ? gmFreeReason(cfg, 'purchase')
+      : !h ? null : h.id === Number(r.applicant_id) ? '申请人本人，自动跳过'
+        : approved.has(h.id) ? '同一人已在前一步审批通过，自动跳过' : null;
     if (reason) {
       await db.query(
         `INSERT INTO purchase_actions(request_id, round, stage, action, actor_id, comment)
-         VALUES($1,$2,$3,'skip',$4,$5)`, [r.id, r.round, stage, h.id, reason]);
+         VALUES($1,$2,$3,'skip',$4,$5)`, [r.id, r.round, stage, h?.id ?? null, reason]);
       continue;
     }
     await db.query(

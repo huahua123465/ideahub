@@ -751,7 +751,7 @@
 <div class="modal exp-edit-modal pur-edit-modal" id="purEditModal" role="dialog" aria-modal="true" aria-labelledby="purEditTitle">
   <header>
     <h2 id="purEditTitle">发起采购</h2>
-    <div class="hint">填好信息、传上聊天记录、采购合同或价格清单，提交后依次由部门负责人、总经理、财务审批立项。</div>
+    <div class="hint" id="purEditHint">填好信息、传上聊天记录、采购合同或价格清单，提交后依次由部门负责人、总经理、财务审批立项。</div>
   </header>
   <div class="form">
     <div class="exp-callout warn" id="purEditReturn" hidden></div>
@@ -889,7 +889,7 @@
 <div class="modal exp-config-modal" id="expConfigModal" role="dialog" aria-modal="true" aria-labelledby="expConfigTitle">
   <header>
     <h2 id="expConfigTitle">报销审批设置</h2>
-    <div class="hint">报销单按「部门负责人 → 总经理 → 财务 → 出纳」流转。没选负责人的部门暂不启用，可以分几次配完；人员有变动时改这里，审批中的单子会自动转给新的人。</div>
+    <div class="hint">报销单按「部门负责人 → 总经理 → 财务 → 出纳」流转，小额单子可以免掉总经理这一步。没选负责人的部门暂不启用，可以分几次配完；人员有变动时改这里，审批中的单子会自动转给新的人。这里的设置采购也在用。</div>
   </header>
   <div class="form">
     <div class="field">
@@ -911,6 +911,21 @@
         <label for="expCfgCashier">出纳</label>
         <select class="inp" id="expCfgCashier"></select>
       </div>
+    </div>
+    <div class="field">
+      <div class="exp-cfg-label" id="expCfgFreeLabel">小额免总经理审批</div>
+      <div class="exp-cfg-stats">金额不超过额度的单子自动跳过总经理这一步，其余各步照走。留空用默认值；填 0 表示都要过总经理。</div>
+      <div class="exp-cfg-free" role="group" aria-labelledby="expCfgFreeLabel">
+        <div class="field">
+          <label for="expCfgExpenseFree">报销额度（元）</label>
+          <input class="inp exp-amount-inp" id="expCfgExpenseFree" inputmode="decimal" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="expCfgPurchaseFree">采购额度（元）</label>
+          <input class="inp exp-amount-inp" id="expCfgPurchaseFree" inputmode="decimal" autocomplete="off">
+        </div>
+      </div>
+      <div class="exp-cfg-stats" id="expCfgFreeState" aria-live="polite"></div>
     </div>
     <div class="exp-error" id="expCfgErr" role="alert" aria-live="polite"></div>
   </div>

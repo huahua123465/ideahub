@@ -84,9 +84,11 @@ async function approved(user, over) {
   }
   return (await detailOf(user, c.id)).data;
 }
+// 基线配置把「小额免总经理审批」的额度设成 0（不免审），下面的流程测试都按完整步骤走；额度本身单独测
 const setConfig = (over = {}) => call(ADMIN, 'PATCH', '/api/expenses/config', {
   depts: [{ dept: '产品部', leaderId: LEAD_P }, { dept: '技术部', leaderId: LEAD_T }],
-  gmId: GM, financeId: FIN, cashierId: CASH, ...over,
+  gmId: GM, financeId: FIN, cashierId: CASH,
+  expenseGmFreeAmount: '0', purchaseGmFreeAmount: '0', ...over,
 });
 
 // 跑之前把原配置和这几个人原来的部门存下来，跑完原样放回去
@@ -94,6 +96,7 @@ const snapshot = {
   depts: (await dbq('SELECT dept, leader_id, sort FROM expense_dept_leaders')).rows,
   roles: (await dbq('SELECT role, user_id FROM expense_role_holders')).rows,
   userDepts: (await dbq('SELECT id, dept FROM users WHERE id = ANY($1::bigint[])', [Object.values(id)])).rows,
+  thresholds: (await dbq('SELECT kind, gm_free_cents FROM approval_thresholds')).rows,
 };
 const setDept = (user, dept) => call(ADMIN, 'PATCH', `/api/admin/users/${user}/dept`, { dept });
 for (const [u, d] of [[APP, '产品部'], [LEAD_P, '产品部'], [CASH, '产品部'], [FIN, '产品部'], [LEAD_T, '技术部'], [OUT, '技术部']]) {
@@ -116,8 +119,46 @@ after(async () => {
   for (const r of snapshot.roles) {
     await dbq('INSERT INTO expense_role_holders(role, user_id) VALUES($1,$2)', [r.role, r.user_id]);
   }
+  await dbq('DELETE FROM approval_thresholds');
+  for (const t of snapshot.thresholds) {
+    await dbq('INSERT INTO approval_thresholds(kind, gm_free_cents) VALUES($1,$2)', [t.kind, t.gm_free_cents]);
+  }
   for (const u of snapshot.userDepts) await dbq('UPDATE users SET dept = $2 WHERE id = $1', [u.id, u.dept]);
   await close();
+});
+
+test('小额免总经理审批：默认 2000 元，额度和报销共用一份设置', async () => {
+  const reset = await setConfig({ purchaseGmFreeAmount: '' });
+  assert.equal(reset.status, 200);
+  assert.equal(reset.data.gmFree.purchase.amount, '2000.00');
+  assert.equal(reset.data.gmFree.purchase.custom, false);
+
+  // 正好 2000 也免审：部门负责人同意后直接到财务，总经理那一步留一条跳过记录
+  const small = await submitted(APP, { amount: '2000' });
+  const afterLead = await act(LEAD_P, small.id, 'approve', { stage: 'leader' });
+  assert.equal(afterLead.status, 200, JSON.stringify(afterLead.data));
+  assert.equal(afterLead.data.stage, 'finance');
+  assert.equal(afterLead.data.handler.id, FIN);
+  assert.equal(afterLead.data.flow.find(s => s.stage === 'gm').state, 'skipped');
+  const skip = (await detailOf(APP, small.id)).data.actions.find(a => a.stage === 'gm' && a.action === 'skip');
+  assert.match(skip.comment, /免总经理审批/);
+  assert.equal((await act(GM, small.id, 'approve', {})).status, 403, '总经理这一步已经跳过');
+
+  // 超出额度一分钱就要过总经理
+  const big = await submitted(APP, { amount: '2000.01' });
+  assert.equal((await act(LEAD_P, big.id, 'approve', { stage: 'leader' })).data.stage, 'gm');
+
+  // 管理员改额度：立刻按新额度走；报销那一栏不受影响
+  const raised = await setConfig({ purchaseGmFreeAmount: '5000', expenseGmFreeAmount: '' });
+  assert.equal(raised.data.gmFree.purchase.amount, '5000.00');
+  assert.equal(raised.data.gmFree.purchase.custom, true);
+  assert.equal(raised.data.gmFree.expense.amount, '300.00');
+  const mid = await submitted(APP, { amount: '4999' });
+  assert.equal((await act(LEAD_P, mid.id, 'approve', { stage: 'leader' })).data.stage, 'finance');
+
+  assert.equal((await setConfig()).data.gmFree.purchase.amountCents, 0, '回到基线：不免审');
+  const zero = await submitted(APP, { amount: '1' });
+  assert.equal((await act(LEAD_P, zero.id, 'approve', { stage: 'leader' })).data.stage, 'gm');
 });
 
 test('建草稿：字段校验；草稿只有申请人看得见；没申请材料不能提交', async () => {

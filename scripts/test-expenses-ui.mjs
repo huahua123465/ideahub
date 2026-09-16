@@ -371,6 +371,18 @@ try {
     assert.match(cfg.gm, /陈屿/);
     // 管理员能看到部门分配情况，没分配的人数要醒目
     assert.match(await page.$eval('#expCfgStats', n => (n.hidden ? '' : n.textContent)), /已分配：产品部 3 人.*还有 4 人没分配部门/);
+    // 小额免总经理审批：没手动设过就留空，placeholder 显示默认额度，下面一行写清当前规则
+    const free = await page.evaluate(() => ({
+      expense: document.querySelector('#expCfgExpenseFree').value,
+      expensePh: document.querySelector('#expCfgExpenseFree').placeholder,
+      purchasePh: document.querySelector('#expCfgPurchaseFree').placeholder,
+      state: document.querySelector('#expCfgFreeState').textContent,
+    }));
+    assert.equal(free.expense, '');
+    assert.equal(free.expensePh, '默认 300');
+    assert.equal(free.purchasePh, '默认 2000');
+    assert.match(free.state, /报销：不超过 ¥300 免总经理审批（默认）/);
+    assert.match(free.state, /采购：不超过 ¥2000 免总经理审批（默认）/);
     await buttonVisible(page, 'expConfigModal', '#btnExpCfgSave');
     await harness.screenshot(page, `expenses-config-${scene}`);
     if (mobile) {
@@ -398,6 +410,7 @@ try {
       for (let i = 0; i < 3; i++) await page.click('#expCfgDepts .exp-cfg-row:first-child [data-cfg-del]');
       assert.deepEqual((await deptRows()).map(r => r[0]), ['运营部', '财务部', '行政部']);
       await page.select('#expCfgDepts .exp-cfg-row:first-child [data-cfg-leader]', '2');
+      await page.type('#expCfgExpenseFree', '500');
       await page.click('#btnExpCfgSave');
       await waitToast(page, /已保存。财务部、行政部还没选负责人，先不启用/);
       await page.waitForFunction(() => !document.querySelector('#expConfigModal.on'));
@@ -405,6 +418,12 @@ try {
       await page.waitForFunction(() => document.querySelectorAll('#expCfgDepts .exp-cfg-row').length === 3
         && document.querySelector('#expCfgDepts .exp-cfg-row [data-cfg-leader]').value === '2');
       assert.deepEqual(await deptRows(), [['运营部', '2'], ['财务部', ''], ['行政部', '']]);
+      // 手动填过的额度回填进输入框，说明那一行也跟着变；采购没动，还是默认值
+      assert.equal(await page.$eval('#expCfgExpenseFree', n => n.value), '500');
+      const saved = await page.$eval('#expCfgFreeState', n => n.textContent);
+      assert.match(saved, /报销：不超过 ¥500 免总经理审批/);
+      assert.doesNotMatch(saved, /报销：不超过 ¥500 免总经理审批（默认）/);
+      assert.match(saved, /采购：不超过 ¥2000 免总经理审批（默认）/);
     }
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.modal.on'));

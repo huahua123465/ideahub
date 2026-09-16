@@ -3280,10 +3280,13 @@ body.learning-fullscreen-open{overflow:hidden}
 .exp-cfg-del:hover{border-color:var(--crit-line);background:var(--crit-bg);color:var(--crit)}
 .exp-cfg-add{margin-top:8px}
 .exp-cfg-roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.exp-cfg-free{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.exp-cfg-free .field{min-width:0}
+#expCfgFreeState{margin:8px 0 0}
 
 @media (max-width:700px){
   .exp-detail-modal,.exp-config-modal{width:calc(100vw - 16px)}
-  .exp-cfg-roles,.exp-fields{grid-template-columns:minmax(0,1fr)}
+  .exp-cfg-roles,.exp-cfg-free,.exp-fields{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:560px){
   .exp-grid{grid-template-columns:minmax(0,1fr)}

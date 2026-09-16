@@ -6,7 +6,7 @@
  * 审批人和报销共用一套配置（mock-expenses.js）。演示身份「陈屿」是总经理，也是几张采购的申请人，
  * 所以「待我处理」里既有要他审批的，也有要他填收款账户、提交交付清单的。
  */
-import { mockExpenseConfig } from './mock-expenses.js';
+import { mockExpenseConfig, skipsGm, gmFreeReason } from './mock-expenses.js';
 
 const STAGES = ['leader', 'gm', 'finance'];
 const STAGE_LABEL = { leader: '部门负责人', gm: '总经理', finance: '财务', account: '收款账户', cashier: '出纳' };
@@ -219,6 +219,10 @@ function advance(r, fromIndex) {
   for (let i = fromIndex + 1; i < STAGES.length; i++) {
     const stage = STAGES[i];
     const h = handlerId(r, stage);
+    if (stage === 'gm' && skipsGm('purchase', r.cents)) {
+      r.actions.push(act(r.round, stage, 'skip', h, gmFreeReason('purchase'), 0));
+      continue;
+    }
     if (h && (h === r.applicantId || approved.has(h))) {
       r.actions.push(act(r.round, stage, 'skip', h, h === r.applicantId ? '申请人本人，自动跳过' : '同一人已在前一步审批通过，自动跳过', 0));
       continue;
