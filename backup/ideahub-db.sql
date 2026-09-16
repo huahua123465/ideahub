@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict atfO4ryoFBXz06S9d3Ynt4DVkyohb9ir36rUNsnVtTU56FRMi976gg9EeER1Nw9
+\restrict eSWsMeNiacIhJJdy5MIdoET9cO9kzwYrdmToyKbVgvNAfeqc7SXJJkmVSk8s9Vg
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -6708,7 +6708,7 @@ COPY public.expense_dept_leaders (dept, leader_id, sort, updated_at) FROM stdin;
 COPY public.expense_role_holders (role, user_id, updated_at) FROM stdin;
 gm	28	2026-09-11 03:55:44.172589+00
 finance	30	2026-09-11 03:55:44.172589+00
-cashier	30	2026-09-11 03:55:44.172589+00
+cashier	32	2026-09-15 03:37:02.690818+00
 \.
 
 
@@ -6969,22 +6969,22 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 
 COPY public.ideas (id, code, title, content, category, tags, status, author_id, is_anonymous, vote_count, comment_count, view_count, hot_score, owner_id, adopted_at, adopted_by, progress, doc_url, created_at, updated_at, source_type, source_url, source_ref, deleted_at, promoted_at) FROM stdin;
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.008080397	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	164	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.008594265	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.021363698	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.2159293	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.09751646	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.020230107	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.20463209	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.0924145	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	18	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
 10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.008594441	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.014562015	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.02136657	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.051915023	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.008080556	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.013350178	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.020232728	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.048797626	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
 8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	10	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
 \.
@@ -9081,7 +9081,7 @@ a56a0ffe9a859925df9a342d97a1bc11e225a40121d0ae8b98f20916755e1535	1	2026-08-26 04
 eb99728b19ee1cf1693b176bec24135c292a238966abeea076fbbf6d30ff8ec1	1	2026-09-01 09:46:10.484263+00	2026-10-01 09:46:10.484263+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 60a60b9a4ca29a7bc378a4c158c30aa1e5ba5e1e8070620a7544d43dba3c88c1	29	2026-09-03 08:35:49.22924+00	2026-10-03 08:35:49.22924+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 63fd73a5057ce4560182f2e5fb46a9a241b8623c907b83692392a8faef61161b	30	2026-09-11 03:48:25.52883+00	2026-10-11 03:48:25.52883+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
-79ec185bc2b7f7dbfdff16d202f0a03b5740982dbbaf38eb8b2a3710b7b2d7d1	28	2026-09-14 08:14:40.180597+00	2026-10-14 08:14:40.180597+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
+59e89ba23a484cb8bf96589f5eaa5c724628828155af5ed447822dfefac07529	32	2026-09-15 03:31:48.240323+00	2026-10-15 03:31:48.240323+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 b84618db1db376272c8335e17d7eb744f83de038447060d21de0970d8aad6570	31	2026-09-14 08:45:31.629865+00	2026-10-14 08:45:31.629865+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 e1e54f1f2342391c7f079bfbfeb85d2d69431e3a2a8d134b6b4f02ae1dff1f5b	11	2026-09-14 08:48:25.35803+00	2026-10-14 08:48:25.35803+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
 \.
@@ -9177,15 +9177,16 @@ COPY public.users (id, name, dept, role, avatar_hue, created_at, username, passw
 8	刘大增	运营部	reviewer	\N	2026-08-21 06:02:11.821697+00	刘大增	scrypt$16384$8$1$cd958f1c038dbd9a1297e9cf97e107a5$4a13803a1a1827108e2995d4651dc77be5f18e8410a14dcf1ce736f682d1ae55	2026-08-25 08:42:01.629454+00	private
 9	杨俊杰	运营部	reviewer	\N	2026-08-21 07:21:38.171351+00	杨俊杰	scrypt$16384$8$1$742d62188e40a936f6cda838ef4d31c6$ef71a9d1f96f8b5e688fbcabc839b417c57683d9f5e7ef7348d79db52297cef7	2026-08-24 02:30:51.146294+00	private
 10	杨池	运营部	admin	\N	2026-08-21 07:22:15.994905+00	杨池	scrypt$16384$8$1$ac914aad522fa20dc071cdc501f90146$7e9a997c2b2daf056de0775af3fde591d18027379dd05ed72bb1d9b807acc7aa	2026-08-26 03:26:51.201646+00	private
+31	3321489624li@gmail.com	\N	reviewer	\N	2026-09-14 08:45:31.620964+00	3321489624li@gmail.com	scrypt$16384$8$1$ee198851f4506c14e5f5737e4196e723$cd8693bd3ba870f558eed348cbfc5c6168f8298cce3bc3c11c5982eacfda236e	\N	private
+30	温欣颖	财务部	reviewer	\N	2026-09-11 03:48:25.517755+00	温欣颖	scrypt$16384$8$1$02eb5ec63fff3f206b1fff373a2b77fd$60a2201d145d0fea2f15e953c968c9f9837df69c9159c215f6774df039335c9b	2026-09-14 09:24:21.424828+00	private
+29	花花	\N	reviewer	\N	2026-09-03 08:35:49.21917+00	花花	scrypt$16384$8$1$87721f59891bd9d9f584a1e1aa1b93bb$7393411cd5550787bf4d0c852eedacc76ce83cb5b33dabd4ae150bf63f767a66	\N	private
 1	华俊杰	运营部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-09-03 08:35:17.376568+00	private
+32	陈诚	财务部	reviewer	\N	2026-09-15 03:31:48.231023+00	陈诚	scrypt$16384$8$1$1bae3c24853b34003c5d9178652cf4fa$664a8965213414c4121adad5c8ebe717cfc23f806977d4ad7051f07ac0a4b847	\N	private
+28	李总	\N	reviewer	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-14 09:24:00.636275+00	private
 13	技术1-测试（系统）	外部系统	member	\N	2026-08-24 02:46:14.568649+00	\N	\N	\N	private
 12	测试	\N	reviewer	\N	2026-08-22 01:58:20.620055+00	测试	scrypt$16384$8$1$cd9981c8fb86140dd475fced8b2f2e6f$591db77d097dd0da6a0adf03f20667649294527b3ecd844314d1ae57e9e4e789	\N	private
 4	朱涛	运营部	reviewer	\N	2026-08-21 02:53:08.628673+00	ZT123	scrypt$16384$8$1$729731c5d25da09a91af09928a28247e$490d0f6c15ada13e58714dd30bd6ba412ac6c224669c33ae80f72f7e1f1b558e	2026-08-25 07:24:42.140389+00	private
-31	3321489624li@gmail.com	\N	member	\N	2026-09-14 08:45:31.620964+00	3321489624li@gmail.com	scrypt$16384$8$1$ee198851f4506c14e5f5737e4196e723$cd8693bd3ba870f558eed348cbfc5c6168f8298cce3bc3c11c5982eacfda236e	\N	private
 11	李敏	行政部	reviewer	\N	2026-08-21 07:50:55.686453+00	李敏	scrypt$16384$8$1$678111ce19f4286c69d1b9254270cc7a$2453a4183542519defe51453661bbc2f0f3804ef3191423830342efcccda0f28	2026-09-14 08:48:25.333115+00	private
-29	花花	\N	member	\N	2026-09-03 08:35:49.21917+00	花花	scrypt$16384$8$1$87721f59891bd9d9f584a1e1aa1b93bb$7393411cd5550787bf4d0c852eedacc76ce83cb5b33dabd4ae150bf63f767a66	\N	private
-28	李总	\N	member	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-14 09:24:00.636275+00	private
-30	温欣颖	财务部	member	\N	2026-09-11 03:48:25.517755+00	温欣颖	scrypt$16384$8$1$02eb5ec63fff3f206b1fff373a2b77fd$60a2201d145d0fea2f15e953c968c9f9837df69c9159c215f6774df039335c9b	2026-09-14 09:24:21.424828+00	private
 \.
 
 
@@ -9230,6 +9231,7 @@ COPY public.work_reports (id, author_id, reviewer_id, report_date, title, summar
 27	1	\N	2026-09-10	今天主要是针对ai生成视频的进行了调整，现在至少在画面上有了很大的提升，视频有吸睛的看点，明天继续要完善	\N	\N	\N	\N	2026-09-10 14:11:39.50483+00	2026-09-10 14:11:39.50483+00	\N	\N	\N	private
 28	1	\N	2026-09-11	9.11	今日主要做的就是内部的工作平台的财务报销流程的完善，以及视频生成的相关的学习，一条完整的视频需要找到  素材库  音效库  字体库  MG动画库以及后续需要完善的素材准备	\N	\N	\N	2026-09-11 02:10:47.871555+00	2026-09-11 07:51:32.490635+00	\N	\N	\N	private
 29	1	\N	2026-09-14	9.14	今日主要是针对，音频的处理合成要相识人声的相关处理	\N	\N	\N	2026-09-14 06:08:11.252464+00	2026-09-14 06:08:11.252464+00	\N	\N	\N	private
+30	1	\N	2026-09-15	9.15	今日还是继续做视频的生成 ，但是一直都是不太对，差点意思，后面使用同事的skill确定方向后，接下来要持续优化这个skill然后做成一个完整的视频工作流	\N	\N	\N	2026-09-15 09:27:24.889768+00	2026-09-15 09:27:24.889768+00	\N	\N	\N	private
 \.
 
 
@@ -9908,14 +9910,14 @@ SELECT pg_catalog.setval('public.tags_id_seq', 172, true);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 31, true);
+SELECT pg_catalog.setval('public.users_id_seq', 32, true);
 
 
 --
 -- Name: work_reports_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.work_reports_id_seq', 29, true);
+SELECT pg_catalog.setval('public.work_reports_id_seq', 30, true);
 
 
 --
@@ -15236,5 +15238,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict atfO4ryoFBXz06S9d3Ynt4DVkyohb9ir36rUNsnVtTU56FRMi976gg9EeER1Nw9
+\unrestrict eSWsMeNiacIhJJdy5MIdoET9cO9kzwYrdmToyKbVgvNAfeqc7SXJJkmVSk8s9Vg
 
