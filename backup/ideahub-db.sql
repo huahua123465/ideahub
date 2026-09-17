@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict eSWsMeNiacIhJJdy5MIdoET9cO9kzwYrdmToyKbVgvNAfeqc7SXJJkmVSk8s9Vg
+\restrict KDkSo70qpIe8NWc2LPgOGyfwsNXVYKOSdYMLASytERFpDGpJLYiLrlO4LrbhxEn
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -1847,6 +1847,20 @@ CREATE SEQUENCE public.api_keys_id_seq
 --
 
 ALTER SEQUENCE public.api_keys_id_seq OWNED BY public.api_keys.id;
+
+
+--
+-- Name: approval_thresholds; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.approval_thresholds (
+    kind text NOT NULL,
+    gm_free_cents bigint NOT NULL,
+    updated_by bigint,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT approval_thresholds_gm_free_cents_check CHECK (((gm_free_cents >= 0) AND (gm_free_cents <= '9999999999'::bigint))),
+    CONSTRAINT approval_thresholds_kind_check CHECK ((kind = ANY (ARRAY['expense'::text, 'purchase'::text])))
+);
 
 
 --
@@ -6255,6 +6269,16 @@ COPY public.api_keys (id, name, key_hash, scopes, created_by, created_at, last_u
 
 
 --
+-- Data for Name: approval_thresholds; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.approval_thresholds (kind, gm_free_cents, updated_by, updated_at) FROM stdin;
+expense	30000	1	2026-09-16 07:12:39.525625+00
+purchase	200000	1	2026-09-16 07:12:39.525625+00
+\.
+
+
+--
 -- Data for Name: attachments; Type: TABLE DATA; Schema: public; Owner: -
 --
 
@@ -6303,6 +6327,9 @@ COPY public.attachments (id, scope, ref_id, side, orig_name, stored_name, mime, 
 90	expense	5	submit	cf116380b0abc131f822df61d7bf6664.jpg	30013561a0b311f0d5e70607a7387928.jpg	image/jpeg	97566	\N	11	2026-09-14 09:23:38.711165+00	\N
 91	expense	5	submit	453ac5f0860588be14d52e3a4dce9c81.jpg	85e1f0a9a7529d400a4963136b96d50e.jpg	image/jpeg	63014	\N	11	2026-09-14 09:23:38.945434+00	\N
 92	expense	5	submit	d993fcbb495396aa342de783e4a501ac.jpg	4fe66e79f6e76442ac84760cabb68582.jpg	image/jpeg	79400	\N	11	2026-09-14 09:23:39.879349+00	\N
+93	expense	6	submit	已生成图像 1 (2).png	9d223e11e956b85a3590f8caef7ee977.png	image/png	3302452	\N	1	2026-09-16 07:16:40.323119+00	\N
+94	expense	7	submit	已生成图像 1 (2).png	eefa2f2d38d1578ab1a7de10b6a42d66.png	image/png	3302452	\N	1	2026-09-16 07:17:58.672338+00	\N
+95	expense	8	submit	微信图片_20260916155304_257_24.jpg	506c34de2025ec62bd18b98aab9e06b2.jpg	image/jpeg	378243	\N	7	2026-09-16 07:54:00.53477+00	\N
 \.
 
 
@@ -6409,9 +6436,9 @@ COPY public.chat_groups (id, name, created_by, created_at) FROM stdin;
 COPY public.chat_messages (id, from_id, to_id, body, read_at, created_at, group_id, mentions, edited_at, recalled_at) FROM stdin;
 128	1	4	1	2026-09-02 08:28:58.118142+00	2026-09-02 08:28:51.289111+00	\N	\N	\N	\N
 52	1	12	ni	2026-08-22 01:58:48.125248+00	2026-08-22 01:58:36.659993+00	\N	\N	\N	\N
-130	1	4	收到	\N	2026-09-02 08:51:35.045438+00	\N	\N	\N	\N
 53	12	1	在的	2026-08-22 01:58:53.421014+00	2026-08-22 01:58:51.680646+00	\N	\N	\N	\N
-132	1	29	https://github.com/jaxxchen003/digital-human-video-production	\N	2026-09-03 08:49:20.736638+00	\N	\N	\N	\N
+132	1	29	https://github.com/jaxxchen003/digital-human-video-production	2026-09-16 07:18:48.364121+00	2026-09-03 08:49:20.736638+00	\N	\N	\N	\N
+130	1	4	收到	2026-09-16 07:20:46.372462+00	2026-09-02 08:51:35.045438+00	\N	\N	\N	\N
 54	12	1	好的	2026-08-22 01:59:38.29434+00	2026-08-22 01:59:05.559261+00	\N	\N	\N	\N
 55	12	1	测试	2026-08-22 01:59:38.29434+00	2026-08-22 01:59:11.90793+00	\N	\N	\N	\N
 56	12	1	弹窗	2026-08-22 01:59:38.29434+00	2026-08-22 01:59:14.81543+00	\N	\N	\N	\N
@@ -6675,6 +6702,21 @@ COPY public.expense_claim_actions (id, claim_id, round, stage, action, actor_id,
 14	5	1	gm	approve	28	\N	2026-09-14 09:24:09.934794+00
 15	5	1	finance	approve	30	\N	2026-09-14 09:24:33.127141+00
 16	5	1	cashier	pay	30	银行已转至个人账户	2026-09-14 09:25:13.165989+00
+17	6	1	\N	submit	1	\N	2026-09-16 07:16:41.630309+00
+18	7	1	\N	submit	1	\N	2026-09-16 07:17:59.851865+00
+19	7	1	leader	approve	4	\N	2026-09-16 07:21:06.609755+00
+20	6	1	leader	approve	4	\N	2026-09-16 07:21:16.952828+00
+21	6	1	gm	skip	28	金额不超过 ¥300.00，免总经理审批，自动跳过	2026-09-16 07:21:16.952828+00
+22	7	1	gm	approve	28	\N	2026-09-16 07:22:57.313018+00
+23	7	1	finance	approve	30	\N	2026-09-16 07:23:10.949233+00
+24	7	1	cashier	pay	32	\N	2026-09-16 07:23:18.755242+00
+25	7	1	\N	confirm	1	测	2026-09-16 07:23:29.944881+00
+26	6	1	finance	approve	30	\N	2026-09-16 07:40:11.613274+00
+27	6	1	cashier	return	32	测试退回	2026-09-16 07:43:29.684847+00
+28	8	1	\N	submit	7	\N	2026-09-16 07:54:01.580662+00
+29	8	1	leader	approve	4	\N	2026-09-16 07:54:33.331288+00
+30	8	1	gm	skip	28	金额不超过 ¥300.00，免总经理审批，自动跳过	2026-09-16 07:54:33.331288+00
+31	8	1	finance	cancel	7	\N	2026-09-16 07:56:40.652971+00
 \.
 
 
@@ -6687,6 +6729,9 @@ COPY public.expense_claims (id, applicant_id, dept, category, title, expense_dat
 3	30	财务部	travel	高铁票	2026-09-12	20000	单独出行，已报备	cancelled	\N	1	2026-09-14 02:47:38.752062+00	\N	2026-09-14 02:47:36.315728+00	2026-09-14 07:10:16.456675+00	\N	\N
 4	30	财务部	daily	绿植发财树10棵	2026-09-14	180000	\N	withdrawn	\N	1	2026-09-14 07:19:02.965901+00	\N	2026-09-14 07:19:00.689541+00	2026-09-14 07:19:17.473268+00	\N	\N
 5	11	行政部	daily	采购了清洁用品	2026-09-14	15000	\N	completed	\N	1	2026-09-14 09:23:40.316139+00	2026-09-14 09:25:13.165989+00	2026-09-14 09:23:38.282605+00	2026-09-14 09:25:13.165989+00	\N	\N
+7	1	运营部	office	测试2	2026-09-16	40000	测试	completed	\N	1	2026-09-16 07:17:59.851865+00	2026-09-16 07:23:18.755242+00	2026-09-16 07:17:52.193082+00	2026-09-16 07:23:29.944881+00	2026-09-16 07:23:29.944881+00	2026-09-16 07:23:18.755242+00
+6	1	运营部	office	测试	2026-09-16	10000	测试	returned	\N	1	2026-09-16 07:16:41.630309+00	\N	2026-09-16 07:16:07.264802+00	2026-09-16 07:43:29.684847+00	\N	\N
+8	7	运营部	office	做合同开了个百度文库的7天会员	2026-09-10	200	做合同开了个百度文库的7天会员	cancelled	\N	1	2026-09-16 07:54:01.580662+00	\N	2026-09-16 07:53:48.641626+00	2026-09-16 07:56:40.652971+00	\N	\N
 \.
 
 
@@ -6695,9 +6740,9 @@ COPY public.expense_claims (id, applicant_id, dept, category, title, expense_dat
 --
 
 COPY public.expense_dept_leaders (dept, leader_id, sort, updated_at) FROM stdin;
-运营部	4	0	2026-09-11 03:55:44.172589+00
-财务部	30	1	2026-09-11 03:55:44.172589+00
-行政部	11	2	2026-09-11 03:55:44.172589+00
+运营部	4	0	2026-09-16 07:12:39.525625+00
+财务部	30	1	2026-09-16 07:12:39.525625+00
+行政部	11	2	2026-09-16 07:12:39.525625+00
 \.
 
 
@@ -6706,9 +6751,9 @@ COPY public.expense_dept_leaders (dept, leader_id, sort, updated_at) FROM stdin;
 --
 
 COPY public.expense_role_holders (role, user_id, updated_at) FROM stdin;
-gm	28	2026-09-11 03:55:44.172589+00
-finance	30	2026-09-11 03:55:44.172589+00
-cashier	32	2026-09-15 03:37:02.690818+00
+gm	28	2026-09-16 07:12:39.525625+00
+finance	30	2026-09-16 07:12:39.525625+00
+cashier	32	2026-09-16 07:12:39.525625+00
 \.
 
 
@@ -6960,6 +7005,7 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 9	4	2026-09-01 04:10:51.498177+00
 10	4	2026-09-01 04:11:02.203888+00
 30	4	2026-09-01 04:11:17.773339+00
+7	10	2026-09-16 07:52:27.237174+00
 \.
 
 
@@ -6968,25 +7014,25 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 --
 
 COPY public.ideas (id, code, title, content, category, tags, status, author_id, is_anonymous, vote_count, comment_count, view_count, hot_score, owner_id, adopted_at, adopted_by, progress, doc_url, created_at, updated_at, source_type, source_url, source_ref, deleted_at, promoted_at) FROM stdin;
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.007617529	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.008080397	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.019197278	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.08776018	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	13	6	54	0.20686327	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-16 07:52:27.237174+00	manual	\N	\N	\N	\N
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	164	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
-11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	6	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.020230107	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	12	6	53	0.20463209	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-01 04:10:16.865468+00	manual	\N	\N	\N	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.0924145	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
+11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	7	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
 16	IDEA-2026-0037	xxxx	x	运营	{}	adopted	3	f	1	3	18	2.1192162	3	2026-08-21 02:49:28.313962+00	3	100	http://127.0.0.1:5000/	2026-08-21 02:47:55.855369+00	2026-08-21 02:50:38.383839+00	manual	\N	\N	\N	2026-08-21 02:49:28.313962+00
 10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.008080556	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.013350178	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.020232728	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.048797626	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.0076176734	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.01230147	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.019199679	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.045990836	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
+8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	11	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
-8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	10	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
 \.
 
 
@@ -7025,16 +7071,9 @@ COPY public.notifications (id, user_id, actor_id, kind, title, body, board, ref_
 26	10	4	report_feedback	朱涛 反馈了你的「作品」	1	reports	22	2026-08-31 03:32:04.773401+00	2026-08-28 06:39:22.505643+00
 25	10	4	report_feedback	朱涛 反馈了你的「表格」	1	reports	23	2026-08-31 03:32:14.679111+00	2026-08-28 06:39:12.429015+00
 27	4	1	expense	华俊杰提交了报销单，等你审批	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-11 06:41:53.955299+00
-28	28	30	expense	温欣颖提交了报销单，等你审批	差旅费 · ¥200.00 · 高铁票	expenses	3	\N	2026-09-14 02:47:38.770917+00
 29	4	1	expense	华俊杰撤回了报销单，暂时不用你处理	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-14 06:49:00.182346+00
 30	4	1	expense	华俊杰提交了报销单，等你审批	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-14 06:49:05.252547+00
 31	4	1	expense	华俊杰作废了报销单，暂时不用你处理	办公费 · ¥542.00 · 6022	expenses	2	\N	2026-09-14 06:49:12.513973+00
-32	28	30	expense	温欣颖撤回了报销单，暂时不用你处理	差旅费 · ¥200.00 · 高铁票	expenses	3	\N	2026-09-14 07:10:11.729899+00
-33	28	30	expense	温欣颖提交了报销单，等你审批	日用费 · ¥1800.00 · 绿植发财树10棵	expenses	4	\N	2026-09-14 07:19:02.982339+00
-34	28	30	expense	温欣颖撤回了报销单，暂时不用你处理	日用费 · ¥1800.00 · 绿植发财树10棵	expenses	4	\N	2026-09-14 07:19:17.490437+00
-35	28	30	purchase	温欣颖提交了采购申请，等你审批	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:03:42.168129+00
-36	28	30	purchase	温欣颖撤回了采购申请，暂时不用你处理	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:11:42.744315+00
-37	28	30	purchase	温欣颖提交了采购申请，等你审批	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:12:18.178182+00
 38	30	28	purchase	采购立项已通过，可以发起付款	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	\N	2026-09-14 08:26:04.102448+00
 39	28	11	purchase	李敏提交了采购申请，等你审批	非一次性支付 · ¥200.00 · 发财树（测试）	purchases	2	2026-09-14 08:59:10.807972+00	2026-09-14 08:51:22.58024+00
 40	30	28	purchase	李敏提交了采购申请，等你审批	非一次性支付 · ¥200.00 · 发财树（测试）	purchases	2	\N	2026-09-14 09:00:57.687141+00
@@ -7047,18 +7086,44 @@ COPY public.notifications (id, user_id, actor_id, kind, title, body, board, ref_
 47	11	30	purchase	采购第 2 笔付款已通过财务审批	发财树（测试） · 本笔 ¥100.00 · 下一步：出纳转款	purchases	2	\N	2026-09-14 09:18:15.168745+00
 48	11	30	purchase	采购第 2 笔付款已转款	发财树（测试） · 本笔 ¥100.00	purchases	2	\N	2026-09-14 09:18:25.251849+00
 49	30	11	purchase	李敏的采购已交付完成	发财树（测试） · 交付清单已提交	purchases	2	\N	2026-09-14 09:19:29.536872+00
-50	28	11	purchase	李敏提交了采购申请，等你审批	一次性支付 · ¥249.00 · 绿萝100盆（测试）	purchases	3	\N	2026-09-14 09:20:28.597636+00
+28	28	30	expense	温欣颖提交了报销单，等你审批	差旅费 · ¥200.00 · 高铁票	expenses	3	2026-09-16 07:26:18.068951+00	2026-09-14 02:47:38.770917+00
 51	30	28	purchase	李敏提交了采购申请，等你审批	一次性支付 · ¥249.00 · 绿萝100盆（测试）	purchases	3	\N	2026-09-14 09:20:58.209798+00
 52	11	28	purchase	你的采购申请已通过总经理审批	绿萝100盆（测试） · 下一步：财务审批（温欣颖）	purchases	3	\N	2026-09-14 09:20:58.215199+00
 53	11	30	purchase	采购立项已通过，请提交收款方账户	一次性支付 · ¥249.00 · 绿萝100盆（测试）	purchases	3	\N	2026-09-14 09:21:28.073646+00
 54	30	11	purchase	李敏的采购第 1 笔付款等你转款	绿萝100盆（测试） · 本笔 ¥249.00	purchases	3	\N	2026-09-14 09:22:12.155324+00
 55	11	30	purchase	采购款已支付完成，交付完成后请提交交付清单	绿萝100盆（测试） · 本笔 ¥249.00	purchases	3	\N	2026-09-14 09:22:21.897599+00
 56	30	11	purchase	李敏的采购已交付完成	绿萝100盆（测试） · 交付清单已提交	purchases	3	\N	2026-09-14 09:22:50.150605+00
-57	28	11	expense	李敏提交了报销单，等你审批	日用费 · ¥150.00 · 采购了清洁用品	expenses	5	\N	2026-09-14 09:23:40.337367+00
 58	30	28	expense	李敏提交了报销单，等你审批	日用费 · ¥150.00 · 采购了清洁用品	expenses	5	\N	2026-09-14 09:24:09.947902+00
 59	11	28	expense	你的报销单已通过总经理审批	采购了清洁用品 · 下一步：财务审批（温欣颖）	expenses	5	\N	2026-09-14 09:24:09.951377+00
 60	11	30	expense	你的报销单已通过财务审批	采购了清洁用品 · 下一步：出纳打款（温欣颖）	expenses	5	\N	2026-09-14 09:24:33.141428+00
 61	11	30	expense	你的报销单已打款	日用费 · ¥150.00 · 采购了清洁用品	expenses	5	\N	2026-09-14 09:25:13.201588+00
+63	4	1	expense	华俊杰提交了报销单，等你审批	办公费 · ¥400.00 · 测试2	expenses	7	2026-09-16 07:20:52.987691+00	2026-09-16 07:17:59.864739+00
+65	1	4	expense	你的报销单已通过部门负责人审批	测试2 · 下一步：总经理审批（李总）	expenses	7	\N	2026-09-16 07:21:06.637199+00
+62	4	1	expense	华俊杰提交了报销单，等你审批	办公费 · ¥100.00 · 测试	expenses	6	2026-09-16 07:21:14.603556+00	2026-09-16 07:16:41.649743+00
+66	30	4	expense	华俊杰提交了报销单，等你审批	办公费 · ¥100.00 · 测试	expenses	6	\N	2026-09-16 07:21:16.9653+00
+67	1	4	expense	你的报销单已通过部门负责人审批	测试 · 下一步：财务审批（温欣颖）	expenses	6	\N	2026-09-16 07:21:16.967834+00
+64	28	4	expense	华俊杰提交了报销单，等你审批	办公费 · ¥400.00 · 测试2	expenses	7	2026-09-16 07:22:54.510074+00	2026-09-16 07:21:06.633054+00
+68	30	28	expense	华俊杰提交了报销单，等你审批	办公费 · ¥400.00 · 测试2	expenses	7	\N	2026-09-16 07:22:57.324871+00
+69	1	28	expense	你的报销单已通过总经理审批	测试2 · 下一步：财务审批（温欣颖）	expenses	7	\N	2026-09-16 07:22:57.327563+00
+71	1	30	expense	你的报销单已通过财务审批	测试2 · 下一步：出纳打款（陈诚）	expenses	7	\N	2026-09-16 07:23:10.965061+00
+70	32	30	expense	华俊杰的报销单审批完成，等你打款	办公费 · ¥400.00 · 测试2	expenses	7	2026-09-16 07:23:14.091871+00	2026-09-16 07:23:10.961149+00
+72	1	32	expense	你的报销单已打款，收到后请确认	办公费 · ¥400.00 · 测试2	expenses	7	2026-09-16 07:23:24.093949+00	2026-09-16 07:23:18.764845+00
+73	32	1	expense	华俊杰已确认收到报销款	办公费 · ¥400.00 · 测试2	expenses	7	\N	2026-09-16 07:23:29.955138+00
+32	28	30	expense	温欣颖撤回了报销单，暂时不用你处理	差旅费 · ¥200.00 · 高铁票	expenses	3	2026-09-16 07:26:18.068951+00	2026-09-14 07:10:11.729899+00
+33	28	30	expense	温欣颖提交了报销单，等你审批	日用费 · ¥1800.00 · 绿植发财树10棵	expenses	4	2026-09-16 07:26:18.068951+00	2026-09-14 07:19:02.982339+00
+34	28	30	expense	温欣颖撤回了报销单，暂时不用你处理	日用费 · ¥1800.00 · 绿植发财树10棵	expenses	4	2026-09-16 07:26:18.068951+00	2026-09-14 07:19:17.490437+00
+35	28	30	purchase	温欣颖提交了采购申请，等你审批	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	2026-09-16 07:26:18.068951+00	2026-09-14 08:03:42.168129+00
+36	28	30	purchase	温欣颖撤回了采购申请，暂时不用你处理	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	2026-09-16 07:26:18.068951+00	2026-09-14 08:11:42.744315+00
+37	28	30	purchase	温欣颖提交了采购申请，等你审批	非一次性支付 · ¥1300.00 · 广告牌制作	purchases	1	2026-09-16 07:26:18.068951+00	2026-09-14 08:12:18.178182+00
+50	28	11	purchase	李敏提交了采购申请，等你审批	一次性支付 · ¥249.00 · 绿萝100盆（测试）	purchases	3	2026-09-16 07:26:18.068951+00	2026-09-14 09:20:28.597636+00
+57	28	11	expense	李敏提交了报销单，等你审批	日用费 · ¥150.00 · 采购了清洁用品	expenses	5	2026-09-16 07:26:18.068951+00	2026-09-14 09:23:40.337367+00
+75	1	30	expense	你的报销单已通过财务审批	测试 · 下一步：出纳打款（陈诚）	expenses	6	\N	2026-09-16 07:40:11.635396+00
+76	1	32	expense	你的报销单被出纳退回	测试 · 原因：测试退回	expenses	6	\N	2026-09-16 07:43:29.695154+00
+74	32	30	expense	华俊杰的报销单审批完成，等你打款	办公费 · ¥100.00 · 测试	expenses	6	2026-09-16 07:51:55.644859+00	2026-09-16 07:40:11.631006+00
+77	4	7	expense	李年提交了报销单，等你审批	办公费 · ¥2.00 · 做合同开了个百度文库的7天会员	expenses	8	\N	2026-09-16 07:54:01.606765+00
+78	30	4	expense	李年提交了报销单，等你审批	办公费 · ¥2.00 · 做合同开了个百度文库的7天会员	expenses	8	\N	2026-09-16 07:54:33.344001+00
+80	30	7	expense	李年作废了报销单，暂时不用你处理	办公费 · ¥2.00 · 做合同开了个百度文库的7天会员	expenses	8	\N	2026-09-16 07:56:40.662206+00
+79	7	4	expense	你的报销单已通过部门负责人审批	做合同开了个百度文库的7天会员 · 下一步：财务审批（温欣颖）	expenses	8	2026-09-16 07:57:37.033524+00	2026-09-16 07:54:33.348078+00
 \.
 
 
@@ -9055,6 +9120,8 @@ COPY public.samples (id, canonical_key, platform, platform_content_id, source_ur
 
 COPY public.sessions (id, user_id, created_at, expires_at, user_agent) FROM stdin;
 f94df4246b55053fd5fffc02623f95400a63a41a708dc8052e6721e57c3779a3	30	2026-09-14 09:24:21.431077+00	2026-10-14 09:24:21.431077+00	Mozilla/5.0 (Linux; Android 16; 24115RA8EC Build/BP2A.250605.031.A3; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.7871.189 Mobile Safari/537.36 XWEB/1500117 MMWEBSDK/20260604 MMWEBID/1466 REV/21bd8b32bf605ffbf0e340d26d4b8c156584802a MicroMessenger/8.0.77.3160(0x28004D38) WeCha
+7cea7e68072d2b1015bbd9ad17af4bf4c864dae457db3ba18a0f9df8079e6f11	4	2026-09-16 07:20:36.983764+00	2026-10-16 07:20:36.983764+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
+247dd2c4d21ff52ffacc1f62bddbbac9e467ff8db43cf24df518f646ca3a868b	32	2026-09-16 07:41:10.036181+00	2026-10-16 07:41:10.036181+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d41) XWEB/25560 NT/6.1 Flue
 25f58c9e91760056fbe7b119edcbd6784ccf62a0b928c091613265cc7cc28fda	3	2026-08-21 01:09:55.492798+00	2026-09-20 01:09:55.492798+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 5817952f843fe7a151a837e1f93ff8d86b7773034a3bc2ba16d1ed5b1ea64908	1	2026-08-22 01:57:29.848889+00	2026-09-21 01:57:29.848889+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 7657f87b6ab7c6c8e0af982b6bab2029df951ec3feec42cce6e3a2331030c44c	3	2026-08-24 02:17:02.741483+00	2026-09-23 02:17:02.741483+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
@@ -9079,11 +9146,11 @@ e1692cf1a064282b0a96422d7dc47958817858e0edafd639afbd7b59a5ef6429	3	2026-08-25 08
 a56a0ffe9a859925df9a342d97a1bc11e225a40121d0ae8b98f20916755e1535	1	2026-08-26 04:59:55.257048+00	2026-09-25 04:59:55.257048+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 135b5f4f6b8644865efe2aac7f9f6304149f44d2274075f1c75bc9bffaefacfb	28	2026-09-01 08:51:14.06036+00	2026-10-01 08:51:14.06036+00	Mozilla/5.0 (Phone; OpenHarmony 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 ArkWeb/6.0.0.46SP3 Mobile MicroMessenger/8.0.19.35(0xf3801323) Weixin NetType/4G Language/zh_CN MMWEBID/1327 MMWEBSDK/202606050006 XWEB/1320225
 eb99728b19ee1cf1693b176bec24135c292a238966abeea076fbbf6d30ff8ec1	1	2026-09-01 09:46:10.484263+00	2026-10-01 09:46:10.484263+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
-60a60b9a4ca29a7bc378a4c158c30aa1e5ba5e1e8070620a7544d43dba3c88c1	29	2026-09-03 08:35:49.22924+00	2026-10-03 08:35:49.22924+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 63fd73a5057ce4560182f2e5fb46a9a241b8623c907b83692392a8faef61161b	30	2026-09-11 03:48:25.52883+00	2026-10-11 03:48:25.52883+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
 59e89ba23a484cb8bf96589f5eaa5c724628828155af5ed447822dfefac07529	32	2026-09-15 03:31:48.240323+00	2026-10-15 03:31:48.240323+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 b84618db1db376272c8335e17d7eb744f83de038447060d21de0970d8aad6570	31	2026-09-14 08:45:31.629865+00	2026-10-14 08:45:31.629865+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 e1e54f1f2342391c7f079bfbfeb85d2d69431e3a2a8d134b6b4f02ae1dff1f5b	11	2026-09-14 08:48:25.35803+00	2026-10-14 08:48:25.35803+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
+0a21acca0cb2928909f88e59f749a7d7175c8b09ed3f1c5e79e2babb00328e34	28	2026-09-16 07:22:48.272532+00	2026-10-16 07:22:48.272532+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 \.
 
 
@@ -9181,11 +9248,11 @@ COPY public.users (id, name, dept, role, avatar_hue, created_at, username, passw
 30	温欣颖	财务部	reviewer	\N	2026-09-11 03:48:25.517755+00	温欣颖	scrypt$16384$8$1$02eb5ec63fff3f206b1fff373a2b77fd$60a2201d145d0fea2f15e953c968c9f9837df69c9159c215f6774df039335c9b	2026-09-14 09:24:21.424828+00	private
 29	花花	\N	reviewer	\N	2026-09-03 08:35:49.21917+00	花花	scrypt$16384$8$1$87721f59891bd9d9f584a1e1aa1b93bb$7393411cd5550787bf4d0c852eedacc76ce83cb5b33dabd4ae150bf63f767a66	\N	private
 1	华俊杰	运营部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-09-03 08:35:17.376568+00	private
-32	陈诚	财务部	reviewer	\N	2026-09-15 03:31:48.231023+00	陈诚	scrypt$16384$8$1$1bae3c24853b34003c5d9178652cf4fa$664a8965213414c4121adad5c8ebe717cfc23f806977d4ad7051f07ac0a4b847	\N	private
-28	李总	\N	reviewer	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-14 09:24:00.636275+00	private
 13	技术1-测试（系统）	外部系统	member	\N	2026-08-24 02:46:14.568649+00	\N	\N	\N	private
+4	朱涛	运营部	reviewer	\N	2026-08-21 02:53:08.628673+00	ZT123	scrypt$16384$8$1$729731c5d25da09a91af09928a28247e$490d0f6c15ada13e58714dd30bd6ba412ac6c224669c33ae80f72f7e1f1b558e	2026-09-16 07:20:36.977849+00	private
 12	测试	\N	reviewer	\N	2026-08-22 01:58:20.620055+00	测试	scrypt$16384$8$1$cd9981c8fb86140dd475fced8b2f2e6f$591db77d097dd0da6a0adf03f20667649294527b3ecd844314d1ae57e9e4e789	\N	private
-4	朱涛	运营部	reviewer	\N	2026-08-21 02:53:08.628673+00	ZT123	scrypt$16384$8$1$729731c5d25da09a91af09928a28247e$490d0f6c15ada13e58714dd30bd6ba412ac6c224669c33ae80f72f7e1f1b558e	2026-08-25 07:24:42.140389+00	private
+28	李总	\N	reviewer	\N	2026-09-01 07:55:22.813824+00	李总	scrypt$16384$8$1$834217a4031b4d482510f73a50b79cea$e7c3eff9dadb013fb76f794ef546d43a6bcf1e7b8517ca365e69b040a09f0f03	2026-09-16 07:22:48.265203+00	private
+32	陈诚	财务部	reviewer	\N	2026-09-15 03:31:48.231023+00	陈诚	scrypt$16384$8$1$1bae3c24853b34003c5d9178652cf4fa$664a8965213414c4121adad5c8ebe717cfc23f806977d4ad7051f07ac0a4b847	2026-09-16 07:41:10.012557+00	private
 11	李敏	行政部	reviewer	\N	2026-08-21 07:50:55.686453+00	李敏	scrypt$16384$8$1$678111ce19f4286c69d1b9254270cc7a$2453a4183542519defe51453661bbc2f0f3804ef3191423830342efcccda0f28	2026-09-14 08:48:25.333115+00	private
 \.
 
@@ -9232,6 +9299,7 @@ COPY public.work_reports (id, author_id, reviewer_id, report_date, title, summar
 28	1	\N	2026-09-11	9.11	今日主要做的就是内部的工作平台的财务报销流程的完善，以及视频生成的相关的学习，一条完整的视频需要找到  素材库  音效库  字体库  MG动画库以及后续需要完善的素材准备	\N	\N	\N	2026-09-11 02:10:47.871555+00	2026-09-11 07:51:32.490635+00	\N	\N	\N	private
 29	1	\N	2026-09-14	9.14	今日主要是针对，音频的处理合成要相识人声的相关处理	\N	\N	\N	2026-09-14 06:08:11.252464+00	2026-09-14 06:08:11.252464+00	\N	\N	\N	private
 30	1	\N	2026-09-15	9.15	今日还是继续做视频的生成 ，但是一直都是不太对，差点意思，后面使用同事的skill确定方向后，接下来要持续优化这个skill然后做成一个完整的视频工作流	\N	\N	\N	2026-09-15 09:27:24.889768+00	2026-09-15 09:27:24.889768+00	\N	\N	\N	private
+31	1	\N	2026-09-16	9.16	今天吧报销审批的基础调整了一下，这样小数量的钱就不用经过总经理从而直接可以进行报销流程，然后继续完善了我的视频生成的模型，音频也调整好了语数语调刚刚好还在继续完善视频的审美功能	\N	\N	\N	2026-09-16 07:14:45.552429+00	2026-09-16 07:14:45.552429+00	\N	\N	\N	private
 \.
 
 
@@ -9364,7 +9432,7 @@ SELECT pg_catalog.setval('public.api_keys_id_seq', 23, true);
 -- Name: attachments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.attachments_id_seq', 92, true);
+SELECT pg_catalog.setval('public.attachments_id_seq', 95, true);
 
 
 --
@@ -9490,14 +9558,14 @@ SELECT pg_catalog.setval('public.demands_id_seq', 30, true);
 -- Name: expense_claim_actions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.expense_claim_actions_id_seq', 16, true);
+SELECT pg_catalog.setval('public.expense_claim_actions_id_seq', 31, true);
 
 
 --
 -- Name: expense_claims_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.expense_claims_id_seq', 5, true);
+SELECT pg_catalog.setval('public.expense_claims_id_seq', 8, true);
 
 
 --
@@ -9539,7 +9607,7 @@ SELECT pg_catalog.setval('public.links_id_seq', 24, true);
 -- Name: notifications_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.notifications_id_seq', 61, true);
+SELECT pg_catalog.setval('public.notifications_id_seq', 80, true);
 
 
 --
@@ -9917,7 +9985,7 @@ SELECT pg_catalog.setval('public.users_id_seq', 32, true);
 -- Name: work_reports_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.work_reports_id_seq', 30, true);
+SELECT pg_catalog.setval('public.work_reports_id_seq', 31, true);
 
 
 --
@@ -10173,6 +10241,14 @@ ALTER TABLE ONLY public.api_keys
 
 ALTER TABLE ONLY public.api_keys
     ADD CONSTRAINT api_keys_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: approval_thresholds approval_thresholds_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.approval_thresholds
+    ADD CONSTRAINT approval_thresholds_pkey PRIMARY KEY (kind);
 
 
 --
@@ -13507,6 +13583,14 @@ ALTER TABLE ONLY public.api_keys
 
 
 --
+-- Name: approval_thresholds approval_thresholds_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.approval_thresholds
+    ADD CONSTRAINT approval_thresholds_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: attachments attachments_uploaded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15238,5 +15322,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict eSWsMeNiacIhJJdy5MIdoET9cO9kzwYrdmToyKbVgvNAfeqc7SXJJkmVSk8s9Vg
+\unrestrict KDkSo70qpIe8NWc2LPgOGyfwsNXVYKOSdYMLASytERFpDGpJLYiLrlO4LrbhxEn
 
