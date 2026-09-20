@@ -1779,6 +1779,14 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 /* 写日报的阻力主要来自「看起来要花时间」，界面上先把这件事显得轻一点。 */
 .dash-today .dash-today-body{display:flex;flex-direction:column;gap:10px;padding:2px 0 4px}
 .dash-today textarea.inp{resize:vertical;min-height:88px;line-height:1.65}
+/* 日期行：默认就是今天，忘了记的那几天可以挑回去补。 */
+/* 日期框不铺满整行 —— 它是一个小选择，铺满会让人以为这里要填很多东西。 */
+.dash-today-when{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dash-today-when label{font-size:12px;color:var(--muted);flex:none}
+.dash-today-when input.inp{width:auto;min-width:148px;flex:none}
+.dash-today-back{flex:none;padding:5px 10px;border:1px solid var(--line);border-radius:9px;
+  background:var(--page);color:var(--blue-dk);font-size:11.5px;font-weight:650}
+.dash-today-when-note{flex:1 1 auto;min-width:0;font-size:12px;color:var(--muted)}
 .dash-today-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .dash-today-foot label{font-size:12px;color:var(--muted);flex:none}
 .dash-today-foot select.inp{width:auto;min-width:118px;flex:none}
@@ -1788,6 +1796,8 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 @media (max-width:520px){
   .dash-today-hint{order:3;flex-basis:100%}
   .dash-today-foot .btn{margin-left:auto}
+  /* 补记说明换到独立一行，别把日期框和「回到今天」挤到换行 */
+  .dash-today-when-note{order:3;flex-basis:100%}
 }
 
 /* 日报可见性徽章。用描边+浅底而不是实心色块：它是一条状态说明，

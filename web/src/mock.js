@@ -999,7 +999,35 @@ export async function handle(method, path, body) {
     const scope = q.get('scope') || 'mine';
     const items = scope === 'review' ? REPORTS.filter(x => x.reviewerId === ME.id)
       : scope === 'mine' ? REPORTS.filter(x => x.authorId === ME.id) : REPORTS;
-    return { items: [...items] };
+    // 首页「每日总结」靠日期倒序取每天最新的那条，演示数据也得是这个顺序
+    return { items: [...items].sort((a, b) => String(b.reportDate || '').localeCompare(String(a.reportDate || '')) || b.id - a.id) };
+  }
+
+  // 日报的新建和修改：首页那块「每日总结」要能真的存进去（含补记过去某一天），
+  // 否则演示模式下按保存只会撞上「mock 没实现这个接口」。
+  if (p === '/api/reports' && method === 'POST') {
+    const row = {
+      id: ++seq, authorId: ME.id, authorName: ME.name,
+      reviewerId: body?.reviewerId ? Number(body.reviewerId) : null, reviewerName: '',
+      reportDate: body?.reportDate || new Date().toISOString().slice(0, 10),
+      title: body?.title || '未命名', summary: body?.summary || '',
+      resultUrl: body?.resultUrl || '', blockers: body?.blockers || '', needHelp: body?.needHelp || '',
+      feedback: '', visibility: body?.visibility === 'public' ? 'public' : 'private',
+      status: body?.reviewerId ? '待审核' : '个人记录', fileCount: 0,
+    };
+    REPORTS.unshift(row);
+    return { ...row };
+  }
+  const reportEdit = p.match(/^\/api\/reports\/(\d+)$/);
+  if (reportEdit && method === 'PATCH') {
+    const r = REPORTS.find(x => x.id === Number(reportEdit[1]));
+    if (!r) throw Object.assign(new Error('没有这条提交'), { status: 404 });
+    for (const k of ['title', 'summary', 'resultUrl', 'blockers', 'needHelp',
+                     'feedback', 'reportDate', 'visibility']) {
+      if (body?.[k] !== undefined) r[k] = body[k];
+    }
+    r.status = r.feedback ? '已反馈' : (r.reviewerId ? '待审核' : '个人记录');
+    return { ...r };
   }
 
   const clientDetail = p.match(/^\/api\/clients\/(\d+)$/);
