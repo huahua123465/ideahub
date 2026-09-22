@@ -865,6 +865,8 @@ export function bind() {
     if (e.target.closest('#aiSetupModal') || e.target.closest('#confirmLayer')) return;
     // 点这些弹窗的遮罩只是关弹窗，聊天面板要留着
     if (e.target.closest('#mask.over-chat')) return;
+    // 在聊天里点开的表格预览浮在面板上面，看完关掉还要回到对话
+    if (e.target.closest('.sheet-preview')) return;
     closeFromOutside();
   });
   // 「返回」只在手机的单栏模式下出现，桌面双栏用不上它

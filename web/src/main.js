@@ -32,6 +32,7 @@ import * as samples from './views/samples.js';
 import * as expenses from './views/expenses.js';
 import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
+import { bindSheetPreview } from './sheet-preview.js';
 
 let view = 'home';
 
@@ -166,6 +167,7 @@ async function boot() {
   expenses.refreshBadge();
   purchases.refreshBadge();
   chat.bind();
+  bindSheetPreview();
   chat.refresh();
   alertBox.bind();
   // 只读一下当前权限，不在这里申请 —— 申请必须由用户点击触发

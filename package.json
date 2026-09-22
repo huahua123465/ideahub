@@ -21,6 +21,7 @@
     "test:purchases": "node --test --test-concurrency=1 scripts/test-purchases.mjs",
     "test:purchases:ui": "node scripts/test-purchases-ui.mjs",
     "test:ai-chat:ui": "node scripts/test-ai-chat-ui.mjs",
+    "test:sheet-preview:ui": "node scripts/test-sheet-preview-ui.mjs",
     "test:samples": "node scripts/build-web.mjs && node --test scripts/test-samples-stage1.mjs scripts/test-sample-research-stage2.mjs scripts/test-sample-library-stage3.mjs scripts/test-sample-library-stage4.mjs && node scripts/test-sample-research-ui.mjs && node scripts/test-sample-library-stage3-ui.mjs && node scripts/test-sample-library-stage4-ui.mjs",
     "test:samples:stage3": "node scripts/build-web.mjs && node --test scripts/test-sample-library-stage3.mjs && node scripts/test-sample-library-stage3-ui.mjs",
     "test:samples:db": "node scripts/test-sample-library-stage3-db.mjs",
@@ -43,6 +44,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
-    "puppeteer": "^25.8.0"
+    "puppeteer": "^25.8.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

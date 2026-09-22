@@ -61,6 +61,27 @@ await Promise.all([
   fsp.copyFile(PDF_JS_INPUTS[1], join(pdfVendor, 'pdf.worker.min.mjs')),
   fsp.copyFile(PDF_JS_INPUTS[2], join(pdfVendor, 'LICENSE.txt')),
 ]);
+// SheetJS 只在预览 Excel 时按需加载。它是开发依赖（官方包只在 cdn.sheetjs.com 发布），
+// 压缩后的运行文件提交在 web/vendor/sheetjs/ 里；Docker 构建不装开发依赖，
+// 那时源文件不在，直接沿用仓库里那份，构建不必再去连 SheetJS 的下载站。
+const sheetVendor = join(root, 'web', 'vendor', 'sheetjs');
+const sheetSource = join(root, 'node_modules', 'xlsx', 'xlsx.mjs');
+let sheetSynced = false;
+try {
+  await fsp.access(sheetSource);
+  const { build: esbuild } = await import('esbuild');
+  await fsp.mkdir(sheetVendor, { recursive: true });
+  await esbuild({
+    entryPoints: [sheetSource], outfile: join(sheetVendor, 'xlsx.min.mjs'),
+    bundle: true, format: 'esm', minify: true, target: ['es2020'], logLevel: 'warning',
+    legalComments: 'inline',
+  });
+  await fsp.copyFile(join(root, 'node_modules', 'xlsx', 'LICENSE'), join(sheetVendor, 'LICENSE.txt'));
+  sheetSynced = true;
+} catch (e) {
+  if (e.code !== 'ENOENT') throw e;
+  console.log('  跳过 SheetJS：开发依赖没装（容器内构建时是正常的），沿用仓库里的 web/vendor/sheetjs/');
+}
 const 同步 = async (从, 到, 说明) => {
   try {
     await fsp.copyFile(join(root, ...从), join(root, 'web', 到));
@@ -78,4 +99,5 @@ const 已同步 = (await Promise.all([
 
 console.log(`打包完成：web/dist/app.js  ${Math.round(size / 1024)} KB  版本 ${stamp}`);
 console.log('PDF.js 浏览器运行文件已同步到 web/vendor/pdfjs/');
+if (sheetSynced) console.log('SheetJS 浏览器运行文件已同步到 web/vendor/sheetjs/');
 if (已同步.length) console.log('对接方资料已同步到 web/：' + 已同步.join('、'));
