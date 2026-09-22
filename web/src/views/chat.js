@@ -5,6 +5,10 @@
  * 手机上放不下两栏，退回单栏（靠 CSS 的 .has-conv 切换，JS 不用管）。
  * 收起时缩成右下角一个悬浮按钮 —— 常驻展开会一直吃掉右侧一条，
  * 而这个系统主体是宽表格，最缺的就是横向空间。
+ *
+ * 列表最上面固定一个「AI 助手」会话（kind='ai'）。它不是同事之间的消息：
+ * 记录只存在当前浏览器里（按用户分开），服务端只把最近几轮上下文转给
+ * 管理员接入的模型。所以它不走已读、撤回、附件那一套。
  */
 import { api, state } from '../api.js';
 import { esc, $, fromNow, avatarColor, initial } from '../util.js';
@@ -21,6 +25,15 @@ let msgs = [];
 let members = [];           // 当前群的成员，@ 候选用
 let me = { id: 0, role: 'member' };
 let editingId = null;       // 正在编辑哪条消息
+
+/* ---- AI 助手 ---- */
+const AI_KEEP = 200;        // 浏览器里最多留多少条，太长了 localStorage 会满
+const AI_CONTEXT = 20;      // 每次带给模型的最近几条
+let aiItems = [];           // [{ role:'user'|'assistant', content, at }]
+let aiLoadedFor = null;     // 记录读的是哪个用户的，换账号要重读
+let aiPending = false;
+let aiError = '';
+let aiProvider = null;      // 公开配置，不含密钥
 
 export const setMe = u => { me = u; };
 
@@ -87,6 +100,7 @@ export async function refresh() {
 
 async function loadMsgs({ keepScroll = false } = {}) {
   if (!conv) return;
+  if (conv.kind === 'ai') return;   // AI 对话在本地，没有可拉的
   const box = $('#chatMsgs');
   // 本来就贴在底部才自动跟随；正在往回翻旧消息的人不该被拽回来
   const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 60;
@@ -155,7 +169,8 @@ const convRow = (c, sub) => `
 /** 左栏的列表。它一直在，不随会话切换消失 */
 function paintList() {
   $('#chatList').innerHTML =
-    (groups.length ? `<div class="chatsec">群聊</div>` + groups.map(g => convRow(g, `${g.members} 人`)).join('') : '')
+    aiRow()
+    + (groups.length ? `<div class="chatsec">群聊</div>` + groups.map(g => convRow(g, `${g.members} 人`)).join('') : '')
     + `<div class="chatsec">同事</div>`
     + (peers.length ? peers.map(p => convRow(p, p.dept)).join('')
        : '<div class="dim" style="padding:16px">还没有别的同事注册。</div>');
@@ -167,6 +182,8 @@ function paintEmpty() {
   $('#chatFoot').hidden = true;
   $('#chatMembers').hidden = true;
   $('#chatGroupDel').hidden = true;
+  $('#chatAiSetup').hidden = true;
+  $('#chatAiClear').hidden = true;
   $('#chatMsgs').innerHTML =
     '<div class="dim" style="padding:26px;text-align:center">从左边选一个人或群开始聊。</div>';
 }
@@ -186,6 +203,10 @@ function renderBody(text) {
 function paintConv() {
   $('#chatTitle').textContent = conv.name;
   $('#chatFoot').hidden = false;
+  paintFootMode();
+  if (conv.kind === 'ai') return paintAi();
+  $('#chatAiSetup').hidden = true;
+  $('#chatAiClear').hidden = true;
   $('#chatMembers').hidden = conv.kind !== 'group';
   // 解散群只给建群的人和管理员看到
   $('#chatGroupDel').hidden = !(conv.kind === 'group'
@@ -361,6 +382,7 @@ function saveDraft() {
 }
 
 async function openConv(kind, id) {
+  if (kind === 'ai') return openAi();
   const list = kind === 'group' ? groups : peers;
   const c = list.find(x => x.id === id);
   if (!c) return;
@@ -393,6 +415,7 @@ async function send() {
   const inp = $('#chatInput');
   const text = inp.value.trim();
   if (!text || !conv) return;
+  if (conv.kind === 'ai') return sendAi(text);
   inp.value = '';
   $('#chatAt').hidden = true;
 
@@ -448,6 +471,322 @@ function bumpPreview(text) {
   paintList();
 }
 
+/* ---------------- AI 助手 ---------------- */
+
+const aiStoreKey = () => `ideahub.aiChat.v1.${me.id || 0}`;
+
+function loadAiItems() {
+  if (aiLoadedFor === me.id) return;
+  aiLoadedFor = me.id;
+  aiItems = [];
+  try {
+    const saved = JSON.parse(localStorage.getItem(aiStoreKey()) || '[]');
+    if (Array.isArray(saved)) {
+      aiItems = saved.filter(x => x && (x.role === 'user' || x.role === 'assistant')
+        && typeof x.content === 'string');
+    }
+  } catch { /* 隐私模式或数据损坏：当作没有记录 */ }
+}
+
+function saveAiItems() {
+  aiItems = aiItems.slice(-AI_KEEP);
+  try { localStorage.setItem(aiStoreKey(), JSON.stringify(aiItems)); }
+  catch { /* 存不下也不影响这次对话 */ }
+}
+
+function aiRow() {
+  loadAiItems();
+  const last = aiItems[aiItems.length - 1];
+  const on = conv?.kind === 'ai' ? ' on' : '';
+  const preview = aiPending ? '正在回答…'
+    : last ? (last.role === 'user' ? '我：' : '') + last.content.replace(/\s+/g, ' ')
+    : '问问题、理思路、起草文字';
+  return `<div class="chatsec">AI 助手</div>
+  <button class="peer peer-ai${on}" data-kind="ai" data-id="0">
+    <span class="av av-ai">${ICON.sparkle}</span>
+    <span class="peer-main"><b>AI 助手</b><span class="peer-last">${esc(preview)}</span></span>
+    <span class="peer-side">${last?.at ? `<span class="dim">${esc(fromNow(last.at))}</span>` : ''}</span>
+  </button>`;
+}
+
+/** AI 会话不能发文件，输入提示也不一样 */
+function paintFootMode() {
+  const ai = conv?.kind === 'ai';
+  const clip = $('#chatFoot .chatclip');
+  if (clip) clip.hidden = ai;
+  $('#chatInput').placeholder = ai
+    ? '问 AI 点什么…'
+    : '说点什么…（Enter 发送，群里可以 @）';
+  $('#chatSend').disabled = ai && aiPending;
+}
+
+async function loadAiProvider(force = false) {
+  if (aiProvider && !force) return aiProvider;
+  try { aiProvider = await api.aiChatProvider(); }
+  catch (e) { if (e.message !== '请先登录') aiProvider = null; }
+  return aiProvider;
+}
+
+async function openAi() {
+  saveDraft();
+  conv = { kind: 'ai', id: 0, name: 'AI 助手' };
+  resetEditing();
+  members = [];
+  loadAiItems();
+  $('#chatInput').value = drafts.get(draftKey(conv)) || '';
+  $('#chatPanel').classList.add('has-conv');
+  paintList();
+  paintConv();
+  scrollToEnd();
+  await loadAiProvider(true);
+  if (conv?.kind === 'ai') { paintConv(); scrollToEnd(); }
+}
+
+/**
+ * AI 回答的轻量排版：先整体转义，再认代码块、行内代码、粗体和换行。
+ * 不接 Markdown 库 —— 模型输出是不可信文本，自己可控的几条规则更安全。
+ */
+function renderAiText(text) {
+  const blocks = String(text).split(/```/);
+  return blocks.map((part, i) => {
+    if (i % 2 === 1) {
+      const code = part.replace(/^[\w+-]*\n/, '');
+      return `<pre class="ai-code"><code>${esc(code.replace(/\n$/, ''))}</code></pre>`;
+    }
+    return esc(part)
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+      .replace(/^#{1,4}\s+(.+)$/gm, '<b>$1</b>')
+      .replace(/\n/g, '<br>');
+  }).join('');
+}
+
+function paintAi() {
+  $('#chatMembers').hidden = true;
+  $('#chatGroupDel').hidden = true;
+  $('#chatAiSetup').hidden = !(aiProvider?.canManage || me.role === 'admin');
+  $('#chatAiClear').hidden = !aiItems.length || aiPending;
+
+  const ready = aiProvider?.configured;
+  let intro = '';
+  if (!aiItems.length) {
+    intro = aiProvider === null
+      ? '<div class="ai-empty dim">正在读取 AI 接入状态…</div>'
+      : ready
+        ? `<div class="ai-empty">
+             <span class="av av-ai">${ICON.sparkle}</span>
+             <b>有什么可以帮你？</b>
+             <span class="dim">可以让它帮忙起草文案、整理会议要点、解释一个概念。回答仅供参考，重要结论请自己核实。</span>
+             <span class="dim">对话只保存在这台设备的浏览器里。</span>
+           </div>`
+        : `<div class="ai-empty">
+             <span class="av av-ai">${ICON.sparkle}</span>
+             <b>AI 助手还没有接入</b>
+             ${aiProvider?.canManage
+               ? '<span class="dim">填写 API 地址和密钥后，全公司的同事都能使用。</span><button class="btn btn-primary" type="button" data-ai-setup>去接入</button>'
+               : '<span class="dim">请联系管理员在这里接入 AI 接口。</span>'}
+           </div>`;
+  }
+
+  let lastDay = '';
+  const rows = aiItems.map(m => {
+    const day = m.at ? dayOf(m.at) : '';
+    const sep = day && day !== lastDay ? `<div class="chatday">${esc(day)}</div>` : '';
+    if (day) lastDay = day;
+    const mine = m.role === 'user';
+    return `${sep}<div class="msg${mine ? ' mine' : ' msg-ai'}">
+      <div class="brow"><div class="bubble">${mine ? esc(m.content).replace(/\n/g, '<br>') : renderAiText(m.content)}</div></div>
+      <div class="mtime">${m.at ? esc(fromNow(m.at)) : ''}${!mine && m.model ? ` · ${esc(m.model)}` : ''}</div>
+    </div>`;
+  }).join('');
+
+  const tail = aiPending
+    ? `<div class="msg msg-ai"><div class="brow"><div class="bubble ai-typing" aria-label="AI 正在回答">
+         <i></i><i></i><i></i></div></div><div class="mtime">正在回答…</div></div>`
+    : aiError
+      ? `<div class="ai-error" role="alert"><span>${esc(aiError)}</span>
+           <button class="btn btn-ghost" type="button" data-ai-retry>重试</button></div>`
+      : '';
+
+  $('#chatMsgs').innerHTML = intro + rows + tail;
+  paintFootMode();
+}
+
+async function sendAi(text) {
+  if (aiPending) return;
+  if (aiProvider && !aiProvider.configured) {
+    toast('info', aiProvider.canManage ? '先点「接入设置」接入 AI 接口' : '管理员还没有接入 AI 接口');
+    return;
+  }
+  $('#chatInput').value = '';
+  drafts.delete(draftKey(conv));
+  aiItems.push({ role: 'user', content: text, at: new Date().toISOString() });
+  saveAiItems();
+  await askAi();
+}
+
+/** 用当前记录的最近几轮向模型提问。最后一条必须是用户的问题 */
+async function askAi() {
+  if (aiPending || aiItems[aiItems.length - 1]?.role !== 'user') return;
+  aiPending = true;
+  aiError = '';
+  repaintAi();
+  const context = aiItems.slice(-AI_CONTEXT).map(({ role, content }) => ({ role, content }));
+  try {
+    const r = await api.aiChatAsk(context);
+    aiItems.push({ role: 'assistant', content: r.reply, model: r.model, at: r.createdAt || new Date().toISOString() });
+    saveAiItems();
+  } catch (e) {
+    aiError = e.message || 'AI 没有回答，请重试';
+    if (e.status === 503) loadAiProvider(true).then(repaintAi);
+  } finally {
+    aiPending = false;
+    repaintAi();
+  }
+}
+
+/** 用户可能在等回答时切去和别人聊了：只在还停在 AI 会话时重画右栏 */
+function repaintAi() {
+  if (!openPanel) return;
+  paintList();
+  if (conv?.kind === 'ai') { paintConv(); scrollToEnd(); }
+}
+
+async function clearAi() {
+  if (aiPending || !aiItems.length) return;
+  const ok = await confirmAction({
+    eyebrow: '只影响这台设备',
+    title: '清空和 AI 的对话？',
+    message: '这台设备上保存的 AI 对话会全部删除。',
+    note: 'AI 对话本来就不上传到服务器，清空后无法找回。',
+    confirmLabel: '确认清空',
+  });
+  if (!ok) return;
+  aiItems = [];
+  aiError = '';
+  saveAiItems();
+  repaintAi();
+}
+
+/* ---- 管理员：接入设置 ---- */
+
+let setupModels = [];
+
+function setupFeedback(message = '', kind = '') {
+  const el = $('#aiSetupFeedback');
+  el.textContent = message;
+  el.className = `ai-setup-feedback${kind ? ` ${kind}` : ''}`;
+}
+
+const hostOf = url => { try { return new URL(url).host; } catch { return ''; } };
+
+function paintSetupNow() {
+  const p = aiProvider;
+  const now = $('#aiSetupNow');
+  if (!p) { now.textContent = '读不到当前配置'; return; }
+  const where = p.source === 'chat' ? 'AI 助手单独接入'
+    : p.source === 'shared' ? '沿用智能导入的配置' : '服务器环境配置';
+  now.innerHTML = p.configured
+    ? `当前：<b>${esc(hostOf(p.baseUrl) || '已接入')}</b> · ${esc(p.model || '未选模型')}<span class="dim"> · ${esc(where)}</span>`
+    : '当前：<b>还没有接入</b>';
+  $('#aiSetupReset').hidden = p.source !== 'chat';
+}
+
+function paintSetupModels(selected = '') {
+  const sel = $('#aiSetupModel');
+  sel.innerHTML = setupModels.length
+    ? setupModels.map(m => `<option value="${esc(m)}"${m === selected ? ' selected' : ''}>${esc(m)}</option>`).join('')
+    : '<option value="">先拉取可用模型</option>';
+  sel.disabled = !setupModels.length;
+  $('#aiSetupSave').disabled = !setupModels.length;
+}
+
+async function openSetup() {
+  setupModels = [];
+  $('#aiSetupKey').value = '';
+  setupFeedback();
+  paintSetupModels();
+  $('#mask').classList.add('on', 'over-chat');
+  $('#aiSetupModal').classList.add('on');
+  await loadAiProvider(true);
+  paintSetupNow();
+  $('#aiSetupUrl').value = aiProvider?.baseUrl || '';
+  $('#aiSetupKeyHint').textContent = aiProvider?.hasKey
+    ? '已保存的密钥不会显示；地址不变又不换密钥就留空'
+    : '粘贴平台后台创建的完整 API Key';
+  $('#aiSetupUrl').focus();
+}
+
+export function closeSetup() {
+  if (!$('#aiSetupModal')?.classList.contains('on')) return;
+  $('#aiSetupModal').classList.remove('on');
+  $('#mask').classList.remove('on', 'over-chat');
+}
+
+const setupPayload = () => ({
+  baseUrl: $('#aiSetupUrl').value.trim(),
+  apiKey: $('#aiSetupKey').value.trim(),
+});
+
+async function fetchSetupModels() {
+  const payload = setupPayload();
+  if (!payload.baseUrl) return setupFeedback('请先填写 API 地址', 'error');
+  const btn = $('#aiSetupFetch');
+  btn.disabled = true;
+  setupFeedback(`正在连接 ${hostOf(payload.baseUrl) || '模型接口'} 拉取可用模型…`, 'loading');
+  try {
+    const d = await api.aiChatModels(payload);
+    setupModels = d.models || [];
+    $('#aiSetupUrl').value = d.baseUrl || payload.baseUrl;
+    paintSetupModels(setupModels.includes(aiProvider?.model) ? aiProvider.model : setupModels[0]);
+    setupFeedback(`连接成功，找到 ${setupModels.length} 个模型；选好后点「保存接入」`, 'success');
+  } catch (e) {
+    setupModels = [];
+    paintSetupModels();
+    setupFeedback(e.message || '拉取失败', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveSetup() {
+  const model = $('#aiSetupModel').value;
+  if (!model) return setupFeedback('请先拉取并选择一个模型', 'error');
+  const btn = $('#aiSetupSave');
+  btn.disabled = true;
+  setupFeedback('正在验证并保存…', 'loading');
+  try {
+    aiProvider = await api.aiChatProviderSave({ ...setupPayload(), model });
+    toast('ok', `AI 助手已接入 ${model}`);
+    closeSetup();
+    aiError = '';
+    repaintAi();
+  } catch (e) {
+    setupFeedback(e.message || '保存失败', 'error');
+  } finally {
+    btn.disabled = !setupModels.length;
+  }
+}
+
+async function resetSetup() {
+  const ok = await confirmAction({
+    eyebrow: '影响全公司',
+    title: '改回沿用智能导入的配置？',
+    message: 'AI 助手单独保存的地址和密钥会被删除，之后和智能导入用同一个接口。',
+    confirmLabel: '确认改回',
+  });
+  if (!ok) return;
+  try {
+    aiProvider = await api.aiChatProviderReset();
+    paintSetupNow();
+    setupModels = [];
+    paintSetupModels();
+    $('#aiSetupUrl').value = aiProvider?.baseUrl || '';
+    setupFeedback('已改回沿用智能导入的配置', 'success');
+    repaintAi();
+  } catch (e) { setupFeedback(e.message || '操作失败', 'error'); }
+}
+
 /* ---------------- 建群 / 拉人 ---------------- */
 /* 原来是一个个 `confirm('把 XX 拉进群？')`，五个人还能忍，十个人就是灾难。
    改成一次勾完的弹窗。建群和拉人共用它，只差要不要填群名。 */
@@ -473,13 +812,13 @@ function openPick(mode, list) {
   $('#groupNameField').hidden = mode !== 'create';
   $('#groupName').value = '';
   paintPick(list);
-  $('#mask').classList.add('on');
+  $('#mask').classList.add('on', 'over-chat');
   $('#groupModal').classList.add('on');
 }
 
 export function closePick() {
   $('#groupModal').classList.remove('on');
-  $('#mask').classList.remove('on');
+  $('#mask').classList.remove('on', 'over-chat');
 }
 
 async function confirmPick() {
@@ -522,6 +861,10 @@ export function bind() {
     if (e.target.closest('#chatPanel') || e.target.closest('#chatBtn')) return;
     // 建群弹窗、消息菜单是聊天的一部分，点它们不算点外面
     if (e.target.closest('#groupModal') || e.target.closest('#chatMenu')) return;
+    // AI 接入弹窗、清空确认框也是从聊天里打开的
+    if (e.target.closest('#aiSetupModal') || e.target.closest('#confirmLayer')) return;
+    // 点这些弹窗的遮罩只是关弹窗，聊天面板要留着
+    if (e.target.closest('#mask.over-chat')) return;
     closeFromOutside();
   });
   // 「返回」只在手机的单栏模式下出现，桌面双栏用不上它
@@ -553,6 +896,21 @@ export function bind() {
   });
   $('#groupOk').addEventListener('click', confirmPick);
 
+  $('#chatAiSetup').addEventListener('click', openSetup);
+  $('#chatAiClear').addEventListener('click', clearAi);
+  $('#aiSetupFetch').addEventListener('click', fetchSetupModels);
+  $('#aiSetupSave').addEventListener('click', saveSetup);
+  $('#aiSetupReset').addEventListener('click', resetSetup);
+  // 地址或密钥改了，之前拉到的模型列表就不作数了
+  for (const id of ['#aiSetupUrl', '#aiSetupKey']) {
+    $(id).addEventListener('input', () => {
+      if (!setupModels.length) return;
+      setupModels = [];
+      paintSetupModels();
+      setupFeedback('地址或密钥已改变，请重新拉取模型');
+    });
+  }
+
   $('#chatGroupDel').addEventListener('click', async () => {
     if (conv?.kind !== 'group') return;
     const ok = await confirmAction({
@@ -579,6 +937,8 @@ export function bind() {
   });
 
   $('#chatMsgs').addEventListener('click', e => {
+    if (e.target.closest('[data-ai-retry]')) { askAi(); return; }
+    if (e.target.closest('[data-ai-setup]')) { openSetup(); return; }
     const image = e.target.closest('[data-chat-image]');
     if (image) {
       const pictures = msgs.filter(m => !m.recalled && isChatImage(m.file));
@@ -617,7 +977,7 @@ export function bind() {
   $('#chatFile').addEventListener('change', async e => {
     const files = [...(e.target.files || [])];
     e.target.value = '';
-    if (!files.length || !conv) return;
+    if (!files.length || !conv || conv.kind === 'ai') return;
     // 上传期间用户仍然可以切换会话；目标要在选文件这一刻锁住，
     // 不能让后面的图片因为 conv 已变化而误发给另一个人。
     const target = { kind: conv.kind, id: conv.id };

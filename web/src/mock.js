@@ -483,6 +483,10 @@ const accountSummary=item=>({dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,accountId:i
 const accountDetail=item=>({dtoVersion:ACCOUNT_RESEARCH_DTO_VERSION,account:{accountId:item.accountId,stableKey:item.stableKey,platform:item.platform,platformLabel:item.platformLabel,displayName:item.displayName,handle:item.handle,profileUrl:item.profileUrl,identity:item.identity},currentRunId:item.currentRunId,runs:structuredClone(item.runs),permissions:accountPermissions()});
 
 /** 把 mock 当成一个假后端来用，路径和真接口完全一致 */
+const MOCK_AI_SHARED = { configured:true, canManage:true, baseUrl:'https://api.example.com/v1',
+  model:'gpt-5-mini', source:'shared', hasKey:true };
+let mockAiProvider = { ...MOCK_AI_SHARED };
+
 export async function handle(method, path, body) {
   await new Promise(r => setTimeout(r, 90));   // 假装有网络延迟，动画才自然
   const [p, search] = path.split('?');
@@ -1138,6 +1142,23 @@ export async function handle(method, path, body) {
 
   if (p === '/api/notifications' && method === 'GET') return { items:[], unread:0 };
   if (p === '/api/chat/peers' && method === 'GET') return { items:[], groups:[], unreadTotal:0 };
+  if (p === '/api/ai-chat/provider') {
+    if (method === 'DELETE') mockAiProvider = { ...MOCK_AI_SHARED };
+    if (method === 'POST') mockAiProvider = { ...MOCK_AI_SHARED, source:'chat',
+      baseUrl:String(body?.baseUrl || MOCK_AI_SHARED.baseUrl), model:String(body?.model || MOCK_AI_SHARED.model) };
+    return { ...mockAiProvider };
+  }
+  if (p === '/api/ai-chat/provider/models' && method === 'POST') {
+    return { baseUrl:String(body?.baseUrl || MOCK_AI_SHARED.baseUrl), models:['deepseek-chat', 'gpt-5-mini', 'qwen-plus'] };
+  }
+  if (p === '/api/ai-chat' && method === 'POST') {
+    await new Promise(r => setTimeout(r, 420));
+    const last = [...(body?.messages || [])].reverse().find(m => m.role === 'user')?.content || '';
+    return {
+      reply:`（演示回答）你问的是：「${last.slice(0, 60)}」。\n\n**建议**先把目标拆成三步：\n1. 明确要解决的问题\n2. 列出现有资料\n3. 约定下一次同步的时间`,
+      model:mockAiProvider.model, createdAt:new Date().toISOString(),
+    };
+  }
 
   // 「只看界面」模式下没有后端，也就没有账号体系。
   // 这里把账号相关的接口都兜住，免得点了用户管理或退出登录就报错。

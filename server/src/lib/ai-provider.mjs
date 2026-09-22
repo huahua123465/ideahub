@@ -8,10 +8,14 @@ import {
   createCipheriv, createDecipheriv, createHash, randomBytes,
 } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { badRequest, HttpError } from './http.mjs';
 
 const CONFIG_FILE = process.env.AI_PROVIDER_CONFIG_FILE || '/var/lib/ideahub-ai/provider.json';
+// 聊天里的 AI 助手可以单独接一个平台；没单独配置时沿用上面那份。
+// 放在同一个持久卷里，重建容器不会丢。
+const CHAT_CONFIG_FILE = process.env.AI_CHAT_CONFIG_FILE
+  || join(dirname(CONFIG_FILE), 'chat-provider.json');
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-5-mini';
 
@@ -76,9 +80,9 @@ function openSealed(payload) {
   return normalizeProvider(JSON.parse(plain));
 }
 
-async function storedProvider() {
+async function storedProvider(file = CONFIG_FILE) {
   try {
-    const payload = JSON.parse(await readFile(CONFIG_FILE, 'utf8'));
+    const payload = JSON.parse(await readFile(file, 'utf8'));
     const provider = openSealed(payload);
     if (!provider.apiKey) return null;
     return { ...provider, source: 'saved' };
@@ -105,24 +109,44 @@ export async function activeProvider() {
   return await storedProvider() || environmentProvider();
 }
 
-export async function saveProvider(raw) {
+export async function saveProvider(raw, file = CONFIG_FILE) {
   const provider = normalizeProvider(raw);
   if (provider.apiKey.length < 8) throw badRequest('请输入完整的 API Key');
   if (!provider.model) throw badRequest('请选择一个模型');
 
-  await mkdir(dirname(CONFIG_FILE), { recursive: true, mode: 0o700 });
-  const temp = `${CONFIG_FILE}.${process.pid}.${Date.now()}.tmp`;
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(temp, JSON.stringify(seal(provider)), { mode: 0o600 });
-  await rename(temp, CONFIG_FILE);
-  await chmod(CONFIG_FILE, 0o600);
+  await rename(temp, file);
+  await chmod(file, 0o600);
   return { ...provider, source: 'saved' };
 }
 
-export async function clearSavedProvider() {
-  try { await unlink(CONFIG_FILE); } catch (err) {
+export async function clearSavedProvider(file = CONFIG_FILE) {
+  try { await unlink(file); } catch (err) {
     if (err?.code !== 'ENOENT') throw err;
   }
   return environmentProvider();
+}
+
+/* ---------- 聊天 AI 助手的独立配置 ---------- */
+
+/** 单独配过就用单独那份（source=chat），否则沿用智能导入的配置（source=shared）。 */
+export async function activeChatProvider() {
+  const own = await storedProvider(CHAT_CONFIG_FILE);
+  if (own) return { ...own, source: 'chat' };
+  return { ...await activeProvider(), source: 'shared' };
+}
+
+export async function saveChatProvider(raw) {
+  const saved = await saveProvider(raw, CHAT_CONFIG_FILE);
+  return { ...saved, source: 'chat' };
+}
+
+/** 删掉单独配置，回到沿用智能导入那份。 */
+export async function clearChatProvider() {
+  await clearSavedProvider(CHAT_CONFIG_FILE);
+  return activeChatProvider();
 }
 
 export function publicProvider(provider, canManage = false) {
@@ -137,7 +161,7 @@ export function publicProvider(provider, canManage = false) {
   };
 }
 
-function providerError(body, status) {
+export function providerError(body, status) {
   const message = clean(body?.error?.message || body?.message, 280).replace(/[\r\n]+/g, ' ');
   if (status === 401) return badRequest(
     `模型接口返回 401：${message || 'API Key 未通过验证，请确认复制的是创建时显示的完整密钥'}`);
@@ -184,8 +208,8 @@ export async function fetchProviderModels(raw) {
   return { provider, models };
 }
 
-export async function resolveProviderInput(raw = {}) {
-  const current = await activeProvider();
+export async function resolveProviderInput(raw = {}, current = null) {
+  current ||= await activeProvider();
   const baseUrl = normalizeApiBase(raw.baseUrl || current.baseUrl);
   const suppliedKey = cleanKey(raw.apiKey);
   if (!suppliedKey && baseUrl !== current.baseUrl) {

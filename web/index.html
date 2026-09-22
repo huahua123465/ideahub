@@ -597,6 +597,8 @@
       <div class="spacer"></div>
       <button class="chatx" id="chatMembers" title="群成员" hidden><span class="ico" data-ico="users"></span></button>
       <button class="chatx" id="chatGroupDel" title="解散群聊" hidden><span class="ico" data-ico="trash"></span></button>
+      <button class="chatx chatx-txt" id="chatAiSetup" type="button" title="AI 接入设置" hidden>接入设置</button>
+      <button class="chatx" id="chatAiClear" type="button" title="清空 AI 对话" aria-label="清空 AI 对话" hidden><span class="ico" data-ico="trash"></span></button>
       <button class="chatx chat-exit-main" id="chatClose" type="button" title="退出聊天" aria-label="退出聊天"><span class="ico" data-ico="close"></span><span class="chat-exit-label">退出</span></button>
     </header>
     <div class="chatmsgs" id="chatMsgs"></div>
@@ -614,6 +616,41 @@
 <!-- 消息操作菜单：编辑 / 撤回 / 删除。挂在 body 上而不是气泡里，
      否则会被 .chatmsgs 的 overflow 裁掉 -->
 <div class="chatmenu" id="chatMenu" hidden></div>
+
+<!-- AI 助手接入：只有管理员能打开。密钥只进不出，页面永远读不到已保存的明文 -->
+<div class="modal modal-sm" id="aiSetupModal" role="dialog" aria-modal="true" aria-labelledby="aiSetupTitle">
+  <header>
+    <h2 id="aiSetupTitle">AI 助手接入</h2>
+    <div class="hint">填写兼容 OpenAI 接口的平台地址和 API Key，拉取模型后选一个保存。密钥加密保存在服务器上。</div>
+  </header>
+  <div class="form">
+    <div class="ai-setup-now" id="aiSetupNow">正在读取当前配置…</div>
+    <div class="field">
+      <label for="aiSetupUrl">API 地址</label>
+      <input class="inp" id="aiSetupUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://api.openai.com/v1">
+      <span class="ai-setup-help">只填网站地址也可以，系统会自动补全 /v1</span>
+    </div>
+    <div class="field">
+      <label for="aiSetupKey">API Key</label>
+      <input class="inp" id="aiSetupKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="sk-…">
+      <span class="ai-setup-help" id="aiSetupKeyHint">已保存的密钥不会显示；不换密钥就留空</span>
+    </div>
+    <div class="field">
+      <label for="aiSetupModel">模型</label>
+      <div class="ai-setup-row">
+        <select class="inp" id="aiSetupModel" disabled><option value="">先拉取可用模型</option></select>
+        <button class="btn btn-ghost" id="aiSetupFetch" type="button">拉取模型</button>
+      </div>
+    </div>
+    <div class="ai-setup-feedback" id="aiSetupFeedback" role="status" aria-live="polite"></div>
+  </div>
+  <footer>
+    <button class="btn btn-ghost" id="aiSetupReset" type="button" hidden>改回沿用智能导入配置</button>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" data-close>取消</button>
+    <button class="btn btn-primary" id="aiSetupSave" type="button" disabled>保存接入</button>
+  </footer>
+</div>
 
 <!-- 建群 / 拉人：一次勾完，不要一个个 confirm -->
 <div class="modal modal-sm" id="groupModal" role="dialog" aria-modal="true" aria-labelledby="groupTitle">

@@ -355,6 +355,12 @@ export const api = {
   chatRecall:       (mid)             => call('POST', `/api/chat/messages/${mid}/recall`, {}),
   chatEdit:         (mid, body)       => call('PATCH', `/api/chat/messages/${mid}`, { body }),
   chatDelete:       (mid)             => call('DELETE', `/api/chat/messages/${mid}`),
+  // 聊天里的 AI 助手：对话只存在浏览器，服务端只负责转发给管理员接入的模型
+  aiChatProvider:      ()        => call('GET',    '/api/ai-chat/provider'),
+  aiChatModels:        (payload) => call('POST',   '/api/ai-chat/provider/models', payload),
+  aiChatProviderSave:  (payload) => call('POST',   '/api/ai-chat/provider', payload),
+  aiChatProviderReset: ()        => call('DELETE', '/api/ai-chat/provider'),
+  aiChatAsk:           (messages) => call('POST',  '/api/ai-chat', { messages }),
 
   /** 漏斗看板是只读的算出来的，没有增删改 */
   funnel:         ()            => call('GET',    '/api/funnel'),

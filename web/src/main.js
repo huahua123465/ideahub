@@ -699,6 +699,7 @@ function closeAll() {
   closeMobileSearch();
   notify.close();
   chat.closePick();
+  chat.closeSetup();
   // 聊天面板不跟着 Esc / 遮罩一起关：它是常驻工具，不是弹窗，
   // 关掉正在打的字比留着更烦人。只有点它自己的 ✕ 才收。
   modal.close();
