@@ -284,11 +284,20 @@ export function mount(router) {
     // 漏了的话任何人拿着一个连续的 id 就能把别人交的东西翻个遍。
     // 私聊附件只有对话双方能取，管理员也不行 —— 私聊不是台账。
     // 少了这一段，拿着连续的文件 id 就能把别人的私聊文件翻个遍。
+    // 群聊文件没有 to_id，按群成员判断；只认 from/to 的话，群里除了发送人谁都打不开。
     if (f.scope === 'chat') {
       const { rows: m } = await query(
-        'SELECT from_id, to_id FROM chat_messages WHERE id = $1', [f.ref_id]);
-      const ok = m[0] && (Number(m[0].from_id) === me.id || Number(m[0].to_id) === me.id);
-      if (!ok) throw forbidden('这是别人的私聊文件');
+        `SELECT m.from_id, m.to_id, m.group_id, m.recalled_at,
+                EXISTS(SELECT 1 FROM chat_group_members g
+                        WHERE g.group_id = m.group_id AND g.user_id = $2) AS in_group
+           FROM chat_messages m WHERE m.id = $1`, [f.ref_id, me.id]);
+      const msg = m[0];
+      const ok = msg && (msg.group_id
+        ? msg.in_group
+        : Number(msg.from_id) === me.id || Number(msg.to_id) === me.id);
+      if (!ok) throw forbidden(msg?.group_id ? '你不在这个群里，打不开群文件' : '这是别人的私聊文件');
+      // 撤回 = 双方都看不到，拿着旧链接也不能再下载
+      if (msg.recalled_at) throw notFound('这条消息已撤回，文件不能再打开');
     }
     // 工作提交（= 个人日报）的附件跟着那条日报的可见性走，规则见 routes/work.mjs 文件头：
     //   public  → 全站登录用户
