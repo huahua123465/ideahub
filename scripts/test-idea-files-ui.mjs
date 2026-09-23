@@ -27,7 +27,7 @@ try{
     await page.goto(`${BASE}/?mock=1`,{waitUntil:'domcontentloaded'});await page.waitForSelector('#tab-pool');
     await page.click('#tab-pool');await page.waitForSelector('#v-pool.view.on');await page.click('#btnNew');
     await page.waitForSelector('#modal.on');
-    assert.equal(await page.$eval('#fFiles',input=>input.accept),'.pdf,.doc,.docx,.xls,.xlsx');
+    assert.equal(await page.$eval('#fFiles',input=>input.accept),'.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx');
     await (await page.$('#fFiles')).uploadFile(...paths);
     await page.waitForFunction(()=>document.querySelectorAll('.idea-pending-file').length===3);
     const modalLayout=await page.$eval('#modal',node=>{const box=node.getBoundingClientRect(),form=node.querySelector('.form');return{top:box.top,bottom:box.bottom,scrollable:form.scrollHeight>=form.clientHeight};});

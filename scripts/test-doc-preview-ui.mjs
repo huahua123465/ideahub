@@ -1,12 +1,13 @@
 /**
- * Markdown / Word / PPT 附件预览专项验收：npm run test:doc-preview:ui
+ * Markdown / Word / PPT / PDF 附件预览专项验收：npm run test:doc-preview:ui
  *
  * 跑在内置演示数据上，把 fetch('/api/files/…') 换成返回现场拼的字节。桌面和手机各走一遍：
- *   只接管 .md / .docx / .doc / .pptx / .ppt 的普通点击（.txt、.pdf、下载链接照旧）
+ *   只接管 .md / .docx / .doc / .pptx / .ppt / .pdf 的普通点击（.txt、.html、下载链接照旧）
  *   → Markdown 排版（标题 / 表格 / 任务列表 / 代码块 / 链接新窗口）→ 内嵌 HTML 被消毒
  *   → 切「原文」再切回 → GBK 文件 → 无权限报错 → Esc 关闭并还焦点
  *   → Word 分页渲染（标题 / 粗体 / 表格 / 外链新窗口 / javascript: 链接被去掉 / 手机上缩放不横向溢出）
  *   → 坏的 docx 报错 → PPT 走服务端转好的 PDF（这里直接回一份手写的两页 PDF）、转换失败报错
+ *   → PDF 直接取原文件显示
  *   → 叠在聊天面板上且不把面板关掉
  * 截图和 report.json 写到 scripts/.uidiff/doc-preview/。
  * Word 样例用 JSZip 现场拼一个最小的 .docx（开发依赖，跑测试的机器上一定有）。
@@ -101,6 +102,7 @@ async function setup(page) {
       921: Uint8Array.from(atob(docxB64), c => c.charCodeAt(0)),
       922: new TextEncoder().encode('这不是 zip'),
       '931/preview': Uint8Array.from(atob(pdfB64), c => c.charCodeAt(0)),
+      941: Uint8Array.from(atob(pdfB64), c => c.charCodeAt(0)),
     };
     const realFetch = window.fetch;
     window.fetch = (input, init) => {
@@ -128,7 +130,8 @@ async function setup(page) {
       <a id="mdTxt" href="/api/files/914" target="_blank">说明.txt</a>
       <a class="chatfile" id="docx" href="/api/files/921" target="_blank"><span class="fname">合作方案.docx</span></a>
       <a id="docxBroken" href="/api/files/922" target="_blank">坏文件.docx</a>
-      <a id="docPdf" href="/api/files/923" target="_blank">方案.pdf</a>
+      <a id="docHtml" href="/api/files/923" target="_blank">分析报告.html</a>
+      <a class="chatfile" id="pdf" href="/api/files/941" target="_blank"><span class="fname">高铁电子发票.pdf</span></a>
       <a class="chatfile" id="ppt" href="/api/files/931" target="_blank"><span class="fname">九月复盘.pptx</span></a>
       <a id="pptBroken" href="/api/files/932" target="_blank">坏的.ppt</a>`;
     document.body.appendChild(host);
@@ -161,8 +164,8 @@ try {
     const page = await harness.newPage(scene, viewport);
     await setup(page);
 
-    for (const id of ['mdDownload', 'mdTxt', 'docPdf']) await page.click(`#${id}`);
-    assert.equal(await page.evaluate(open), false, '下载链接、txt、pdf 不应打开文档预览');
+    for (const id of ['mdDownload', 'mdTxt', 'docHtml']) await page.click(`#${id}`);
+    assert.equal(await page.evaluate(open), false, '下载链接、txt、html 报告不应打开文档预览');
     assert.deepEqual(await page.evaluate(() => window.__clicks.map(c => c.prevented)), [false, false, false]);
 
     await page.click('#mdDoc');
@@ -319,6 +322,21 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
 
+    // PDF：直接取原文件（不走 /preview 转换），同一套分页阅读器
+    await page.click('#pdf');
+    await page.waitForFunction(() => document.querySelectorAll('.doc-preview .learning-pdf-page canvas').length === 2);
+    st = await page.evaluate(() => ({
+      kind: document.querySelector('.doc-kind').textContent,
+      fetched: window.__fetched.at(-1),
+      download: document.querySelector('.doc-preview .sp-download').getAttribute('href'),
+      hOverflow: (b => b.scrollWidth - b.clientWidth)(document.querySelector('.doc-preview .sp-body')),
+    }));
+    assert.deepEqual(st, { kind: 'PDF 预览', fetched: '941', download: '/api/files/941?download=1', hOverflow: 0 }, JSON.stringify(st));
+    await harness.screenshot(page, `pdf-preview-${scene}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'pdf');
+
     // 叠在聊天面板上面，关掉后聊天面板还在
     await page.click('#chatBtn');
     await page.waitForFunction(() => document.querySelector('#chatPanel').classList.contains('on'));
@@ -335,14 +353,14 @@ try {
     assert.equal(await page.evaluate(() => document.querySelector('#chatPanel').classList.contains('on')), true,
       '关掉预览不应连带收起聊天面板');
 
-    harness.recordCheck(`${scene}-doc-preview`, 'interaction', { render: true, sanitize: true, source: true, gbk: true, denied: true, docx: true, docxBroken: true, ppt: true, pptBroken: true, overChat: true });
+    harness.recordCheck(`${scene}-doc-preview`, 'interaction', { render: true, sanitize: true, source: true, gbk: true, denied: true, docx: true, docxBroken: true, ppt: true, pptBroken: true, pdf: true, overChat: true });
     await page.close();
   }
 
   assert.deepEqual(harness.report.browserErrors, [], JSON.stringify(harness.report.browserErrors));
   assert.deepEqual(harness.report.networkErrors, [], JSON.stringify(harness.report.networkErrors));
   await harness.writeReport();
-  console.log(`文档预览（Markdown / Word / PPT）验收通过：${harness.report.checks.length} 项检查，${harness.report.screenshots.length} 张截图`);
+  console.log(`文档预览（Markdown / Word / PPT / PDF）验收通过：${harness.report.checks.length} 项检查，${harness.report.screenshots.length} 张截图`);
 } catch (error) {
   await harness.writeReport(error);
   throw error;

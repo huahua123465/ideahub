@@ -5,9 +5,9 @@ import test from 'node:test';
 import { IDEA_FILE_EXT,MAX_IDEA_FILES,ideaUploadParams } from '../server/src/routes/files.mjs';
 
 test('灵感附件只允许PDF、Word和Excel且上限固定',()=>{
-  assert.deepEqual([...IDEA_FILE_EXT],['.pdf','.doc','.docx','.xls','.xlsx']);
+  assert.deepEqual([...IDEA_FILE_EXT],['.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx']);
   assert.equal(MAX_IDEA_FILES,8);
-  for(const name of ['方案.pdf','需求.doc','复盘.docx','数据.xls','预算.xlsx']){
+  for(const name of ['方案.pdf','需求.doc','复盘.docx','数据.xls','预算.xlsx','汇报.ppt','路演.pptx']){
     const params=ideaUploadParams(new URL(`http://local.test/?name=${encodeURIComponent(name)}`));
     assert.equal(params.origName,name);
   }
@@ -35,7 +35,7 @@ test('灵感附件路由包含权限、匿名保护、下载校验和永久清�
   assert.match(ideas,/canManageFiles/);
   assert.match(dto,/file_count/);
   assert.match(purge,/attachments WHERE scope/);
-  assert.match(index,/accept="\.pdf,\.doc,\.docx,\.xls,\.xlsx"/);
+  assert.match(index,/accept="\.pdf,\.doc,\.docx,\.xls,\.xlsx,\.ppt,\.pptx"/);
   assert.match(modal,/上传附件 \$\{index\+1\}/);
   assert.match(drawer,/ideaFileUpload/);
 });

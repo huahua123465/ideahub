@@ -49,7 +49,7 @@ async function setup(page) {
       <a id="spCsv" href="/api/files/902" target="_blank">名单.csv</a>
       <a id="spDenied" href="/api/files/903" target="_blank">别人的表.xlsx</a>
       <a id="spDownload" href="/api/files/901?download=1">下载</a>
-      <a id="spPdf" href="/api/files/904" target="_blank">方案.pdf</a>`;
+      <a id="spPdf" href="/api/files/904" target="_blank">说明.txt</a>`;
     document.body.appendChild(host);
     // 记下每次点击最终有没有被拦下，再统一拦住，免得真去导航或下载
     window.__clicks = [];
@@ -91,9 +91,9 @@ try {
     const page = await harness.newPage(scene, viewport);
     await setup(page);
 
-    // 只接管 Excel/CSV 的普通点击；下载链接、PDF 照旧
+    // 只接管 Excel/CSV 的普通点击；下载链接、其他格式照旧
     for (const id of ['spDownload', 'spPdf']) await page.click(`#${id}`);
-    assert.equal(await page.evaluate(open), false, '下载链接和 PDF 不应打开表格预览');
+    assert.equal(await page.evaluate(open), false, '下载链接和其他格式不应打开表格预览');
     assert.deepEqual(await page.evaluate(() => window.__clicks.map(c => c.prevented)), [false, false]);
 
     await page.click('#spXlsx');
