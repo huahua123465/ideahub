@@ -8,6 +8,7 @@
  * modal.events 是同一套习惯，main.js 里接线的地方能排在一起看。
  */
 import { state } from './api.js';
+import { checkVersion } from './update-banner.js';
 
 export const events = new EventTarget();
 
@@ -68,6 +69,8 @@ function connect() {
     // bootId 变了 = 后端重启过，中间发生的事我们一概不知道，老老实实全量重拉
     if (bootId && d?.bootId && d.bootId !== bootId) emitSweep('restart');
     bootId = d?.bootId ?? bootId;
+    // 上线会重启后端，连接断了重连时这里就能拿到新版本号
+    checkVersion(d?.version);
   });
 
   // 后端明确告诉我们「续不上了」

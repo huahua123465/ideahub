@@ -197,8 +197,16 @@ async function serveStatic(req, pathname, res) {
     const etag = `W/"${s.mtimeMs.toString(36)}-${s.size.toString(36)}"`;
     const lastMod = new Date(s.mtimeMs).toUTCString();
 
+    // 地址里带内容指纹的文件（dist/app.js?v=…、styles.css?v=…、dist/chunks/名字-哈希.js）
+    // 内容一变地址就变，可以放心让浏览器缓存一年、期间一次都不回来问。
+    // 服务器在洛杉矶，每个文件省下一次往返就是几百毫秒。index.html 本身仍然每次都问（no-cache），
+    // 所以上线后浏览器拿到新的 index.html，里面引用的就是新地址。
+    const versioned = rel.startsWith('dist/chunks/')
+      || (/\.(js|css)$/.test(rel) && new URL(req.url || '/', 'http://x').searchParams.has('v'));
+    const cacheControl = versioned ? 'public, max-age=31536000, immutable' : 'no-cache';
+
     if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304, { etag, 'cache-control': 'no-cache' });
+      res.writeHead(304, { etag, 'cache-control': cacheControl });
       res.end();
       return true;
     }
@@ -207,7 +215,7 @@ async function serveStatic(req, pathname, res) {
     const headers = {
       'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream',
       'content-length': buf.length,
-      'cache-control': 'no-cache',
+      'cache-control': cacheControl,
       etag,
       'last-modified': lastMod,
     };

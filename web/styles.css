@@ -3511,3 +3511,28 @@ body.sheet-preview-open{overflow:hidden}
   .docx-host .docx-wrapper>section.docx{width:auto!important;min-height:0!important;height:auto!important;
     padding:22px 16px!important;margin-bottom:8px;overflow-x:auto}
 }
+
+/* ---------- 「有新版本」提示条（web/src/update-banner.js） ----------
+   贴在顶栏（60px）下方居中：不挡顶栏的搜索、也不和底部的提示条、右下角的聊天按钮打架。
+   层级高过聊天面板和弹窗，低于附件预览（130）和确认框。 */
+.update-banner{position:fixed;left:50%;top:calc(68px + env(safe-area-inset-top));z-index:125;
+  transform:translate(-50%,-12px);opacity:0;visibility:hidden;
+  display:flex;align-items:center;gap:6px;padding:6px 6px 6px 16px;border-radius:999px;
+  /* left:50% 时浏览器只按半屏宽度排版，不写 max-content 的话按钮会挤出深色底 */
+  width:max-content;max-width:calc(100vw - 24px);
+  background:var(--ink);color:#fff;font-size:13.5px;box-shadow:var(--shadow-lg);
+  transition:transform .22s ease,opacity .22s ease,visibility 0s linear .22s}
+.update-banner.on{transform:translate(-50%,0);opacity:1;visibility:visible;transition:transform .22s ease,opacity .22s ease}
+.update-banner .ub-text{white-space:nowrap;margin-right:4px}
+.update-banner button{flex:none;height:32px;padding:0 14px;border-radius:999px;font-size:13px;color:#fff}
+.update-banner .ub-reload{background:var(--blue);font-weight:600}
+.update-banner .ub-reload:hover{background:var(--blue-dk)}
+.update-banner .ub-later{background:rgba(255,255,255,.12)}
+.update-banner .ub-later:hover{background:rgba(255,255,255,.2)}
+.update-banner button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+@media (max-width:760px){
+  .update-banner{font-size:13px}
+  .update-banner .ub-more{display:none}
+  .update-banner button{height:36px}
+}
+@media (prefers-reduced-motion:reduce){.update-banner,.update-banner.on{transition:none}}

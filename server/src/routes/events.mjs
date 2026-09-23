@@ -11,6 +11,20 @@
 import { currentUser } from '../lib/auth.mjs';
 import { sendJson } from '../lib/http.mjs';
 import { addClient, replaySince, writeFrame, bootId, isFull, clientCount } from '../lib/bus.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * 当前这版前端的版本号：打包时写进 index.html 的 dist/app.js?v=…。
+ * 随 hello 发给页面，页面发现和自己加载的不一样，就提示「有新版本，刷新一下」。
+ * 同事的页面往往一开一整天，上线后不提示的话会一直用着旧版。源码模式（开发时）没有版本号，不提示。
+ */
+export const WEB_VERSION = (() => {
+  try {
+    const html = readFileSync(fileURLToPath(new URL('../../../web/index.html', import.meta.url)), 'utf8');
+    return /dist\/app\.js\?v=([\w-]+)/.exec(html)?.[1] || null;
+  } catch { return null; }
+})();
 
 const PING_EVERY = 25_000;   // 要短于常见反代/网关的 60s 空闲超时
 
@@ -39,7 +53,7 @@ export function mount(router) {
     // 断线补发：EventSource 重连时浏览器会自动带上 Last-Event-ID。
     // 拿不到可续的位置（后端重启过 / 缓冲区已冲掉）就发 reset，让前端全量重拉。
     const missed = replaySince(req.headers['last-event-id']);
-    writeFrame(res, 'hello', { bootId, resumed: Array.isArray(missed) && missed.length > 0 });
+    writeFrame(res, 'hello', { bootId, version: WEB_VERSION, resumed: Array.isArray(missed) && missed.length > 0 });
     if (missed === null) {
       writeFrame(res, 'reset', {});
     } else {

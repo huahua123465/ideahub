@@ -10,6 +10,7 @@ import {
   buildWebBundle,
   makeQaHtml,
   readBundleOutput,
+  readChunkOutputs,
   validateWebBuildInputs,
 } from './web-build.mjs';
 
@@ -46,11 +47,12 @@ export async function createUiHarness({
   await validateWebBuildInputs();
   const buildResult = await buildWebBundle({ write: false, sourcemap: false });
   const bundle = readBundleOutput(buildResult);
+  const chunks = readChunkOutputs(buildResult);
   const sourceHtml = await readFile(WEB_HTML, 'utf8');
   const qaHtml = makeQaHtml(sourceHtml);
 
   const marker = randomUUID();
-  const server = createQaServer({ bundle, marker, qaHtml, fixtures });
+  const server = createQaServer({ bundle, chunks, marker, qaHtml, fixtures });
   await new Promise((resolveListen, rejectListen) => {
     server.once('error', rejectListen);
     server.listen(0, '127.0.0.1', resolveListen);
@@ -232,7 +234,7 @@ function isAllowedRequest(url, origin) {
   }
 }
 
-function createQaServer({ bundle, marker, qaHtml, fixtures = {} }) {
+function createQaServer({ bundle, chunks = {}, marker, qaHtml, fixtures = {} }) {
   return createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url || '/', 'http://127.0.0.1').pathname);
@@ -243,6 +245,12 @@ function createQaServer({ bundle, marker, qaHtml, fixtures = {} }) {
       }
       if (pathname === '/__qa/app.js') {
         respond(res, 200, bundle, 'text/javascript; charset=utf-8');
+        return;
+      }
+      // app.js 按需加载的拆分模块（相对 app.js 的 ./chunks/xxx.js）
+      const chunk = /^\/__qa\/(chunks\/[^/]+\.js)$/.exec(pathname);
+      if (chunk && Object.hasOwn(chunks, chunk[1])) {
+        respond(res, 200, chunks[chunk[1]], 'text/javascript; charset=utf-8');
         return;
       }
       if (pathname === '/favicon.ico') {

@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,7 +8,8 @@ export const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 export const WEB_ROOT = join(PROJECT_ROOT, 'web');
 export const WEB_ENTRY = join(WEB_ROOT, 'src', 'main.js');
 export const WEB_HTML = join(WEB_ROOT, 'index.html');
-export const WEB_BUNDLE = join(WEB_ROOT, 'dist', 'app.js');
+export const WEB_DIST = join(WEB_ROOT, 'dist');
+export const WEB_BUNDLE = join(WEB_DIST, 'app.js');
 export const PDF_JS_INPUTS = Object.freeze([
   join(PROJECT_ROOT, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'),
   join(PROJECT_ROOT, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'),
@@ -16,6 +18,7 @@ export const PDF_JS_INPUTS = Object.freeze([
 
 const ENTRY_SCRIPT = /<script type="module" src="\.\/(?:src\/main\.js|dist\/app\.js[^"]*)"><\/script>/;
 const MODULE_PRELOADS = /<!-- modulepreload:start -->[\s\S]*?<!-- modulepreload:end -->/;
+const STYLESHEET = /<link rel="stylesheet" href="\.\/([\w.-]+\.css)(?:\?v=h[0-9a-f]{10})?">/g;
 
 const SHARED_BUILD_OPTIONS = Object.freeze({
   bundle: true,
@@ -23,6 +26,11 @@ const SHARED_BUILD_OPTIONS = Object.freeze({
   minify: true,
   target: ['es2022'],
   logLevel: 'warning',
+  // 按需加载的模块（比如只在演示模式用的 mock.js）拆成单独的文件，不进首屏的 app.js。
+  // 拆出来的文件名带内容哈希，放在 dist/chunks/ 下，服务端对它们给长缓存。
+  splitting: true,
+  entryNames: '[name]',
+  chunkNames: 'chunks/[name]-[hash]',
 });
 
 /**
@@ -33,15 +41,28 @@ const SHARED_BUILD_OPTIONS = Object.freeze({
 export function buildWebBundle({
   write = true,
   sourcemap = write,
-  outfile = WEB_BUNDLE,
+  outdir = WEB_DIST,
 } = {}) {
   return build({
     ...SHARED_BUILD_OPTIONS,
-    entryPoints: [WEB_ENTRY],
-    outfile,
+    entryPoints: { app: WEB_ENTRY },
+    outdir,
     sourcemap,
     write,
   });
+}
+
+/** 拆出来的按需模块：{ 'chunks/mock-XXXX.js': Buffer }，测试服务器要能按路径回给浏览器 */
+export function readChunkOutputs(buildResult, outdir = WEB_DIST) {
+  const root = outdir.replaceAll('\\', '/').replace(/\/?$/, '/');
+  const chunks = {};
+  for (const file of buildResult.outputFiles || []) {
+    const path = file.path.replaceAll('\\', '/');
+    if (path.startsWith(`${root}chunks/`) && path.endsWith('.js')) {
+      chunks[path.slice(root.length)] = Buffer.from(file.contents);
+    }
+  }
+  return chunks;
 }
 
 export function readBundleOutput(buildResult, outfile = WEB_BUNDLE) {
@@ -69,7 +90,26 @@ export function makeQaHtml(source) {
 }
 
 export function makeDevelopmentHtml(source) {
-  return replaceEntry(source, './src/main.js');
+  return stripStylesheetVersions(replaceEntry(source, './src/main.js'));
+}
+
+/**
+ * 给 index.html 里的本地样式表加内容指纹：./styles.css → ./styles.css?v=h1a2b3c4d5e。
+ * 服务端对带 ?v= 的静态文件给一年的强缓存（server/src/index.mjs serveStatic），
+ * 所以地址必须跟着内容变：内容不变指纹不变，照样吃缓存；改了一个字指纹就变，浏览器重新下载。
+ */
+export async function versionStylesheets(source, webRoot = WEB_ROOT) {
+  const links = [...source.matchAll(STYLESHEET)];
+  let out = source;
+  for (const [tag, name] of links) {
+    const hash = createHash('sha1').update(await readFile(join(webRoot, name))).digest('hex').slice(0, 10);
+    out = out.replace(tag, `<link rel="stylesheet" href="./${name}?v=h${hash}">`);
+  }
+  return out;
+}
+
+function stripStylesheetVersions(source) {
+  return source.replace(STYLESHEET, (_, name) => `<link rel="stylesheet" href="./${name}">`);
 }
 
 export function makeModulePreloadHtml(source, modules) {

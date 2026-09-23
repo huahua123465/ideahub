@@ -5,7 +5,10 @@
  * 界面照样完全可点。这样「给人看效果」和「真开发」用的是同一套前端代码。
  */
 import { logApi } from './apilog.js';
-import * as mock from './mock.js';
+// 演示数据（约 170KB）只在演示模式下用得到：按需加载，正式用户打开页面不用下载它。
+// 打包时 esbuild 会把它拆成单独的文件（scripts/lib/web-build.mjs 开了 splitting）。
+let mockModule = null;
+const mock = () => (mockModule ||= import('./mock.js'));
 
 /** 前端和后端同源时留空；开发时前端在 5173、后端在 3000 */
 const BASE = location.port === '5173'
@@ -47,7 +50,7 @@ export async function probe() {
 }
 
 async function call(method, path, body, extraHeaders = {}) {
-  if (state.mode === 'mock') return mock.handle(method, path, body);
+  if (state.mode === 'mock') return (await mock()).handle(method, path, body);
 
   const r = await fetch(BASE + path, {
     method,
@@ -120,7 +123,7 @@ async function mockUpload(path, file, onProgress) {
     await new Promise(done => setTimeout(done, 120));
     onProgress?.(r);
   }
-  return mock.handle('POST', path, file);
+  return (await mock()).handle('POST', path, file);
 }
 
 const qs = o => {
@@ -277,7 +280,7 @@ export const api = {
     const path = '/api/expenses/export' + qs({ kind, ...filters });
     const type = 'text/csv;charset=utf-8';
     if (state.mode === 'mock') {
-      const out = await mock.handle('GET', path);
+      const out = await (await mock()).handle('GET', path);
       return { blob: new Blob([out.text], { type }), filename: out.filename, count: out.count };
     }
     const r = await fetch(BASE + path, { credentials: 'include' });

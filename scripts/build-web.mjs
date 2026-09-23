@@ -22,6 +22,7 @@ import {
   buildWebBundle,
   makeDevelopmentHtml,
   makeProductionHtml,
+  versionStylesheets,
 } from './lib/web-build.mjs';
 const dev = process.argv.includes('--dev');
 
@@ -36,13 +37,15 @@ if (dev) {
   process.exit(0);
 }
 
+// 拆分出来的模块文件名带哈希，每次构建都不一样；先清空，免得旧文件越积越多
+await rm(join(root, 'web', 'dist'), { recursive: true, force: true });
 await buildWebBundle();
 
 const { size } = await import('node:fs').then(m => m.promises.stat(WEB_BUNDLE));
 const stamp = Date.now().toString(36);
 
 // HTML 入口切换与测试使用同一组解析规则，避免测试能识别而生产脚本识别失败。
-await writeFile(html, makeProductionHtml(s, stamp));
+await writeFile(html, await versionStylesheets(makeProductionHtml(s, stamp)));
 
 // 顺手把对接方要用的推送脚本复制进 web/，让它有一个可下载的地址。
 // 源文件只有 scripts/ 下那一份 —— 在这里复制而不是手工放两份，
