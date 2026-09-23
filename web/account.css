@@ -18,7 +18,7 @@
 
 .menuhead{padding:9px 10px 10px;border-bottom:1px solid var(--line-soft);margin-bottom:5px}
 .menuhead b{display:block;font-size:13.5px;font-weight:700;letter-spacing:-.01em}
-.menuhead span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.menuhead span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 
 .menuitem{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:8px;
   font-size:13px;color:var(--ink2);transition:.12s}
@@ -40,7 +40,7 @@
   font-size:12.5px;font-weight:700;flex:none}
 .urow .who{flex:1;min-width:0}
 .urow .who b{display:block;font-size:13.5px;font-weight:650;letter-spacing:-.01em}
-.urow .who span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;
+.urow .who span{display:block;font-size:12px;color:var(--muted);margin-top:2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* 角色是个三档选择，用分段控件而不是下拉：三个选项全摆出来，
@@ -87,7 +87,7 @@
 .urow .more{flex:none;font-size:12px;color:var(--muted);padding:5px 8px;border-radius:6px}
 .urow .more:hover{background:var(--line-soft);color:var(--ink2)}
 
-.utag{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:5px;
+.utag{font-size:12px;font-weight:700;padding:2px 6px;border-radius:5px;
   background:var(--violet-bg);color:var(--violet);margin-left:6px;vertical-align:1px}
 
 .uempty{padding:26px 0 30px;text-align:center;color:var(--muted);font-size:13px}
