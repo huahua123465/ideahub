@@ -49,7 +49,7 @@ async function setup(page) {
       <a id="spCsv" href="/api/files/902" target="_blank">名单.csv</a>
       <a id="spDenied" href="/api/files/903" target="_blank">别人的表.xlsx</a>
       <a id="spDownload" href="/api/files/901?download=1">下载</a>
-      <a id="spPdf" href="/api/files/904" target="_blank">说明.txt</a>`;
+      <a id="spPdf" href="/api/files/904" target="_blank">报告.html</a>`;
     document.body.appendChild(host);
     // 记下每次点击最终有没有被拦下，再统一拦住，免得真去导航或下载
     window.__clicks = [];

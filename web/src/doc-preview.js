@@ -1,5 +1,5 @@
 /**
- * Markdown（.md）、Word（.docx / .doc）、PPT（.pptx / .ppt）、PDF 附件在页面里直接阅读。
+ * Markdown（.md）、纯文本（.txt）、Word（.docx / .doc）、PPT（.pptx / .ppt）、PDF 附件在页面里直接阅读。
  *
  * 服务端把 .md 当纯文本回给浏览器，直接点开只能看到一屏井号和星号；
  * Office 文件浏览器根本打不开，点了只会下载。这里做法同 sheet-preview.js：
@@ -12,6 +12,8 @@
  *
  * 渲染路子：
  * - .md：浏览器里用 marked 排版；
+ * - .txt：很多人把 Markdown 写好了却存成 .txt（提示词、方案稿常见），内容看着像 Markdown
+ *   就同样排版，否则按原文显示；两种都能用「原文 / 排版」切换；
  * - .docx：浏览器里用 docx-preview 按页排版；
  * - .pptx / .ppt / .doc：浏览器里没有靠得住的开源渲染库，由服务端 LibreOffice 转成 PDF
  *   （GET /api/files/:id/preview，见 server/src/lib/office-preview.mjs），再用 pdf-reader.js 显示；
@@ -31,7 +33,7 @@ import { openPdf, closePdf } from './pdf-reader.js';
 
 const MD_MODULE = '/vendor/markdown/markdown.min.mjs';
 const DOCX_MODULE = '/vendor/docx/docx-preview.min.mjs';
-const DOC_FILE_RE = /\.(md|markdown|docx|doc|pptx|ppt|pdf)$/i;
+const DOC_FILE_RE = /\.(md|markdown|txt|docx|doc|pptx|ppt|pdf)$/i;
 const CONVERT_RE = /\.(pptx|ppt|doc)$/i;   // 要服务端转 PDF 的
 const FILE_URL_RE = /^\/api\/files\/\d+$/;
 const MAX_CHARS = 1_000_000;   // 超出只排版前面这些，几 MB 的日志导出排版会卡住手机
@@ -162,7 +164,8 @@ export async function openDocPreview({ url, name }) {
   box.classList.toggle('is-docx', kind === 'docx');
   box.classList.toggle('is-pdf', kind === 'pdf');
   const isPpt = /\.pptx?$/i.test(name);
-  box.querySelector('.doc-kind').textContent = isPdf ? 'PDF 预览' : isPpt ? 'PPT 预览' : kind === 'md' ? '文档预览' : 'Word 预览';
+  const isTxt = /\.txt$/i.test(name);
+  box.querySelector('.doc-kind').textContent = isPdf ? 'PDF 预览' : isPpt ? 'PPT 预览' : isTxt ? '文本预览' : kind === 'md' ? '文档预览' : 'Word 预览';
   box.querySelector('#docPreviewTitle').textContent = name || '文档';
   box.querySelector('.sp-download').href = `${url}?download=1`;
   const modeBtn = box.querySelector('.md-mode');
@@ -198,6 +201,7 @@ export async function openDocPreview({ url, name }) {
         setNote(`文档有 ${text.length.toLocaleString()} 个字符，只显示前 ${MAX_CHARS.toLocaleString()} 个。完整内容请下载后查看。`);
         text = text.slice(0, MAX_CHARS);
       }
+      if (isTxt && !looksLikeMarkdown(text)) mode = 'source';
       modeBtn.disabled = false;
       await paintMd();
     }
@@ -237,6 +241,17 @@ async function fetchFile(url) {
     throw new Error(msg || `读取失败（${r.status}）`);
   }
   return r.arrayBuffer();
+}
+
+/**
+ * .txt 里是不是写的 Markdown：标题、列表、引用、粗体、代码块、表格这些标记加起来够多才算。
+ * 普通纯文本偶尔出现一个「- 」或「1. 」很正常，按 Markdown 排版反而会把它弄乱。
+ */
+function looksLikeMarkdown(t) {
+  const sample = t.slice(0, 50_000);
+  const hits = (sample.match(/^(#{1,6} |\s*[-*+] |\s*\d+\. |> |```|\|.*\|\s*$)/gm) || []).length
+    + (sample.match(/\*\*[^*\n]+\*\*/g) || []).length;
+  return hits >= 5;
 }
 
 /** 同 CSV：先按 UTF-8 严格解，解不通再按 GBK（Windows 记事本老版本存的是 GBK） */

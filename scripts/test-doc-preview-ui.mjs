@@ -1,13 +1,13 @@
 /**
- * Markdown / Word / PPT / PDF 附件预览专项验收：npm run test:doc-preview:ui
+ * Markdown / 纯文本 / Word / PPT / PDF 附件预览专项验收：npm run test:doc-preview:ui
  *
  * 跑在内置演示数据上，把 fetch('/api/files/…') 换成返回现场拼的字节。桌面和手机各走一遍：
- *   只接管 .md / .docx / .doc / .pptx / .ppt / .pdf 的普通点击（.txt、.html、下载链接照旧）
+ *   只接管 .md / .txt / .docx / .doc / .pptx / .ppt / .pdf 的普通点击（.html、下载链接照旧）
  *   → Markdown 排版（标题 / 表格 / 任务列表 / 代码块 / 链接新窗口）→ 内嵌 HTML 被消毒
  *   → 切「原文」再切回 → GBK 文件 → 无权限报错 → Esc 关闭并还焦点
  *   → Word 分页渲染（标题 / 粗体 / 表格 / 外链新窗口 / javascript: 链接被去掉 / 手机上缩放不横向溢出）
  *   → 坏的 docx 报错 → PPT 走服务端转好的 PDF（这里直接回一份手写的两页 PDF）、转换失败报错
- *   → PDF 直接取原文件显示
+ *   → PDF 直接取原文件显示 → .txt：写的是 Markdown 就排版，普通文本按原文显示
  *   → 叠在聊天面板上且不把面板关掉
  * 截图和 report.json 写到 scripts/.uidiff/doc-preview/。
  * Word 样例用 JSZip 现场拼一个最小的 .docx（开发依赖，跑测试的机器上一定有）。
@@ -103,6 +103,8 @@ async function setup(page) {
       922: new TextEncoder().encode('这不是 zip'),
       '931/preview': Uint8Array.from(atob(pdfB64), c => c.charCodeAt(0)),
       941: Uint8Array.from(atob(pdfB64), c => c.charCodeAt(0)),
+      914: new TextEncoder().encode('# 视频母提示词\r\n\r\n你的任务是把文案做成**知识视频**。\r\n\r\n- 声音\r\n- 画面\r\n- 字幕\r\n\r\n> 冷静拆解一个问题。\r\n'),
+      915: new TextEncoder().encode('会议纪要\n今天讨论了三件事。\n1. 预算\n下周再议。\n'),
     };
     const realFetch = window.fetch;
     window.fetch = (input, init) => {
@@ -127,7 +129,8 @@ async function setup(page) {
       <a id="mdGbk" href="/api/files/912" target="_blank">老文档.md</a>
       <a id="mdDenied" href="/api/files/913" target="_blank">别人的.md</a>
       <a id="mdDownload" href="/api/files/911?download=1">下载</a>
-      <a id="mdTxt" href="/api/files/914" target="_blank">说明.txt</a>
+      <a class="chatfile" id="mdTxt" href="/api/files/914" target="_blank"><span class="fname">AI视频母提示词 V0.1.txt</span></a>
+      <a id="plainTxt" href="/api/files/915" target="_blank">会议纪要.txt</a>
       <a class="chatfile" id="docx" href="/api/files/921" target="_blank"><span class="fname">合作方案.docx</span></a>
       <a id="docxBroken" href="/api/files/922" target="_blank">坏文件.docx</a>
       <a id="docHtml" href="/api/files/923" target="_blank">分析报告.html</a>
@@ -164,9 +167,9 @@ try {
     const page = await harness.newPage(scene, viewport);
     await setup(page);
 
-    for (const id of ['mdDownload', 'mdTxt', 'docHtml']) await page.click(`#${id}`);
-    assert.equal(await page.evaluate(open), false, '下载链接、txt、html 报告不应打开文档预览');
-    assert.deepEqual(await page.evaluate(() => window.__clicks.map(c => c.prevented)), [false, false, false]);
+    for (const id of ['mdDownload', 'docHtml']) await page.click(`#${id}`);
+    assert.equal(await page.evaluate(open), false, '下载链接、html 报告不应打开文档预览');
+    assert.deepEqual(await page.evaluate(() => window.__clicks.map(c => c.prevented)), [false, false]);
 
     await page.click('#mdDoc');
     await page.waitForFunction(() => document.querySelector('.md-body h1'));
@@ -337,6 +340,34 @@ try {
     await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'pdf');
 
+    // .txt 里写的是 Markdown：照样排版，也能切回原文
+    await page.click('#mdTxt');
+    await page.waitForFunction(() => document.querySelector('.md-body h1'));
+    st = await page.evaluate(() => ({
+      kind: document.querySelector('.doc-kind').textContent,
+      h1: document.querySelector('.md-body h1').textContent,
+      strong: document.querySelector('.md-body strong')?.textContent,
+      items: document.querySelectorAll('.md-body li').length,
+      quote: !!document.querySelector('.md-body blockquote'),
+      mode: document.querySelector('.md-mode').textContent,
+    }));
+    assert.deepEqual(st, { kind: '文本预览', h1: '视频母提示词', strong: '知识视频', items: 3, quote: true, mode: '原文' }, JSON.stringify(st));
+    await harness.screenshot(page, `txt-markdown-${scene}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
+
+    // 普通文本：按原文显示（保留换行，不把「1. 」当成列表），能切到排版
+    await page.click('#plainTxt');
+    await page.waitForFunction(() => document.querySelector('.md-source'));
+    st = await page.evaluate(() => ({
+      text: document.querySelector('.md-source').textContent,
+      mode: document.querySelector('.md-mode').textContent,
+      pressed: document.querySelector('.md-mode').getAttribute('aria-pressed'),
+    }));
+    assert.deepEqual(st, { text: '会议纪要\n今天讨论了三件事。\n1. 预算\n下周再议。\n', mode: '排版', pressed: 'true' }, JSON.stringify(st));
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
+
     // 叠在聊天面板上面，关掉后聊天面板还在
     await page.click('#chatBtn');
     await page.waitForFunction(() => document.querySelector('#chatPanel').classList.contains('on'));
@@ -353,14 +384,14 @@ try {
     assert.equal(await page.evaluate(() => document.querySelector('#chatPanel').classList.contains('on')), true,
       '关掉预览不应连带收起聊天面板');
 
-    harness.recordCheck(`${scene}-doc-preview`, 'interaction', { render: true, sanitize: true, source: true, gbk: true, denied: true, docx: true, docxBroken: true, ppt: true, pptBroken: true, pdf: true, overChat: true });
+    harness.recordCheck(`${scene}-doc-preview`, 'interaction', { render: true, sanitize: true, source: true, gbk: true, denied: true, docx: true, docxBroken: true, ppt: true, pptBroken: true, pdf: true, txt: true, overChat: true });
     await page.close();
   }
 
   assert.deepEqual(harness.report.browserErrors, [], JSON.stringify(harness.report.browserErrors));
   assert.deepEqual(harness.report.networkErrors, [], JSON.stringify(harness.report.networkErrors));
   await harness.writeReport();
-  console.log(`文档预览（Markdown / Word / PPT / PDF）验收通过：${harness.report.checks.length} 项检查，${harness.report.screenshots.length} 张截图`);
+  console.log(`文档预览（Markdown / 纯文本 / Word / PPT / PDF）验收通过：${harness.report.checks.length} 项检查，${harness.report.screenshots.length} 张截图`);
 } catch (error) {
   await harness.writeReport(error);
   throw error;
