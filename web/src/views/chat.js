@@ -849,8 +849,35 @@ async function confirmPick() {
   }
 }
 
+/**
+ * 往下滑时把右下角的聊天按钮收起来，往上滑或停下来再出来。
+ * 按钮是固定在屏幕上的，滑动过程中总会压住某张卡片右下角 —— 手机上报销单的状态标签就被它挡住一半。
+ * 有未读消息时不收：那个红点就是要让人看见的。
+ * 页面滚动在不同宽度下不是同一个容器（手机是整页，桌面是 .main），所以在捕获阶段统一听。
+ */
+function bindChatBtnTuck() {
+  const btn = $('#chatBtn');
+  let lastY = 0;
+  let idle = 0;
+  const show = () => btn.classList.remove('tucked');
+  document.addEventListener('scroll', e => {
+    const el = e.target === document ? document.scrollingElement : e.target;
+    if (!el || (el !== document.scrollingElement && !el.classList?.contains('main'))) return;   // 弹窗、面板里的滚动不算
+    const y = el.scrollTop;
+    const down = y > lastY + 6;
+    const up = y < lastY - 6;
+    if (down || up) lastY = y;
+    const unread = !$('#chatDot').hidden;
+    if (down && y > 80 && !unread && !openPanel) btn.classList.add('tucked');
+    else if (up) show();
+    clearTimeout(idle);
+    idle = setTimeout(show, 900);
+  }, { capture: true, passive: true });
+}
+
 export function bind() {
   $('#chatBtn').addEventListener('click', () => toggle());
+  bindChatBtnTuck();
   $('#chatClose').addEventListener('click', () => close());
   $('#chatSideClose').addEventListener('click', () => close());
 
