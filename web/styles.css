@@ -3436,3 +3436,43 @@ body.sheet-preview-open{overflow:hidden}
   .sp-table{font-size:12.5px}
   .sp-table td{max-width:240px}
 }
+
+/* ---------- Markdown 预览（web/src/md-preview.js） ----------
+   外壳复用上面的 .sheet-preview / .sp-*，这里只管正文排版。 */
+.md-preview .sp-panel{width:min(920px,100%)}
+.md-mode{flex:none}
+.md-mode[disabled]{opacity:.5;cursor:default}
+.md-source{margin:0;padding:22px 26px;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.md-body{max-width:760px;margin:0 auto;padding:26px 30px 48px;font-size:15px;line-height:1.75;color:var(--ink);overflow-wrap:anywhere}
+.md-body>:first-child{margin-top:0}
+.md-body h1,.md-body h2,.md-body h3,.md-body h4,.md-body h5,.md-body h6{margin:1.6em 0 .6em;line-height:1.35}
+.md-body h1{font-size:1.75em;padding-bottom:.3em;border-bottom:1px solid var(--line)}
+.md-body h2{font-size:1.4em;padding-bottom:.25em;border-bottom:1px solid var(--line-soft)}
+.md-body h3{font-size:1.18em}
+.md-body h4,.md-body h5,.md-body h6{font-size:1em}
+.md-body p,.md-body ul,.md-body ol,.md-body blockquote,.md-body pre,.md-body table{margin:0 0 1em}
+.md-body ul,.md-body ol{padding-left:1.6em}
+.md-body li+li{margin-top:.25em}
+.md-body li>ul,.md-body li>ol{margin:.25em 0 0}
+.md-body input[type=checkbox]{margin:0 .4em 0 -.2em;vertical-align:-1px}
+.md-body a{color:var(--blue-dk);text-decoration:underline;text-underline-offset:2px}
+.md-body blockquote{padding:.2em 1em;border-left:3px solid var(--blue-200);color:var(--ink2);background:var(--surface-2);border-radius:0 8px 8px 0}
+.md-body code{font:.88em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:.15em .4em;border-radius:5px;background:var(--page)}
+.md-body pre{padding:14px 16px;border-radius:10px;background:var(--page);overflow:auto;line-height:1.55}
+.md-body pre code{padding:0;background:none;font-size:13px}
+.md-body hr{border:none;border-top:1px solid var(--line);margin:1.8em 0}
+.md-body img{max-width:100%;height:auto;border-radius:8px}
+.md-body table{display:block;width:max-content;max-width:100%;overflow:auto;border-collapse:collapse;font-size:14px}
+.md-body blockquote>:last-child,.md-body li>p:last-child{margin-bottom:0}
+.md-body li:has(>input[type=checkbox]){list-style:none;margin-left:-1.3em}
+/* 全站的标题、表头样式更具体（soft.css 后加载），这里加上外壳类名压回去 */
+.md-preview .md-body :is(h1,h2,h3,h4,h5,h6){font-weight:700;color:var(--ink);letter-spacing:0}
+.md-preview .md-body :is(th,td){padding:7px 12px;border:1px solid var(--line);text-align:left;vertical-align:top;
+  height:auto;line-height:1.55;font-size:14px;color:var(--ink);background-image:none;text-transform:none;letter-spacing:0}
+.md-preview .md-body th{background:var(--surface-2);font-weight:600}
+@media (max-width:760px){
+  .md-body{padding:18px 16px 40px;font-size:14.5px}
+  .md-source{padding:16px}
+  .md-mode{min-height:40px}
+}

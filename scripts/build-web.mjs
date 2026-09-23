@@ -82,6 +82,35 @@ try {
   if (e.code !== 'ENOENT') throw e;
   console.log('  跳过 SheetJS：开发依赖没装（容器内构建时是正常的），沿用仓库里的 web/vendor/sheetjs/');
 }
+// Markdown 预览用的 marked + DOMPurify，做法同 SheetJS：开发依赖，打成一个文件提交进仓库，
+// 第一次预览 .md 时才按需加载；容器内构建没装开发依赖时沿用仓库里那份。
+const mdVendor = join(root, 'web', 'vendor', 'markdown');
+let mdSynced = false;
+try {
+  await fsp.access(join(root, 'node_modules', 'marked', 'package.json'));
+  await fsp.access(join(root, 'node_modules', 'dompurify', 'package.json'));
+  const { build: esbuild } = await import('esbuild');
+  await fsp.mkdir(mdVendor, { recursive: true });
+  await esbuild({
+    stdin: {
+      contents: "export { marked } from 'marked'; export { default as DOMPurify } from 'dompurify';",
+      resolveDir: root, loader: 'js',
+    },
+    outfile: join(mdVendor, 'markdown.min.mjs'),
+    bundle: true, format: 'esm', minify: true, target: ['es2020'], logLevel: 'warning',
+    legalComments: 'inline',
+  });
+  const [markedLicense, purifyLicense] = await Promise.all([
+    fsp.readFile(join(root, 'node_modules', 'marked', 'LICENSE'), 'utf8'),
+    fsp.readFile(join(root, 'node_modules', 'dompurify', 'LICENSE'), 'utf8'),
+  ]);
+  await fsp.writeFile(join(mdVendor, 'LICENSE.txt'),
+    `==== marked ====\n\n${markedLicense}\n\n==== DOMPurify ====\n\n${purifyLicense}`);
+  mdSynced = true;
+} catch (e) {
+  if (e.code !== 'ENOENT') throw e;
+  console.log('  跳过 marked / DOMPurify：开发依赖没装（容器内构建时是正常的），沿用仓库里的 web/vendor/markdown/');
+}
 const 同步 = async (从, 到, 说明) => {
   try {
     await fsp.copyFile(join(root, ...从), join(root, 'web', 到));
@@ -100,4 +129,5 @@ const 已同步 = (await Promise.all([
 console.log(`打包完成：web/dist/app.js  ${Math.round(size / 1024)} KB  版本 ${stamp}`);
 console.log('PDF.js 浏览器运行文件已同步到 web/vendor/pdfjs/');
 if (sheetSynced) console.log('SheetJS 浏览器运行文件已同步到 web/vendor/sheetjs/');
+if (mdSynced) console.log('marked / DOMPurify 浏览器运行文件已同步到 web/vendor/markdown/');
 if (已同步.length) console.log('对接方资料已同步到 web/：' + 已同步.join('、'));
