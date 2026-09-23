@@ -111,6 +111,31 @@ try {
   if (e.code !== 'ENOENT') throw e;
   console.log('  跳过 marked / DOMPurify：开发依赖没装（容器内构建时是正常的），沿用仓库里的 web/vendor/markdown/');
 }
+// Word（.docx）预览用的 docx-preview + JSZip，做法同上。
+const docxVendor = join(root, 'web', 'vendor', 'docx');
+let docxSynced = false;
+try {
+  await fsp.access(join(root, 'node_modules', 'docx-preview', 'package.json'));
+  await fsp.access(join(root, 'node_modules', 'jszip', 'package.json'));
+  const { build: esbuild } = await import('esbuild');
+  await fsp.mkdir(docxVendor, { recursive: true });
+  await esbuild({
+    stdin: { contents: "export { renderAsync } from 'docx-preview';", resolveDir: root, loader: 'js' },
+    outfile: join(docxVendor, 'docx-preview.min.mjs'),
+    bundle: true, format: 'esm', platform: 'browser', minify: true, target: ['es2020'], logLevel: 'warning',
+    legalComments: 'inline',
+  });
+  const [docxLicense, zipLicense] = await Promise.all([
+    fsp.readFile(join(root, 'node_modules', 'docx-preview', 'LICENSE'), 'utf8'),
+    fsp.readFile(join(root, 'node_modules', 'jszip', 'LICENSE.markdown'), 'utf8'),
+  ]);
+  await fsp.writeFile(join(docxVendor, 'LICENSE.txt'),
+    `==== docx-preview ====\n\n${docxLicense}\n\n==== JSZip ====\n\n${zipLicense}`);
+  docxSynced = true;
+} catch (e) {
+  if (e.code !== 'ENOENT') throw e;
+  console.log('  跳过 docx-preview：开发依赖没装（容器内构建时是正常的），沿用仓库里的 web/vendor/docx/');
+}
 const 同步 = async (从, 到, 说明) => {
   try {
     await fsp.copyFile(join(root, ...从), join(root, 'web', 到));
@@ -130,4 +155,5 @@ console.log(`打包完成：web/dist/app.js  ${Math.round(size / 1024)} KB  版�
 console.log('PDF.js 浏览器运行文件已同步到 web/vendor/pdfjs/');
 if (sheetSynced) console.log('SheetJS 浏览器运行文件已同步到 web/vendor/sheetjs/');
 if (mdSynced) console.log('marked / DOMPurify 浏览器运行文件已同步到 web/vendor/markdown/');
+if (docxSynced) console.log('docx-preview 浏览器运行文件已同步到 web/vendor/docx/');
 if (已同步.length) console.log('对接方资料已同步到 web/：' + 已同步.join('、'));
