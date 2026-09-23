@@ -869,12 +869,12 @@ const FMT = n => (n > 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB'
 /** 新建时还没 id，选中的文件先攒在这里，记录保存好之后再补传 */
 let pendingFiles = [];
 
-const UPLOAD_HINT = '选择图片或文件上传（图片 / PDF / Word / Excel，单个最大 20MB）';
+const UPLOAD_HINT = '选择图片或文件上传（图片 / PDF / Word / Excel / PPT，单个最大 20MB）';
 
 /** 手机相册选出来的照片多半是 HEIC 或 WebP，只写死几个扩展名会把它们挡在文件选择框外面。
     再补一个 image/* ，让手机上「从相册选」直接能用。 */
 const UPLOAD_ACCEPT = 'image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.avif,.heic,.heif,'
-                    + '.html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md';
+                    + '.html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md';
 
 /** 能在浏览器里直接显示的图。
     HEIC/HEIF 除了 Safari 都显示不了 —— 收得下但画不出来，

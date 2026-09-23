@@ -1,12 +1,13 @@
 /**
- * Markdown / Word 附件预览专项验收：npm run test:doc-preview:ui
+ * Markdown / Word / PPT 附件预览专项验收：npm run test:doc-preview:ui
  *
  * 跑在内置演示数据上，把 fetch('/api/files/…') 换成返回现场拼的字节。桌面和手机各走一遍：
- *   只接管 .md / .docx 的普通点击（.doc、.txt、下载链接照旧）
+ *   只接管 .md / .docx / .doc / .pptx / .ppt 的普通点击（.txt、.pdf、下载链接照旧）
  *   → Markdown 排版（标题 / 表格 / 任务列表 / 代码块 / 链接新窗口）→ 内嵌 HTML 被消毒
  *   → 切「原文」再切回 → GBK 文件 → 无权限报错 → Esc 关闭并还焦点
  *   → Word 分页渲染（标题 / 粗体 / 表格 / 外链新窗口 / javascript: 链接被去掉 / 手机上缩放不横向溢出）
- *   → 坏的 docx 报错 → 叠在聊天面板上且不把面板关掉
+ *   → 坏的 docx 报错 → PPT 走服务端转好的 PDF（这里直接回一份手写的两页 PDF）、转换失败报错
+ *   → 叠在聊天面板上且不把面板关掉
  * 截图和 report.json 写到 scripts/.uidiff/doc-preview/。
  * Word 样例用 JSZip 现场拼一个最小的 .docx（开发依赖，跑测试的机器上一定有）。
  */
@@ -45,6 +46,29 @@ async function makeDocx() {
 }
 const DOCX_B64 = await makeDocx();
 
+/** 手写一份两页的最小 PDF，冒充服务端 LibreOffice 转出来的结果 */
+function makePdf() {
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 720 405] /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 720 405] /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> >>',
+    null,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  const stream = 'BT /F1 36 Tf 60 200 Td (Slide preview) Tj ET';
+  objs[4] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objs.forEach((o, i) => { offsets.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) out += `${String(off).padStart(10, '0')} 00000 n \n`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1').toString('base64');
+}
+const PDF_B64 = makePdf();
+
 const DOC = `# 九月选题复盘
 
 本月共发布 **12** 条，*完播率* 提升明显。详见 [数据看板](https://example.com/board)。
@@ -70,17 +94,23 @@ console.log('<b>不是粗体</b>');
 `;
 
 async function setup(page) {
-  await page.evaluate(async (doc, docxB64) => {
+  await page.evaluate(async (doc, docxB64, pdfB64) => {
     const gbk = new Uint8Array([0x23, 0x20, 0xB2, 0xE2, 0xCA, 0xD4]);   // "# 测试"（GBK）
     const files = {
       911: new TextEncoder().encode('\uFEFF' + doc), 912: gbk,
       921: Uint8Array.from(atob(docxB64), c => c.charCodeAt(0)),
       922: new TextEncoder().encode('这不是 zip'),
+      '931/preview': Uint8Array.from(atob(pdfB64), c => c.charCodeAt(0)),
     };
     const realFetch = window.fetch;
     window.fetch = (input, init) => {
-      const m = /^\/api\/files\/(\d+)$/.exec(String(input));
+      const m = /^\/api\/files\/(\d+(?:\/preview)?)$/.exec(String(input));
       if (!m) return realFetch(input, init);
+      window.__fetched = [...(window.__fetched || []), m[1]];
+      if (m[1] === '932/preview') {
+        return Promise.resolve(new Response(JSON.stringify({ error: '这个文件转换失败了，可能已损坏' }),
+          { status: 422, headers: { 'content-type': 'application/json' } }));
+      }
       if (m[1] === '913') {
         return Promise.resolve(new Response(JSON.stringify({ error: '这是别人的私聊文件' }),
           { status: 403, headers: { 'content-type': 'application/json' } }));
@@ -98,7 +128,9 @@ async function setup(page) {
       <a id="mdTxt" href="/api/files/914" target="_blank">说明.txt</a>
       <a class="chatfile" id="docx" href="/api/files/921" target="_blank"><span class="fname">合作方案.docx</span></a>
       <a id="docxBroken" href="/api/files/922" target="_blank">坏文件.docx</a>
-      <a id="docOld" href="/api/files/923" target="_blank">老格式.doc</a>`;
+      <a id="docPdf" href="/api/files/923" target="_blank">方案.pdf</a>
+      <a class="chatfile" id="ppt" href="/api/files/931" target="_blank"><span class="fname">九月复盘.pptx</span></a>
+      <a id="pptBroken" href="/api/files/932" target="_blank">坏的.ppt</a>`;
     document.body.appendChild(host);
     window.__clicks = [];
     window.addEventListener('click', e => {
@@ -107,7 +139,7 @@ async function setup(page) {
       window.__clicks.push({ id: a.id, prevented: e.defaultPrevented });
       e.preventDefault();
     });
-  }, DOC, DOCX_B64);
+  }, DOC, DOCX_B64, PDF_B64);
 }
 
 const open = () => !!document.querySelector('.doc-preview')?.classList.contains('on');
@@ -129,8 +161,8 @@ try {
     const page = await harness.newPage(scene, viewport);
     await setup(page);
 
-    for (const id of ['mdDownload', 'mdTxt', 'docOld']) await page.click(`#${id}`);
-    assert.equal(await page.evaluate(open), false, '下载链接、txt、老格式 doc 不应打开文档预览');
+    for (const id of ['mdDownload', 'mdTxt', 'docPdf']) await page.click(`#${id}`);
+    assert.equal(await page.evaluate(open), false, '下载链接、txt、pdf 不应打开文档预览');
     assert.deepEqual(await page.evaluate(() => window.__clicks.map(c => c.prevented)), [false, false, false]);
 
     await page.click('#mdDoc');
@@ -259,6 +291,34 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
 
+    // PPT：取服务端转好的 PDF，用分页阅读器显示
+    await page.click('#ppt');
+    await page.waitForFunction(() => document.querySelectorAll('.doc-preview .learning-pdf-page canvas').length === 2);
+    await settleDom(page);
+    st = await page.evaluate(() => ({
+      kind: document.querySelector('.doc-kind').textContent,
+      modeHidden: document.querySelector('.md-mode').hidden,
+      fetched: window.__fetched.at(-1),
+      download: document.querySelector('.doc-preview .sp-download').getAttribute('href'),
+      pages: document.querySelectorAll('.doc-preview .learning-pdf-page').length,
+      hOverflow: (b => b.scrollWidth - b.clientWidth)(document.querySelector('.doc-preview .sp-body')),
+    }));
+    assert.deepEqual(st, { kind: 'PPT 预览', modeHidden: true, fetched: '931/preview',
+      download: '/api/files/931?download=1', pages: 2, hOverflow: 0 }, JSON.stringify(st));
+    await onTop(page, '.doc-preview .sp-close');
+    await harness.screenshot(page, `ppt-preview-${scene}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'ppt');
+
+    // 转换失败：把服务端的原因告诉用户
+    await page.click('#pptBroken');
+    await page.waitForFunction(() => document.querySelector('.doc-preview .sp-error'));
+    assert.match(await page.$eval('.doc-preview .sp-error', n => n.textContent), /转换失败/);
+    assert.equal(await page.$eval('.doc-kind', n => n.textContent), 'PPT 预览');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.doc-preview.on'));
+
     // 叠在聊天面板上面，关掉后聊天面板还在
     await page.click('#chatBtn');
     await page.waitForFunction(() => document.querySelector('#chatPanel').classList.contains('on'));
@@ -275,14 +335,14 @@ try {
     assert.equal(await page.evaluate(() => document.querySelector('#chatPanel').classList.contains('on')), true,
       '关掉预览不应连带收起聊天面板');
 
-    harness.recordCheck(`${scene}-doc-preview`, 'interaction', { render: true, sanitize: true, source: true, gbk: true, denied: true, docx: true, docxBroken: true, overChat: true });
+    harness.recordCheck(`${scene}-doc-preview`, 'interaction', { render: true, sanitize: true, source: true, gbk: true, denied: true, docx: true, docxBroken: true, ppt: true, pptBroken: true, overChat: true });
     await page.close();
   }
 
   assert.deepEqual(harness.report.browserErrors, [], JSON.stringify(harness.report.browserErrors));
   assert.deepEqual(harness.report.networkErrors, [], JSON.stringify(harness.report.networkErrors));
   await harness.writeReport();
-  console.log(`文档预览（Markdown / Word）验收通过：${harness.report.checks.length} 项检查，${harness.report.screenshots.length} 张截图`);
+  console.log(`文档预览（Markdown / Word / PPT）验收通过：${harness.report.checks.length} 项检查，${harness.report.screenshots.length} 张截图`);
 } catch (error) {
   await harness.writeReport(error);
   throw error;

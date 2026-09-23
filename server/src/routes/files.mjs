@@ -15,6 +15,7 @@
  *     sandbox（不带 allow-same-origin）让它拿到一个独立的空源：报告照样渲染、
  *     图表照样跑，但读不到 cookie，也调不了本站接口。
  *  3. Office 文档一律当附件下载，不在浏览器里内联打开。
+ *     要在线看的话走 /api/files/:id/preview：PPT 和老格式 Word 由服务端转成 PDF 再给（lib/office-preview.mjs）。
  */
 import { createWriteStream } from 'node:fs';
 import { unlink, mkdir, stat } from 'node:fs/promises';
@@ -24,17 +25,18 @@ import { join, extname, basename } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
 import { query,tx } from '../db/index.mjs';
-import { sendJson, q, badRequest, notFound, forbidden } from '../lib/http.mjs';
+import { sendJson, q, badRequest, notFound, forbidden, HttpError } from '../lib/http.mjs';
 import { currentUser } from '../lib/auth.mjs';
 import { requireKey } from '../lib/apikey.mjs';
 import { publish } from '../lib/bus.mjs';
+import { CONVERTIBLE_EXT, ensurePreview, dropPreview } from '../lib/office-preview.mjs';
 import { assertExpenseFileReadable, assertExpenseFileDeletable } from './expenses.mjs';
 import { assertPurchaseFileReadable, assertPurchaseFileDeletable } from './purchases.mjs';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/data/uploads';
 const MAX_SIZE = 20 * 1024 * 1024;   // 20MB
 const MAX_IDEA_FILES = 8;
-const IDEA_FILE_EXT = new Set(['.pdf','.doc','.docx','.xls','.xlsx']);
+const IDEA_FILE_EXT = new Set(['.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx']);
 
 /** 允许的类型。键是扩展名，值是回给浏览器的 Content-Type 和打开方式 */
 const KINDS = {
@@ -43,6 +45,8 @@ const KINDS = {
   '.pdf':  { mime: 'application/pdf',          inline: true },
   '.doc':  { mime: 'application/msword' },
   '.docx': { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+  '.ppt':  { mime: 'application/vnd.ms-powerpoint' },
+  '.pptx': { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
   '.xls':  { mime: 'application/vnd.ms-excel' },
   '.xlsx': { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
   '.csv':  { mime: 'text/csv; charset=utf-8' },
@@ -151,7 +155,7 @@ function uploadParams(url) {
 function ideaUploadParams(url) {
   const params=uploadParams(url);
   if(!IDEA_FILE_EXT.has(params.kind.ext)){
-    throw badRequest('灵感附件只支持 PDF、Word（DOC/DOCX）和 Excel（XLS/XLSX）');
+    throw badRequest('灵感附件只支持 PDF、Word（DOC/DOCX）、Excel（XLS/XLSX）和 PPT（PPT/PPTX）');
   }
   return params;
 }
@@ -195,6 +199,58 @@ async function storeScopedFile(req,scope,refId,params,uploadedBy=null,{maxFiles=
 
 async function storeClientFile(req, clientId, params, uploadedBy = null) {
   return storeScopedFile(req,'client',clientId,params,uploadedBy);
+}
+
+/**
+ * 取出一个附件并按它所属的地方校验读权限：打开 / 下载和预览都走这里，
+ * 两处不能各写一份 —— 哪天一处漏改，另一处就成了绕过权限的后门。
+ */
+async function readableFile(req, id) {
+  const me = await currentUser(req);
+  const { rows } = await query('SELECT * FROM attachments WHERE id = $1', [Number(id)]);
+  const f = rows[0];
+  if (!f) throw notFound('没有这个文件');
+
+  // 客户档案的附件是团队共同维护的台账，登录就能看；
+  // 工作提交的附件只有提交人、审核人和管理员能看 —— 这条不能漏，
+  // 漏了的话任何人拿着一个连续的 id 就能把别人交的东西翻个遍。
+  // 私聊附件只有对话双方能取，管理员也不行 —— 私聊不是台账。
+  // 少了这一段，拿着连续的文件 id 就能把别人的私聊文件翻个遍。
+  // 群聊文件没有 to_id，按群成员判断；只认 from/to 的话，群里除了发送人谁都打不开。
+  if (f.scope === 'chat') {
+    const { rows: m } = await query(
+      `SELECT m.from_id, m.to_id, m.group_id, m.recalled_at,
+              EXISTS(SELECT 1 FROM chat_group_members g
+                      WHERE g.group_id = m.group_id AND g.user_id = $2) AS in_group
+         FROM chat_messages m WHERE m.id = $1`, [f.ref_id, me.id]);
+    const msg = m[0];
+    const ok = msg && (msg.group_id
+      ? msg.in_group
+      : Number(msg.from_id) === me.id || Number(msg.to_id) === me.id);
+    if (!ok) throw forbidden(msg?.group_id ? '你不在这个群里，打不开群文件' : '这是别人的私聊文件');
+    // 撤回 = 双方都看不到，拿着旧链接也不能再下载
+    if (msg.recalled_at) throw notFound('这条消息已撤回，文件不能再打开');
+  }
+  // 工作提交（= 个人日报）的附件跟着那条日报的可见性走，规则见 routes/work.mjs 文件头：
+  //   public  → 全站登录用户
+  //   private → 只有作者和他指定的审核人，**管理员也不行**
+  // 这里没有 me.role === 'admin' 的短路，是有意的；加回去就等于私密日报形同虚设。
+  if (f.scope === 'report') {
+    const { rows: r } = await query(
+      'SELECT author_id, reviewer_id, visibility FROM work_reports WHERE id = $1', [f.ref_id]);
+    const ok = r[0] && (
+      r[0].visibility === 'public'
+      || Number(r[0].author_id) === me.id
+      || (r[0].reviewer_id != null && Number(r[0].reviewer_id) === me.id));
+    if (!ok) throw forbidden('这是别人的工作提交，你看不到');
+  }
+  if(f.scope==='idea')await ensureIdeaAccess(Number(f.ref_id),me);
+  // 报销凭证跟着报销单的可见范围走（规则见 routes/expenses.mjs 文件头）。
+  // 这段不能漏：没列在这里的 scope 默认登录就能下载，漏了就能按连续 id 翻别人的报销凭证。
+  if (f.scope === 'expense') await assertExpenseFileReadable(f, me);
+  // 采购申请的材料、转款凭证、交付照片同理，跟着采购单的可见范围走（routes/purchases.mjs 文件头）
+  if (f.scope === 'purchase') await assertPurchaseFileReadable(f, me);
+  return f;
 }
 
 export function mount(router) {
@@ -274,50 +330,7 @@ export function mount(router) {
 
   /* ---------- 打开 / 下载 ---------- */
   router.get('/api/files/:id', async (req, res, params, url) => {
-    const me = await currentUser(req);
-    const { rows } = await query('SELECT * FROM attachments WHERE id = $1', [Number(params.id)]);
-    const f = rows[0];
-    if (!f) throw notFound('没有这个文件');
-
-    // 客户档案的附件是团队共同维护的台账，登录就能看；
-    // 工作提交的附件只有提交人、审核人和管理员能看 —— 这条不能漏，
-    // 漏了的话任何人拿着一个连续的 id 就能把别人交的东西翻个遍。
-    // 私聊附件只有对话双方能取，管理员也不行 —— 私聊不是台账。
-    // 少了这一段，拿着连续的文件 id 就能把别人的私聊文件翻个遍。
-    // 群聊文件没有 to_id，按群成员判断；只认 from/to 的话，群里除了发送人谁都打不开。
-    if (f.scope === 'chat') {
-      const { rows: m } = await query(
-        `SELECT m.from_id, m.to_id, m.group_id, m.recalled_at,
-                EXISTS(SELECT 1 FROM chat_group_members g
-                        WHERE g.group_id = m.group_id AND g.user_id = $2) AS in_group
-           FROM chat_messages m WHERE m.id = $1`, [f.ref_id, me.id]);
-      const msg = m[0];
-      const ok = msg && (msg.group_id
-        ? msg.in_group
-        : Number(msg.from_id) === me.id || Number(msg.to_id) === me.id);
-      if (!ok) throw forbidden(msg?.group_id ? '你不在这个群里，打不开群文件' : '这是别人的私聊文件');
-      // 撤回 = 双方都看不到，拿着旧链接也不能再下载
-      if (msg.recalled_at) throw notFound('这条消息已撤回，文件不能再打开');
-    }
-    // 工作提交（= 个人日报）的附件跟着那条日报的可见性走，规则见 routes/work.mjs 文件头：
-    //   public  → 全站登录用户
-    //   private → 只有作者和他指定的审核人，**管理员也不行**
-    // 这里没有 me.role === 'admin' 的短路，是有意的；加回去就等于私密日报形同虚设。
-    if (f.scope === 'report') {
-      const { rows: r } = await query(
-        'SELECT author_id, reviewer_id, visibility FROM work_reports WHERE id = $1', [f.ref_id]);
-      const ok = r[0] && (
-        r[0].visibility === 'public'
-        || Number(r[0].author_id) === me.id
-        || (r[0].reviewer_id != null && Number(r[0].reviewer_id) === me.id));
-      if (!ok) throw forbidden('这是别人的工作提交，你看不到');
-    }
-    if(f.scope==='idea')await ensureIdeaAccess(Number(f.ref_id),me);
-    // 报销凭证跟着报销单的可见范围走（规则见 routes/expenses.mjs 文件头）。
-    // 这段不能漏：没列在这里的 scope 默认登录就能下载，漏了就能按连续 id 翻别人的报销凭证。
-    if (f.scope === 'expense') await assertExpenseFileReadable(f, me);
-    // 采购申请的材料、转款凭证、交付照片同理，跟着采购单的可见范围走（routes/purchases.mjs 文件头）
-    if (f.scope === 'purchase') await assertPurchaseFileReadable(f, me);
+    const f = await readableFile(req, params.id);
 
     const path = join(UPLOAD_DIR, basename(f.stored_name));
     let st;
@@ -347,6 +360,30 @@ export function mount(router) {
     await pipeline(createReadStream(path), res).catch(() => {});
   });
 
+  /* ---------- 在线预览：PPT / 老格式 Word 转成 PDF ----------
+     权限和打开原文件完全一样。第一次打开要现转，几秒到几十秒，之后走缓存。 */
+  router.get('/api/files/:id/preview', async (req, res, params) => {
+    const f = await readableFile(req, params.id);
+    if (!CONVERTIBLE_EXT.has(extname(f.stored_name).toLowerCase())) throw badRequest('这个格式不需要转换预览');
+    const src = join(UPLOAD_DIR, basename(f.stored_name));
+    try { await stat(src); }
+    catch { throw notFound('文件已经不在磁盘上了'); }
+
+    let pdf;
+    try { pdf = await ensurePreview(src, f.stored_name); }
+    catch (e) { throw new HttpError(422, e.message || '转换失败'); }
+    const st = await stat(pdf);
+    const name = f.orig_name.replace(/\.[^.]+$/, '') + '.pdf';
+    res.writeHead(200, {
+      'content-type': 'application/pdf',
+      'content-length': st.size,
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff',
+      'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
+    });
+    await pipeline(createReadStream(pdf), res).catch(() => {});
+  });
+
   /* ---------- 删除 ---------- */
   router.del('/api/files/:id', async (req, res, params) => {
     const me = await currentUser(req);
@@ -364,6 +401,7 @@ export function mount(router) {
     }
     await query('DELETE FROM attachments WHERE id = $1', [f.id]);
     await unlink(join(UPLOAD_DIR, basename(f.stored_name))).catch(() => {});
+    await dropPreview(f.stored_name);
     sendJson(res, 200, { ok: true });
     if(f.scope==='idea')publish('idea:updated',{id:Number(f.ref_id),files:true});
     else if (f.scope === 'expense') publish('expense:updated', {});

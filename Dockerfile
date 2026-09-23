@@ -2,6 +2,12 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+# PPT / 老格式 Word 的在线预览：服务端用 LibreOffice 转成 PDF（server/src/lib/office-preview.mjs）。
+# 字体：Noto CJK 管中文（微软雅黑、宋体都会回落到它），Liberation / Carlito 和
+# Arial、Times、Calibri 等宽，英文排版不会跑行。放在最前面，只要这行不变就一直吃缓存。
+RUN apk add --no-cache libreoffice-impress libreoffice-writer \
+      font-noto-cjk font-liberation font-carlito font-dejavu
+
 # 依赖单独装，吃 Docker 的层缓存
 COPY package.json ./
 RUN npm install --omit=dev && npm cache clean --force

@@ -1,12 +1,17 @@
 /**
- * Markdown（.md）和 Word（.docx）附件在页面里直接阅读。
+ * Markdown（.md）、Word（.docx / .doc）、PPT（.pptx / .ppt）附件在页面里直接阅读。
  *
  * 服务端把 .md 当纯文本回给浏览器，直接点开只能看到一屏井号和星号；
- * .docx 浏览器根本打不开，点了只会下载。这里做法同 sheet-preview.js：
- * 全局拦截指向 /api/files/<id>、文件名是 .md / .docx 的普通左键点击，弹出阅读浮层，
+ * Office 文件浏览器根本打不开，点了只会下载。这里做法同 sheet-preview.js：
+ * 全局拦截指向 /api/files/<id>、文件名是上面这些后缀的普通左键点击，弹出阅读浮层，
  * 右上角可以下载（Markdown 还能切「原文」）；
  * Ctrl/⌘/Shift 点、中键点、带 ?download=1 的「下载」链接照旧交给浏览器。
- * 老格式 .doc 是二进制格式，浏览器里没有靠谱的解析办法，不接管，点了照旧下载。
+ *
+ * 三条渲染路子：
+ * - .md：浏览器里用 marked 排版；
+ * - .docx：浏览器里用 docx-preview 按页排版；
+ * - .pptx / .ppt / .doc：浏览器里没有靠得住的开源渲染库，由服务端 LibreOffice 转成 PDF
+ *   （GET /api/files/:id/preview，见 server/src/lib/office-preview.mjs），再用 pdf-reader.js 显示。
  *
  * 文件是别人上传的、不可信的：
  * - Markdown 用 marked 渲染后过一遍 DOMPurify —— Markdown 里可以直接写 HTML，不消毒就是 XSS；
@@ -18,16 +23,21 @@
  * 叠在聊天面板上不把面板关掉，这些行为和表格预览一致。
  */
 import { esc } from './util.js';
+import { openPdf, closePdf } from './pdf-reader.js';
 
 const MD_MODULE = '/vendor/markdown/markdown.min.mjs';
 const DOCX_MODULE = '/vendor/docx/docx-preview.min.mjs';
-const DOC_FILE_RE = /\.(md|markdown|docx)$/i;
+const DOC_FILE_RE = /\.(md|markdown|docx|doc|pptx|ppt)$/i;
+const CONVERT_RE = /\.(pptx|ppt|doc)$/i;   // 要服务端转 PDF 的
 const FILE_URL_RE = /^\/api\/files\/\d+$/;
 const MAX_CHARS = 1_000_000;   // 超出只排版前面这些，几 MB 的日志导出排版会卡住手机
 
 const loaders = {};
 let box = null;
-let kind = 'md';             // 'md' | 'docx'
+let kind = 'md';             // 'md' | 'docx' | 'pdf'（服务端转好的 PDF）
+let reader = null;           // pdf-reader 返回的控制器，窗口变化时要让它重新排
+// pdf-reader 全站只有一个会话（学习页也在用），只有自己开过 PDF 才去关，别把底下学习页的 PDF 关掉
+let ownsPdf = false;
 let text = '';               // Markdown 原文，切「原文 / 排版」时用
 let mode = 'render';
 let seq = 0;                 // 连点两个文件时，只认最后一次打开的结果
@@ -109,8 +119,12 @@ function build() {
     if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closeDocPreview(); return; }
     if (e.key === 'Tab') trapFocus(e);
   }, true);
-  // Word 页面是固定的 A4 宽，窗口变窄（手机横竖屏切换）时重新缩放
-  window.addEventListener('resize', () => { if (box.classList.contains('on') && kind === 'docx') fitDocx(); });
+  // Word / PPT 页面是固定宽度的，窗口变窄（手机横竖屏切换）时重新缩放
+  window.addEventListener('resize', () => {
+    if (!box.classList.contains('on')) return;
+    if (kind === 'docx') fitDocx();
+    else if (kind === 'pdf') reader?.resize();
+  });
 }
 
 function trapFocus(e) {
@@ -133,27 +147,40 @@ function setNote(msg) {
 export async function openDocPreview({ url, name }) {
   build();
   const my = ++seq;
-  kind = /\.docx$/i.test(name) ? 'docx' : 'md';
+  kind = CONVERT_RE.test(name) ? 'pdf' : /\.docx$/i.test(name) ? 'docx' : 'md';
+  if (ownsPdf) { closePdf(); ownsPdf = false; }
+  reader = null;
   text = '';
   mode = 'render';
   returnFocus = document.activeElement;
   box.classList.toggle('is-docx', kind === 'docx');
-  box.querySelector('.doc-kind').textContent = kind === 'docx' ? 'Word 预览' : '文档预览';
+  box.classList.toggle('is-pdf', kind === 'pdf');
+  const isPpt = /\.pptx?$/i.test(name);
+  box.querySelector('.doc-kind').textContent = isPpt ? 'PPT 预览' : kind === 'md' ? '文档预览' : 'Word 预览';
   box.querySelector('#docPreviewTitle').textContent = name || '文档';
   box.querySelector('.sp-download').href = `${url}?download=1`;
   const modeBtn = box.querySelector('.md-mode');
-  modeBtn.hidden = kind === 'docx';
+  modeBtn.hidden = kind !== 'md';
   modeBtn.disabled = true;
   modeBtn.textContent = '原文';
   modeBtn.setAttribute('aria-pressed', 'false');
-  box.querySelector('.sp-body').innerHTML = '<div class="sp-loading">正在读取文档…</div>';
+  box.querySelector('.sp-body').innerHTML = kind === 'pdf'
+    ? '<div class="sp-loading">正在转换，第一次打开要等十几秒…</div>'
+    : '<div class="sp-loading">正在读取文档…</div>';
   setNote('');
   box.classList.add('on');
   document.body.classList.add('sheet-preview-open');
   box.querySelector('.sp-close').focus();
 
   try {
-    if (kind === 'docx') {
+    if (kind === 'pdf') {
+      const buffer = await fetchFile(`${url}/preview`);
+      if (my !== seq) return;
+      const body = box.querySelector('.sp-body');
+      body.innerHTML = '';
+      ownsPdf = true;
+      reader = await openPdf(body, new Uint8Array(buffer));
+    } else if (kind === 'docx') {
       const [lib, buffer] = await Promise.all([docxLib(), fetchFile(url)]);
       if (my !== seq) return;
       await paintDocx(lib, buffer, my);
@@ -174,7 +201,7 @@ export async function openDocPreview({ url, name }) {
       <div class="sp-error">
         <b>预览不了这个文件</b>
         <span>${esc(err?.message || '读取失败')}</span>
-        <span class="dim">可以点右上角「下载」后用${kind === 'docx' ? ' Word 或 WPS ' : '文本编辑器'}打开。</span>
+        <span class="dim">可以点右上角「下载」后用${kind === 'md' ? '文本编辑器' : ' Office 或 WPS '}打开。</span>
       </div>`;
   }
 }
@@ -183,6 +210,8 @@ export function closeDocPreview() {
   if (!box?.classList.contains('on')) return;
   seq++;                       // 还在读的那次作废
   box.classList.remove('on');
+  if (ownsPdf) { closePdf(); ownsPdf = false; }
+  reader = null;
   // 表格预览也可能开着（理论上不会同时开），只在它没开时才恢复页面滚动
   if (!document.querySelector('.sheet-preview.on')) document.body.classList.remove('sheet-preview-open');
   box.querySelector('.sp-body').innerHTML = '';   // Word 里的图片是 base64，别一直占着内存
@@ -241,7 +270,7 @@ async function paintDocx(lib, buffer, my) {
       renderFootnotes: true, renderEndnotes: true, renderComments: false, experimental: false,
     });
   } catch {
-    throw new Error('文件已损坏，或者不是 Word 文档（老格式 .doc 请另存为 .docx）');
+    throw new Error('文件已损坏，或者不是 Word 文档');
   }
   if (my !== seq) return;
   sanitizeDocx(host);

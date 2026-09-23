@@ -10,7 +10,7 @@ let dupeTimer = null;
 let picksReady = false;
 let filesBound=false;
 let pendingFiles=[];
-const IDEA_FILE_RE=/\.(pdf|doc|docx|xls|xlsx)$/i;
+const IDEA_FILE_RE=/\.(pdf|doc|docx|xls|xlsx|ppt|pptx)$/i;
 const MAX_FILE_SIZE=20*1024*1024;
 const MAX_FILES=8;
 const formatSize=value=>value>=1024*1024?`${(value/1024/1024).toFixed(1)} MB`:`${Math.ceil(value/1024)} KB`;

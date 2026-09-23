@@ -475,8 +475,8 @@
     <div class="field idea-submit-files">
       <label>附件 <span class="opt">（可选，最多 8 个）</span></label>
       <label class="idea-file-picker" for="fFiles">
-        <input id="fFiles" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx">
-        <b>＋ 选择文件</b><span>PDF、Word、Excel · 单个最大 20MB</span>
+        <input id="fFiles" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+        <b>＋ 选择文件</b><span>PDF、Word、Excel、PPT · 单个最大 20MB</span>
       </label>
       <div class="idea-pending-files" id="fFileList"></div>
       <div class="up-progress" id="fUploadProgress" role="status" aria-live="polite" hidden></div>
@@ -608,7 +608,7 @@
     <div class="chatfoot" id="chatFoot" hidden>
       <label class="chatclip" title="发文件"><span class="ico" data-ico="clip"></span>
         <input type="file" id="chatFile" multiple aria-label="选择聊天附件"
-          accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.avif,.heic,.heif,.html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md">
+          accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.avif,.heic,.heif,.html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md">
       </label>
       <textarea class="inp" id="chatInput" rows="1" aria-label="聊天消息" placeholder="说点什么…（Enter 发送，群里可以 @）"></textarea>
       <button class="btn btn-primary" id="chatSend">发送</button>
@@ -830,9 +830,9 @@
     <div class="field">
       <label for="purFiles">申请材料 <span>*</span></label>
       <label class="idea-file-picker exp-file-picker">
-        <input type="file" id="purFiles" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx">
+        <input type="file" id="purFiles" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
         <b>选择聊天记录、采购合同或价格清单</b>
-        <span>支持图片、PDF、Word、Excel，单个不超过 20MB</span>
+        <span>支持图片、PDF、Word、Excel、PPT，单个不超过 20MB</span>
       </label>
       <div class="exp-file-list" id="purEditFiles"></div>
       <div class="up-progress" id="purUploadProgress" role="status" aria-live="polite" hidden></div>
@@ -900,9 +900,9 @@
     <div class="field">
       <label for="expFiles">凭证与附件 <span>*</span></label>
       <label class="idea-file-picker exp-file-picker">
-        <input type="file" id="expFiles" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx">
+        <input type="file" id="expFiles" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
         <b>选择电子发票、佐证材料或支付截图</b>
-        <span>支持图片、PDF、Word、Excel，单个不超过 20MB</span>
+        <span>支持图片、PDF、Word、Excel、PPT，单个不超过 20MB</span>
       </label>
       <div class="exp-file-list" id="expEditFiles"></div>
       <div class="up-progress" id="expUploadProgress" role="status" aria-live="polite" hidden></div>

@@ -42,7 +42,7 @@ const SIDES = [
 const MAX_FILE = 20 * 1024 * 1024;
 // 填单弹窗顶部那句话；小额免总经理审批的额度接在后面（额度和审批人一样由报销的「审批设置」管）
 const EDIT_HINT = '填好信息、传上聊天记录、采购合同或价格清单，提交后依次由部门负责人、总经理、财务审批立项。';
-const ACCEPT = 'image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx';
+const ACCEPT = 'image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx';
 const AMOUNT_RE = /^\d{1,8}(\.\d{1,2})?$/;
 
 let me = { id: 0, role: 'member' };

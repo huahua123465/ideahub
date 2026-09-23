@@ -320,7 +320,7 @@ function paintDetail(c) {
         ? `<ul class="exp-files">${c.files.map(f => fileItemHtml(f, mySide && f.side === mySide)).join('')}</ul>`
         : '<div class="exp-muted">还没有附件。提交前至少要传一份凭证或支付截图。</div>'}
       ${c.can.upload ? `<label class="idea-file-picker exp-file-picker slim">
-        <input type="file" id="expDetailUpload" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx">
+        <input type="file" id="expDetailUpload" multiple accept="image/*,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
         <b>${c.can.pay ? '上传打款截图' : '补充附件'}</b><span>单个不超过 20MB</span></label>` : ''}
     </section>
     ${canAct ? `<section class="exp-sec exp-act">

@@ -3445,6 +3445,9 @@ body.sheet-preview-open{overflow:hidden}
 /* Word：docx-preview 自带「灰底 + 白纸」的分页外观，这里只调边距；缩放在 doc-preview.js 的 fitDocx */
 .doc-preview.is-docx .sp-panel{width:min(1000px,100%)}
 .doc-preview.is-docx .sp-body{background:#eceef1}
+/* PPT / 老格式 Word：服务端转成 PDF，用学习页同一套分页阅读器（.learning-pdf-page） */
+.doc-preview.is-pdf .sp-panel{width:min(1100px,100%)}
+.doc-preview.is-pdf .sp-body{background:#dfdcd8;padding:14px;touch-action:pan-x pan-y}
 .docx-host .docx-wrapper{padding:24px 24px 8px;background:transparent}
 .docx-host .docx-wrapper>section.docx{margin-bottom:24px;box-shadow:0 2px 10px rgba(20,24,36,.12)}
 /* 全站表格给 table/th/td 定了宽度、内边距、字号和底色，Word 里的表格要照文档自己的样式来。
@@ -3492,6 +3495,7 @@ body.sheet-preview-open{overflow:hidden}
   /* 手机上按纸张宽度等比缩小，字会小到看不清：改成随屏幕宽度重排，字号照原样，
      宽表格在页内左右滑。页边距、固定页高都是 docx-preview 写的行内样式，只能 !important 盖。 */
   .docx-host .docx-wrapper{padding:8px 8px 0}
+  .doc-preview.is-pdf .sp-body{padding:8px}
   .docx-host .docx-wrapper>section.docx{width:auto!important;min-height:0!important;height:auto!important;
     padding:22px 16px!important;margin-bottom:8px;overflow-x:auto}
 }

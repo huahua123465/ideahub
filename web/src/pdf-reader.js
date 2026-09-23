@@ -42,7 +42,8 @@ export function closePdf() {
 
 /**
  * @param {HTMLElement} container 可滚动的分页容器
- * @param {string} url 受登录保护的同源 PDF 地址
+ * @param {string|Uint8Array} url 受登录保护的同源 PDF 地址；也可以直接给已经取回来的 PDF 字节
+ *   （附件预览要先自己取，才能把服务端「转换失败」的原因告诉用户）
  */
 export async function openPdf(container, url, { onProgress, onReady, onPageChange, onZoomChange } = {}) {
   closePdf();
@@ -53,7 +54,9 @@ export async function openPdf(container, url, { onProgress, onReady, onPageChang
 
   const lib = await pdfjs();
   if (own !== session) return;
-  loadingTask = lib.getDocument({ url, withCredentials: true, rangeChunkSize: 256 * 1024 });
+  loadingTask = lib.getDocument(typeof url === 'string'
+    ? { url, withCredentials: true, rangeChunkSize: 256 * 1024 }
+    : { data: url });
   loadingTask.onProgress = ({ loaded, total }) => {
     if (own === session && total) onProgress?.(Math.min(100, Math.round(loaded / total * 100)));
   };
