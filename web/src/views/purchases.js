@@ -86,6 +86,10 @@ const activePayment = c => c.payments.find(p => p.id === c.activePaymentId) || n
 const uploadSide = c => (c.can.edit ? 'submit' : c.can.deliver ? 'delivery' : c.can.pay ? 'review' : null);
 const validAmount = s => AMOUNT_RE.test(s.replace(/,/g, '')) && Number(s.replace(/,/g, '')) > 0;
 
+/** 列表卡片上五步挤在一行，窄屏手机（360 宽）放不下「部门负责人」会被截成「部门负…」，卡片上叫「负责人」；
+    详情页地方够，照旧用全称。只改显示，接口、审批记录、导出里的叫法不变。 */
+const shortStage = s => (s.stage === 'leader' ? '负责人' : s.label);
+
 function flowHtml(c, { compact = false } = {}) {
   const note = s => ({
     done: s.stage === 'payment' || s.stage === 'delivery' ? '已完成' : '已通过',
@@ -94,7 +98,7 @@ function flowHtml(c, { compact = false } = {}) {
   return `<ol class="exp-flow pur-flow${compact ? ' compact' : ''}" aria-label="采购进度">
     ${c.flow.map(s => `<li class="is-${s.state}">
       <i aria-hidden="true"></i>
-      <span class="exp-flow-label">${esc(s.label)}</span>
+      <span class="exp-flow-label"${compact && s.stage === 'leader' ? ` title="${esc(s.label)}"` : ''}>${esc(compact ? shortStage(s) : s.label)}</span>
       <small>${esc(s.handler?.name || '未设置')}${note(s) ? `<em> · ${note(s)}</em>` : ''}</small>
     </li>`).join('')}
   </ol>`;

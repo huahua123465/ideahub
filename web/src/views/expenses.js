@@ -65,6 +65,10 @@ const timeText = iso => {
 // 待确认收款还没走完，用琥珀；申请人确认收到之后才是绿色的「已完成」
 const statusTone = c => ({ draft: 'draft', pending: 'pending', returned: 'returned', withdrawn: 'withdrawn', paid: 'pending', completed: 'paid', cancelled: 'cancelled' }[c.status]);
 
+/** 列表卡片上五步挤在一行，窄屏手机（360 宽）放不下「部门负责人」会被截成「部门负…」，卡片上叫「负责人」；
+    详情页地方够，照旧用全称。只改显示，接口、审批记录、导出里的叫法不变。 */
+const shortStage = s => (s.stage === 'leader' ? '负责人' : s.label);
+
 function flowHtml(c, { compact = false } = {}) {
   const note = { done: '已通过', skipped: '已跳过', returned: '已退回', withdrawn: '已撤回', current: '处理中', waiting: '' };
   const receiptNote = { done: '已确认', current: '待确认' };
@@ -73,7 +77,7 @@ function flowHtml(c, { compact = false } = {}) {
       const text = s.stage === 'receipt' ? receiptNote[s.state] : note[s.state];
       return `<li class="is-${s.state}">
       <i aria-hidden="true"></i>
-      <span class="exp-flow-label">${esc(s.label)}</span>
+      <span class="exp-flow-label"${compact && s.stage === 'leader' ? ` title="${esc(s.label)}"` : ''}>${esc(compact ? shortStage(s) : s.label)}</span>
       <small>${esc(s.handler?.name || '未设置')}${text ? `<em> · ${text}</em>` : ''}</small>
     </li>`;
     }).join('')}

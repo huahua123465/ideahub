@@ -9,6 +9,7 @@
  *   7. 顶栏搜索框的提示语完整显示，不被截断（桌面）
  *   8. 手机首页：问候 → 待办 → 每日总结；每日总结默认收成一行，点「写日报」展开并聚焦；桌面不收
  *   9. 手机顶栏：新建按钮带短标签（「＋ 报销」），AI 按钮带「AI」，顶栏按钮互不重叠、不出屏（390 / 360 宽）
+ *  10. 报销 / 采购卡片上的审批步骤名不被截断（360 宽时「部门负责人」放不下，卡片上叫「负责人」）
  * 截图和 report.json 写到 scripts/.uidiff/ui-polish/。
  */
 import assert from 'node:assert/strict';
@@ -179,6 +180,13 @@ try {
         assert.ok(bar.maxRight <= bar.vw, `${scene}/${view} 顶栏超出屏幕 ${bar.items.join(' ')}`);
         assert.deepEqual([bar.short, bar.shortVisible, bar.ai], [short, true, true], JSON.stringify(bar));
         assert.match(bar.aria, new RegExp(short));
+        if (view === 'expenses' || view === 'purchases') {
+          const cut = await page.evaluate(() => [...document.querySelectorAll('.exp-flow.compact .exp-flow-label')]
+            .filter(el => el.getClientRects().length && el.scrollWidth > el.clientWidth + 1).map(el => el.textContent));
+          assert.deepEqual(cut, [], `${scene}/${view} 卡片上的步骤名被截断了：${cut.join('、')}`);
+          const labels = await page.evaluate(() => [...new Set([...document.querySelectorAll('.exp-flow.compact .exp-flow-label')].map(el => el.textContent))]);
+          assert.ok(labels.includes('负责人') && !labels.includes('部门负责人'), `卡片上应显示「负责人」：${labels.join('、')}`);
+        }
       }
       await page.evaluate(() => scrollTo(0, 0));
       await harness.screenshot(page, `topbar-${scene}`);
