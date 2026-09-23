@@ -2717,6 +2717,16 @@ body.learning-fullscreen-open{overflow:hidden}
   border:none;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;
   font-size:22px;line-height:1;cursor:pointer}
 .lightbox .lb-close:hover{background:rgba(255,255,255,.24)}
+/* 附件图才有「下载」，放在关闭按钮左边 */
+.lightbox .lb-download{position:absolute;top:18px;right:72px;height:38px;padding:0 16px;border-radius:19px;
+  display:inline-flex;align-items:center;background:rgba(255,255,255,.14);color:#fff;font-size:13.5px;text-decoration:none}
+.lightbox .lb-download[hidden]{display:none}
+.lightbox .lb-download:hover{background:rgba(255,255,255,.24)}
+.lightbox :is(.lb-close,.lb-download,.lb-nav):focus-visible{outline:2px solid #fff;outline-offset:2px}
+/* 图片加载失败（没权限 / 已删除）时别只剩一块黑框 */
+.lightbox .lb-error{display:none;color:#e8ecf1;font-size:14px;padding:40px 20px;text-align:center}
+.lightbox.broken .lb-img{display:none}
+.lightbox.broken .lb-error{display:block}
 @media (max-width:720px){
   .imggrid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}
   .lightbox{padding:16px}
@@ -2726,6 +2736,8 @@ body.learning-fullscreen-open{overflow:hidden}
     background:rgba(16,19,28,.55)}
   .lightbox .lb-prev{left:4px}
   .lightbox .lb-next{right:4px}
+  .lightbox .lb-close{top:10px;right:10px;width:44px;height:44px}
+  .lightbox .lb-download{top:10px;right:62px;height:44px;border-radius:22px}
 }
 
 /* ============ 对标拆解：图文笔记的整叠图 ============ */

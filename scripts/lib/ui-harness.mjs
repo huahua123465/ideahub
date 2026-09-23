@@ -35,6 +35,9 @@ export const DEFAULT_UI_OUTPUT = join(PROJECT_ROOT, 'scripts', '.uidiff');
 export async function createUiHarness({
   outputDir = DEFAULT_UI_OUTPUT,
   query = 'mock=1&uiqa=1',
+  // 测试自带的静态响应：{ '/api/files/951': { body: Buffer, type: 'image/png' } }。
+  // <img> 之类的请求不走页面里的 fetch 桩，只能由这台测试服务器直接回。
+  fixtures = {},
 } = {}) {
   outputDir = ownedOutputDirectory(outputDir);
   await rm(outputDir, { recursive: true, force: true });
@@ -47,7 +50,7 @@ export async function createUiHarness({
   const qaHtml = makeQaHtml(sourceHtml);
 
   const marker = randomUUID();
-  const server = createQaServer({ bundle, marker, qaHtml });
+  const server = createQaServer({ bundle, marker, qaHtml, fixtures });
   await new Promise((resolveListen, rejectListen) => {
     server.once('error', rejectListen);
     server.listen(0, '127.0.0.1', resolveListen);
@@ -229,7 +232,7 @@ function isAllowedRequest(url, origin) {
   }
 }
 
-function createQaServer({ bundle, marker, qaHtml }) {
+function createQaServer({ bundle, marker, qaHtml, fixtures = {} }) {
   return createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url || '/', 'http://127.0.0.1').pathname);
@@ -244,6 +247,12 @@ function createQaServer({ bundle, marker, qaHtml }) {
       }
       if (pathname === '/favicon.ico') {
         res.writeHead(204, { 'cache-control': 'no-store' }).end();
+        return;
+      }
+
+      if (Object.hasOwn(fixtures, pathname)) {
+        const f = fixtures[pathname];
+        respond(res, f.status || 200, f.body, f.type);
         return;
       }
 

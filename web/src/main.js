@@ -34,6 +34,7 @@ import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
 import { bindSheetPreview } from './sheet-preview.js';
 import { bindDocPreview } from './doc-preview.js';
+import { bindImagePreview } from './lightbox.js';
 
 let view = 'home';
 
@@ -170,6 +171,7 @@ async function boot() {
   chat.bind();
   bindSheetPreview();
   bindDocPreview();
+  bindImagePreview();
   chat.refresh();
   alertBox.bind();
   // 只读一下当前权限，不在这里申请 —— 申请必须由用户点击触发
