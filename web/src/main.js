@@ -76,6 +76,9 @@ function paintChrome(next = view) {
 
   const create = $('#btnNew');
   $('#btnNewLabel').textContent = c.create || '';
+  // 手机顶栏放不下四个字，只留动作的对象：「发起报销」→「报销」。读屏软件读的还是完整说法（aria-label）
+  $('#btnNewShort').textContent = (c.create || '').replace(/^(提交|新增|发起)/, '');
+  create.setAttribute('aria-label', c.create || '');
   create.classList.toggle('is-hidden', !c.create);
   create.setAttribute('aria-hidden', c.create ? 'false' : 'true');
 

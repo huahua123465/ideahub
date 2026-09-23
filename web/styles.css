@@ -1589,7 +1589,9 @@ body:has(.chatpanel.on) .chatbtn{opacity:0;pointer-events:none;transform:transla
   .topbar .brand{font-size:14px}
   .brand .bulb{width:28px;height:28px}
   #btnNewLabel{display:none}
-  .topbar #btnNew{width:40px;padding:0;justify-content:center}
+  /* 原来手机上只剩一个「＋」，看不出是新建什么；现在带上两个字：「＋ 报销」「＋ 客户」 */
+  .topbar #btnNew{width:auto;padding:0 11px;gap:3px;justify-content:center}
+  .topbar #btnNewShort{display:inline;font-size:14px;font-weight:600}
   .page-head h1{font-size:21px}
   .main{padding:16px 12px 72px}
   .grid{gap:12px}
@@ -1825,6 +1827,9 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 /* ---------- 工作台「今天的总结」 ---------- */
 /* 这块是首屏唯一要打字的地方，输入区给足高度，别做成一行小输入框 —— */
 /* 写日报的阻力主要来自「看起来要花时间」，界面上先把这件事显得轻一点。 */
+/* 手机上收起时才用得到的状态行和开关（soft.css 的 max-width:700px 里打开），桌面不显示 */
+.dash-today-status{display:none;margin-top:3px;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-panel>header .dash-today-toggle{display:none;flex:none;min-height:40px;padding:0 16px;color:#fff;font-size:14px;font-weight:600}
 /* 左右内边距和面板标题（.dash-panel>header）对齐；原来是 0，标签和输入框都贴着卡片边 */
 .dash-today .dash-today-body{display:flex;flex-direction:column;gap:10px;padding:14px 19px 18px}
 .dash-today textarea.inp{resize:vertical;min-height:88px;line-height:1.65}
@@ -2192,6 +2197,14 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
 .smart-import-footer .btn{display:inline-flex;align-items:center;gap:6px}.smart-import-footer .btn .ic{width:15px;height:15px}
 
 @media (max-width:1180px){.smart-import-label{display:none}.smart-import-trigger{width:44px;padding:0}}
+/* 顶栏按钮的短标签：只在放不下完整文字的窄屏上出现 */
+#btnNewShort,.smart-import-short{display:none}
+@media (max-width:560px){
+  .smart-import-short{display:inline;font-size:13px;font-weight:700;letter-spacing:.02em}
+  .topbar .smart-import-trigger{width:auto;padding:0 10px;gap:4px}
+}
+/* 窄屏上顶栏放不下「IdeaHub」字样 + 带字的按钮，只留图标（侧边导航的抽屉顶部还有全名） */
+@media (max-width:420px){.topbar .brand-name{display:none}}
 @media (max-width:1180px){
   .smart-import-trigger{width:44px;height:44px;border-radius:12px}.smart-import-trigger .ic{width:18px;height:18px}
 }

@@ -26,6 +26,15 @@ let pickedDay = '';
 
 /** 我自己的日报按日期索引。切日期直接查这张表，不用为了看一眼那天写没写再跑一趟接口。 */
 let myByDate = new Map();
+/**
+ * 手机上「每日总结」默认收成一行（状态 + 「写日报」按钮），点开才是表单：
+ * 大多数人打开首页是来看待办的，原来一整屏都是这张表单，待办要往下滑很远。
+ * 开合状态放在模块里而不是 DOM 上 —— 首页会被推送整块重绘，放 DOM 上一重绘就又收回去了。
+ * 桌面宽度下样式不收起，这个变量不起作用。
+ */
+let todayOpen = false;
+const todayStatus = (day, report) => report ? `已写：${report.title}` : `${dayLabel(day)}还没写`;
+const todayToggleLabel = report => todayOpen ? '收起' : (report ? '修改' : '写日报');
 
 const ymdOf = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000)
   .toISOString().slice(0, 10);
@@ -226,13 +235,16 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
       </div>
     </section>
 
-    <section class="dash-panel dash-today" data-day="${esc(day)}"
+    <section class="dash-panel dash-today${todayOpen ? ' open' : ''}" data-day="${esc(day)}"
         data-report-id="${dayReport ? Number(dayReport.id) : ''}">
       <header>
-        <div><span>每日总结</span><h2 id="dashTodayHead">${esc(dayLabel(day))}做了什么</h2></div>
-        <button data-goto="reports">看历史日报 →</button>
+        <div><span>每日总结</span><h2 id="dashTodayHead">${esc(dayLabel(day))}做了什么</h2>
+          <p class="dash-today-status" id="dashTodayStatus">${esc(todayStatus(day, dayReport))}</p></div>
+        <button data-goto="reports" class="dash-today-history">看历史日报 →</button>
+        <button type="button" class="btn btn-primary dash-today-toggle" id="dashTodayToggle"
+          aria-expanded="${todayOpen}" aria-controls="dashTodayBody">${esc(todayToggleLabel(dayReport))}</button>
       </header>
-      <div class="dash-today-body">
+      <div class="dash-today-body" id="dashTodayBody">
         <div class="dash-today-when">
           <label for="dashTodayDate">日期</label>
           <input class="inp" type="date" id="dashTodayDate" value="${esc(day)}" max="${esc(today)}">
@@ -302,7 +314,22 @@ function bindToday(root) {
   const visSel = box.querySelector('#dashTodayVis');
   const btn = box.querySelector('#dashTodaySave');
   const hint = box.querySelector('#dashTodayHint');
+  const statusEl = box.querySelector('#dashTodayStatus');
+  const toggle = box.querySelector('#dashTodayToggle');
   const defaultVis = me?.reportVisibilityDefault === 'public' ? 'public' : 'private';
+
+  const currentReport = () => myByDate.get(box.dataset.day || todayYmd()) || null;
+  const syncToggle = () => {
+    box.classList.toggle('open', todayOpen);
+    toggle.setAttribute('aria-expanded', String(todayOpen));
+    toggle.textContent = todayToggleLabel(currentReport());
+    statusEl.textContent = todayStatus(box.dataset.day || todayYmd(), currentReport());
+  };
+  toggle.addEventListener('click', () => {
+    todayOpen = !todayOpen;
+    syncToggle();
+    if (todayOpen) title.focus({ preventScroll: true });
+  });
 
   const markDirty = () => { box.dataset.dirty = '1'; };
   title.addEventListener('input', markDirty);
@@ -330,6 +357,7 @@ function bindToday(root) {
       ? (report.visibility === 'public' ? 'public' : 'private') : defaultVis;
     btn.textContent = saveLabel(day, report);
     showHint('');
+    syncToggle();
   }
 
   dateInp.addEventListener('change', async () => {
@@ -388,6 +416,9 @@ function bindToday(root) {
       btn.textContent = saveLabel(day, saved);
       whenEl.textContent = whenNote(day, saved);
       showHint('');
+      // 手机上存完就收起来，那一行直接显示「已写：……」；桌面上这个开关不起作用
+      todayOpen = false;
+      syncToggle();
       // 首页的「待我审核」等数字跟这条无关，但缓存里得留下新内容，
       // 否则切走再切回来会看到保存前的样子
       clearCache();

@@ -864,9 +864,12 @@ function bindChatBtnTuck() {
     const el = e.target === document ? document.scrollingElement : e.target;
     if (!el || (el !== document.scrollingElement && !el.classList?.contains('main'))) return;   // 弹窗、面板里的滚动不算
     const y = el.scrollTop;
-    const down = y > lastY + 6;
-    const up = y < lastY - 6;
-    if (down || up) lastY = y;
+    // 每次都记下位置：切页面时滚动位置会被直接拨回顶部、不一定有滚动事件，
+    // 只在「挪动超过 6px」时才记的话，旧位置会一直留着，切页后第一下往下滑就收不起来
+    const dy = y - lastY;
+    lastY = y;
+    const down = dy > 2;
+    const up = dy < -2;
     const unread = !$('#chatDot').hidden;
     if (down && y > 80 && !unread && !openPanel) btn.classList.add('tucked');
     else if (up) show();
