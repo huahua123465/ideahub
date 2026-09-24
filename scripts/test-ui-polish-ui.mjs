@@ -13,6 +13,7 @@
  *      每日总结默认收成一行，点「写日报」展开并聚焦（09-24 起桌面也收）；
  *      四个快捷入口一行排满、字不折行；桌面上右下角聊天按钮不压首页卡片；
  *      数字卡片的数字紧贴在标签正下方（09-24 前数字被推到卡片最右端）；
+ *      弹窗按钮栏始终在屏幕内、统一标签不内滚、卡片来源标签靠右、手机三格统计一行、正式库手机版式（09-24）；
  *      配色与交互：「评审中」不用主色、灵感卡无分类色条、侧栏圆点同色、卡片悬停底色变化、切页动画只有一份（09-24）
  *   9. 手机顶栏：新建按钮带短标签（「＋ 报销」），AI 按钮带「AI」，顶栏按钮互不重叠、不出屏（390 / 360 宽）
  *  10. 报销 / 采购卡片上的审批步骤名不被截断（360 宽时「部门负责人」放不下，卡片上叫「负责人」）
@@ -268,6 +269,49 @@ try {
       await page.mouse.move(5, 5);
       await go(page, 'home');
     }
+
+    // 8e. 09-24 第二轮走查：弹窗按钮栏在屏幕内、统一标签不内滚、卡片来源标签靠右、手机三格统计一行、正式库手机版式
+    await go(page, 'pool');
+    await page.evaluate(() => document.querySelector('#btnNew').click());
+    await page.waitForFunction(() => document.querySelector('#modal.on'));
+    await new Promise(r => setTimeout(r, 400));
+    const modalBox = await page.evaluate(() => {
+      const m = document.querySelector('#modal'), f = m.querySelector('footer'), tp = document.querySelector('#fTagPick');
+      return { footerBottom: f.getBoundingClientRect().bottom, modalBottom: m.getBoundingClientRect().bottom, vh: innerHeight,
+        tagInnerScroll: tp.scrollHeight - tp.clientHeight, bodyScrolls: getComputedStyle(m.querySelector('.form')).overflowY,
+        // 内容区限高后，里面自带 overflow 的块（来源那组）曾被压扁到 0 高
+        squashed: [...m.querySelectorAll('.form > *')].filter(el => getComputedStyle(el).display !== 'none' && el.scrollHeight > 4 && el.getBoundingClientRect().height < el.scrollHeight - 2).map(el => el.className) };
+    });
+    assert.ok(modalBox.footerBottom <= modalBox.vh && modalBox.modalBottom <= modalBox.vh, `${scene} 提交灵感弹窗的按钮栏跑到屏幕外了 ${JSON.stringify(modalBox)}`);
+    assert.ok(modalBox.tagInnerScroll <= 1, `${scene} 统一标签又变成内滚了 ${JSON.stringify(modalBox)}`);
+    assert.equal(modalBox.bodyScrolls, 'auto', '弹窗内容区应该自己能滚');
+    assert.deepEqual(modalBox.squashed, [], `${scene} 弹窗里有字段被压扁了`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('#modal.on'));
+    await go(page, 'demands');
+    const top = await page.evaluate(() => {
+      const card = document.querySelector('#v-demands .record-card'), src = card.querySelector('.record-source'), menu = card.querySelector('.record-menu');
+      const c = card.getBoundingClientRect(), a = src.getBoundingClientRect(), m = menu.getBoundingClientRect();
+      return { gap: m.left - a.right, srcFromRight: c.right - a.right };
+    });
+    assert.ok(top.gap >= 0 && top.gap <= 16, `${scene} 卡片顶部来源标签没有贴着右边的菜单 ${JSON.stringify(top)}`);
+    if (mobile) {
+      await go(page, 'reports');
+      const rows = await page.evaluate(() => new Set([...document.querySelectorAll('#v-reports .overview-cell')].map(c => Math.round(c.getBoundingClientRect().top))).size);
+      assert.equal(rows, 1, '手机上三个统计格应排在同一行');
+      await go(page, 'formal');
+      const f = await page.evaluate(() => {
+        const tr = document.querySelector('#formalBody tr'), cells = [...tr.children];
+        const title = tr.querySelector('[data-label="灵感"]');
+        return { titleFirst: cells.every(c => c === title || c.getBoundingClientRect().top > title.getBoundingClientRect().top + 2),
+          labels: cells.filter(c => getComputedStyle(c, '::before').content !== 'none').length,
+          titleSize: parseFloat(getComputedStyle(title).fontSize) };
+      });
+      assert.deepEqual([f.titleFirst, f.labels], [true, 0], `正式库手机卡片应以标题开头、不挂字段名 ${JSON.stringify(f)}`);
+      assert.ok(f.titleSize >= 17, '正式库手机卡片的标题要比其他字大');
+      await harness.screenshot(page, `formal-${scene}`);
+    }
+    await go(page, 'home');
 
     // 8c. 数字卡片：数字紧贴在标签正下方（左对齐），说明不压数字、不出卡片
     const cards = await page.evaluate(() => [...document.querySelectorAll('.dash-action-grid>button')].map(btn => {

@@ -494,6 +494,9 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .dash-panel{border-radius:var(--rd-2xl)}
   html[data-ui="soft"] .board-overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-md)}
   html[data-ui="soft"] .overview-cell{min-height:82px;padding:var(--sp-xl)}
+  /* 刚好三个统计格时一行排三个（09-24）：两列排会让第三个单独占一行，右边空一半 */
+  html[data-ui="soft"] .board-overview:has(>.overview-cell:nth-child(3):last-child){grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-sm)}
+  html[data-ui="soft"] .board-overview:has(>.overview-cell:nth-child(3):last-child) .overview-cell{min-height:0;padding:var(--sp-lg) var(--sp-base)}
   html[data-ui="soft"] .record-card{border-radius:var(--rd-2xl)}
   html[data-ui="soft"] .insight-card,html[data-ui="soft"] .playbook-card,
   html[data-ui="soft"] .case-card,html[data-ui="soft"] .report-card{padding:var(--sp-3xl)}
