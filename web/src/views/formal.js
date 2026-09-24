@@ -59,9 +59,9 @@ export async function render() {
       <td data-label="负责人"><span class="who"><span class="av" style="background:${avatarColor(f.owner?.name)}">${esc(initial(f.owner?.name))}</span>${esc(f.owner?.name || '未指派')}</span></td>
       <td data-label="立项日期" style="color:var(--ink2);font-variant-numeric:tabular-nums">${ymd(f.adoptedAt)}</td>
       <td data-label="进度" class="prog"><span class="progress"><i style="width:${f.progress}%"></i></span>
-          <span style="font-size:12px;color:var(--muted);margin-left:7px">${f.progress}%</span></td>
+          <span style="font-size:var(--fs-xs);color:var(--muted);margin-left:7px">${f.progress}%</span></td>
       <td data-label="方案文档">${f.docUrl ? `<a class="link" href="${esc(f.docUrl)}" target="_blank" rel="noopener">查看 ↗</a>`
-                     : `<span style="color:var(--muted);font-size:12px">待补</span>`}</td>
+                     : `<span style="color:var(--muted);font-size:var(--fs-xs)">待补</span>`}</td>
     </tr>`).join('')
     || `<tr><td colspan="6"><div class="empty sm">
            <svg viewBox="0 0 120 96" aria-hidden="true">

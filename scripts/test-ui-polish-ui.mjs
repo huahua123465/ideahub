@@ -2,6 +2,7 @@
  * 界面细节专项验收：npm run test:ui-polish:ui
  *
  * 2026-09-23 按走查结论修的几处，锁住别再退回去。桌面和手机各走一遍：
+ *   0. 样式表里不写死 px 字号，一律用 --fs-* 阶梯（09-24）
  *   1. 可读性：主要页面上没有小于 12px 的文字；次要文字（var(--muted)）在页面底色上对比度 ≥ 4.5:1；
  *      卡片是细边框、零阴影（09-24）
  *   2. 首页日报表单的标签、输入框不贴卡片边（左右留出和标题一样的内边距）
@@ -18,6 +19,16 @@
  */
 import assert from 'node:assert/strict';
 import { createUiHarness, settleDom } from './lib/ui-harness.mjs';
+
+// 0. 字号只走 styles.css :root 的 --fs-* 阶梯（09-24 收拢），样式表里不许再写死 px 字号
+{
+  const { readFile } = await import('node:fs/promises');
+  for (const f of ['styles.css', 'soft.css', 'account.css', 'login.css', 'motion.css']) {
+    const css = (await readFile(new URL(`../web/${f}`, import.meta.url), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const hard = css.match(/font(?:-size)?:\s*\d+(?:\.\d+)?px/g) || [];
+    assert.deepEqual(hard, [], `web/${f} 里写死了字号，请改用 var(--fs-*)：${hard.slice(0, 5).join('；')}`);
+  }
+}
 
 const harness = await createUiHarness({ outputDir: 'scripts/.uidiff/ui-polish' });
 const VIEWS = ['home', 'pool', 'demands', 'formal', 'clients', 'reports', 'expenses', 'purchases', 'stats', 'samples'];
