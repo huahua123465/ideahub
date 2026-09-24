@@ -6,7 +6,7 @@
  */
 import { api } from '../api.js';
 import { skeleton, countTo, reduced } from '../anim.js';
-import { esc, $ } from '../util.js';
+import { esc, $, avatarColor, initial } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
 import { confirmAction } from '../confirm.js';
@@ -119,12 +119,424 @@ const stageLabel = {
   coaching: '陪跑中', renewed: '已续费', lost: '已流失',
 };
 
-function focusItem({ tone = 'blue', eyebrow, title, meta, board, entity, id }) {
-  return `<button class="dash-focus-item tone-${tone}" data-goto="${esc(board)}"
-      ${entity ? `data-entity="${esc(entity)}"` : ''}${id ? ` data-ref="${Number(id)}"` : ''}>
-    <i></i><span><small>${esc(eyebrow)}</small><b>${esc(title)}</b><em>${esc(meta || '')}</em></span>
-    <strong>处理 <span>→</span></strong>
-  </button>`;
+/* ================= 首页拼贴（09-24）：待办勾选、进度环、漏斗切换、布局编辑、专注模式 ================= */
+
+const RING = 326.7;                       // 进度环周长 2πr，r = 52
+let focusRows = [];                       // 上一次画出来的待办（重绘之间筛选、勾选都基于它）
+let focusFilter = 'all';
+let pipeMode = 'count';
+let editing = false;
+let focusing = false;
+
+const clockText = () => new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+setInterval(() => { const el = document.getElementById('dashClock'); if (el) el.textContent = clockText(); }, 20_000);
+
+/**
+ * 「今天已推进」：首页上把一条待办勾掉，只记在这台设备、只记今天。
+ * 它不改后台状态（审核、跟进还是要点进去做），是给自己排当天节奏用的；明天还没处理完的会重新出现。
+ */
+const doneKey = () => me?.id ? `ideahub.dash.done.v1:${me.id}` : '';
+function doneSet() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(doneKey()) || 'null');
+    return new Set(saved?.day === todayYmd() ? saved.ids : []);
+  } catch { return new Set(); }
+}
+function saveDone(set) {
+  try { localStorage.setItem(doneKey(), JSON.stringify({ day: todayYmd(), ids: [...set] })); } catch { /* 记不住只影响这一次 */ }
+}
+
+function focusRowHtml(r, done) {
+  return `<div class="dash-focus-item tone-${r.tone}${done ? ' is-done' : ''}" data-fid="${esc(r.fid)}">
+    <i></i>
+    <button type="button" class="dash-check" aria-pressed="${done}" aria-label="${done ? '取消「今天已推进」' : '标记为今天已推进'}：${esc(r.title)}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+    <button type="button" class="dash-focus-open rip" data-goto="${esc(r.board)}" data-entity="${esc(r.entity)}" data-ref="${Number(r.id)}">
+      <span><small>${esc(r.eyebrow)}</small><b>${esc(r.title)}</b><em>${esc(r.meta || '')}</em></span>
+      <strong>处理 <span>→</span></strong></button>
+  </div>`;
+}
+
+/** 画待办列表。animate = true 时做 FLIP：勾掉的那条平滑沉到下面，其余的跟着让位 */
+function paintFocus(animate) {
+  const list = document.getElementById('dashFocusList');
+  if (!list) return;
+  const done = doneSet();
+  const first = animate && !reduced()
+    ? new Map([...list.querySelectorAll('.dash-focus-item')].map(el => [el.dataset.fid, el.getBoundingClientRect()])) : null;
+  const shown = focusRows
+    .filter(r => focusFilter === 'all' ? true : focusFilter === 'done' ? done.has(r.fid) : r.kind === focusFilter && !done.has(r.fid))
+    .sort((a, b) => done.has(a.fid) - done.has(b.fid));
+  list.innerHTML = shown.length ? shown.map(r => focusRowHtml(r, done.has(r.fid))).join('')
+    : focusRows.length
+      ? `<p class="dash-empty">${focusFilter === 'done' ? '今天还没有勾掉的事。' : '这一类今天都推进完了。'}</p>`
+      : `<button class="dash-focus-open dash-focus-idle" data-goto="pool"><span><small>当前无待办</small><b>去灵感池看看团队正在讨论什么</b>
+          <em>保持资料流动，下一步才会自然出现</em></span><strong>去看看 <span>→</span></strong></button>`;
+  if (first) for (const el of list.querySelectorAll('.dash-focus-item')) {
+    const a = first.get(el.dataset.fid);
+    const b = el.getBoundingClientRect();
+    if (a && a.top !== b.top) el.animate([{ transform: `translateY(${a.top - b.top}px)` }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.2,.9,.25,1.1)' });
+    else if (!a) el.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'ease-out' });
+  }
+  paintProgress(done);
+  for (const seg of document.querySelectorAll('#v-home .dash-seg')) placePill(seg);
+}
+
+/** 进度环 + 问候下面那句话：跟着勾选实时变 */
+function paintProgress(done = doneSet()) {
+  const total = focusRows.length;
+  const n = focusRows.filter(r => done.has(r.fid)).length;
+  const bar = document.getElementById('dashRingBar');
+  if (!bar) return;
+  bar.style.strokeDashoffset = String(total ? RING * (1 - n / total) : 0);
+  document.getElementById('dashRingNum').textContent = total ? `${n}/${total}` : '清空';
+  document.getElementById('dashRing').setAttribute('aria-label', total ? `今天值得推进的 ${total} 件事，已推进 ${n} 件` : '今天没有待推进的事');
+  document.getElementById('dashRing').classList.toggle('is-full', !total || n === total);
+  const left = total - n;
+  document.getElementById('dashHeroLine').textContent = !total
+    ? '今天没有等你处理的事，可以去灵感池看看新想法。'
+    : left ? `今天有 ${total} 件事值得推进，还剩 ${left} 件。先处理需要判断的事，再把结果沉淀成团队资产。`
+      : '今天的事都推进过了，写完日报就可以收工。';
+}
+
+/** 分段按钮下面那块滑动的底 */
+function placePill(seg) {
+  const on = seg.querySelector('button[aria-pressed="true"]');
+  const pill = seg.querySelector('.dash-seg-pill');
+  if (!on || !pill) return;
+  pill.style.width = `${on.offsetWidth}px`;
+  pill.style.transform = `translateX(${on.offsetLeft}px)`;
+}
+
+/** 勾选时的一小把彩纸（动效「完整」时才放） */
+function burst(from) {
+  if (reduced() || !from) return;
+  const r = from.getBoundingClientRect();
+  const cs = getComputedStyle(document.documentElement);
+  const colors = ['--blue', '--good', '--warn', '--violet'].map(v => cs.getPropertyValue(v).trim() || '#999');
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement('i');
+    p.className = 'dash-confetti';
+    p.style.left = `${r.left + r.width / 2}px`;
+    p.style.top = `${r.top + r.height / 2}px`;
+    p.style.background = colors[i % colors.length];
+    document.body.appendChild(p);
+    const a = Math.random() * Math.PI * 2, d = 40 + Math.random() * 90;
+    p.animate([
+      { transform: 'translate(-50%,-50%) rotate(0)', opacity: 1 },
+      { transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d + 50}px) rotate(${Math.random() * 540}deg)`, opacity: 0 },
+    ], { duration: 700 + Math.random() * 400, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = () => p.remove();
+  }
+}
+
+function toggleDone(fid, btn) {
+  const set = doneSet();
+  const row = focusRows.find(r => r.fid === fid);
+  const nowDone = !set.has(fid);
+  if (nowDone) set.add(fid); else set.delete(fid);
+  saveDone(set);
+  paintFocus(true);
+  if (!nowDone || !row) return;
+  burst(btn);
+  const all = focusRows.every(r => set.has(r.fid));
+  toast('ok', all ? '今天值得推进的事都推进过了' : `「${row.title}」标记为今天已推进`);
+}
+
+/* ---------- 布局编辑：拖动换位置、改宽度、先藏起来。只记在这台设备上 ---------- */
+const TILES = {
+  hero: { name: '问候', sizes: [8, 6, 12] },
+  hot: { name: '待我审核', sizes: [4, 3, 6] },
+  today: { name: '每日总结', sizes: [12, 6] },
+  stats: { name: '数字概况', sizes: [12, 6] },
+  focus: { name: '今天值得推进', sizes: [7, 6, 8, 12] },
+  pipeline: { name: '客户转化', sizes: [5, 4, 6, 12] },
+  library: { name: '团队资产', sizes: [7, 6, 12] },
+  clients: { name: '服务中客户', sizes: [5, 6, 12] },
+};
+const DEFAULT_ORDER = Object.keys(TILES);
+const LAYOUT_KEY = 'ideahub.dash.layout.v1';
+function readLayout() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null');
+    const order = Array.isArray(s?.order) ? s.order.filter(k => TILES[k]) : [];
+    for (const k of DEFAULT_ORDER) if (!order.includes(k)) order.push(k);
+    return {
+      order,
+      hidden: Array.isArray(s?.hidden) ? s.hidden.filter(k => TILES[k]) : [],
+      size: Object.fromEntries(Object.entries(s?.size || {}).filter(([k, v]) => TILES[k]?.sizes.includes(v))),
+    };
+  } catch { return { order: [...DEFAULT_ORDER], hidden: [], size: {} }; }
+}
+let layout = readLayout();
+function saveLayout() {
+  const bento = document.getElementById('dashBento');
+  if (bento) layout.order = [...bento.children].map(el => el.dataset.tile).filter(Boolean);
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch { /* 记不住只影响这一次 */ }
+}
+
+function applyLayout() {
+  const bento = document.getElementById('dashBento');
+  if (!bento) return;
+  for (const k of layout.order) {
+    const el = bento.querySelector(`:scope > [data-tile="${k}"]`);
+    if (el) bento.appendChild(el);
+  }
+  for (const el of bento.children) {
+    const k = el.dataset.tile;
+    const span = layout.size[k] || TILES[k].sizes[0];
+    el.style.setProperty('--span', span);
+    el.dataset.wide = span >= 7 ? '1' : '0';
+    el.hidden = layout.hidden.includes(k);
+  }
+  const tray = document.getElementById('dashTray');
+  if (tray) tray.innerHTML = layout.hidden.map(k => `<button type="button" class="dash-tool" data-tile-show="${k}">+ ${TILES[k].name}</button>`).join('');
+}
+
+/** 改布局时整块网格做一次 FLIP，卡片从旧位置滑到新位置 */
+function flipTiles(change) {
+  const bento = document.getElementById('dashBento');
+  const before = new Map([...bento.children].filter(el => !el.hidden).map(el => [el, el.getBoundingClientRect()]));
+  change();
+  if (reduced()) return;
+  for (const el of bento.children) {
+    if (el.hidden) continue;
+    const a = before.get(el), b = el.getBoundingClientRect();
+    if (!a) { el.animate([{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 360, easing: 'ease-out' }); continue; }
+    if (a.left === b.left && a.top === b.top && a.width === b.width) continue;
+    el.animate([
+      { transformOrigin: 'top left', transform: `translate(${a.left - b.left}px,${a.top - b.top}px) scale(${a.width / b.width},${a.height / b.height})` },
+      { transformOrigin: 'top left', transform: 'none' },
+    ], { duration: 460, easing: 'cubic-bezier(.2,.9,.25,1.05)' });
+  }
+}
+
+function enterEdit() {
+  const bento = document.getElementById('dashBento');
+  if (!bento) return;
+  bento.classList.add('editing');
+  document.getElementById('dashEditbar').hidden = false;
+  for (const el of bento.children) {
+    if (el.querySelector(':scope > .dash-tile-tools')) continue;
+    const name = TILES[el.dataset.tile].name;
+    el.insertAdjacentHTML('afterbegin', `<div class="dash-tile-tools">
+      <button type="button" data-tile-move="-1" aria-label="${name}往前挪">←</button>
+      <button type="button" data-tile-move="1" aria-label="${name}往后挪">→</button>
+      <button type="button" data-tile-size aria-label="改变${name}的宽度">宽度</button>
+      <button type="button" data-tile-hide aria-label="先藏起${name}">隐藏</button></div>`);
+  }
+  applyLayout();
+}
+function exitEdit() {
+  const bento = document.getElementById('dashBento');
+  editing = false;
+  if (!bento) return;
+  bento.classList.remove('editing');
+  document.getElementById('dashEditbar').hidden = true;
+  bento.querySelectorAll('.dash-tile-tools').forEach(t => t.remove());
+  saveLayout();
+  syncTools();
+}
+function setEditing(on) {
+  if (on === editing) return;
+  if (on && focusing) setFocusing(false);
+  editing = on;
+  if (on) { enterEdit(); toast('info', '拖动卡片换位置，改完点「完成」'); } else { exitEdit(); toast('ok', '首页布局已保存在这台设备上'); }
+  syncTools();
+}
+
+/** 拖动换位置：按住卡片拖，经过别的卡片时换位，其余卡片 FLIP 让位 */
+function bindDrag(root) {
+  root.addEventListener('pointerdown', e => {
+    if (!editing || e.button !== 0 || e.target.closest('.dash-tile-tools')) return;
+    const bento = document.getElementById('dashBento');
+    const tile = e.target.closest('#dashBento > [data-tile]');
+    if (!tile) return;
+    e.preventDefault();
+    const start = tile.getBoundingClientRect();
+    const ox = e.clientX - start.left, oy = e.clientY - start.top;
+    tile.classList.add('dragging');
+    try { tile.setPointerCapture(e.pointerId); } catch { /* 部分浏览器不给也能拖 */ }
+    let last = null, cool = 0;
+    const place = ev => {
+      tile.style.transform = 'none';
+      const b = tile.getBoundingClientRect();
+      tile.style.transform = `translate(${ev.clientX - ox - b.left}px,${ev.clientY - oy - b.top}px) scale(1.02)`;
+    };
+    const move = ev => {
+      place(ev);
+      if (performance.now() < cool) return;
+      const hit = document.elementsFromPoint(ev.clientX, ev.clientY)
+        .map(n => n.closest?.('#dashBento > [data-tile]')).find(n => n && n !== tile);
+      if (!hit) { last = null; return; }
+      if (hit === last) return;
+      const kids = [...bento.children];
+      const others = kids.filter(n => n !== tile && !n.hidden);
+      const before = new Map(others.map(n => [n, n.getBoundingClientRect()]));
+      bento.insertBefore(tile, kids.indexOf(tile) < kids.indexOf(hit) ? hit.nextSibling : hit);
+      if (!reduced()) for (const n of others) {
+        const a = before.get(n), b = n.getBoundingClientRect();
+        if (a.left !== b.left || a.top !== b.top) n.animate([{ transform: `translate(${a.left - b.left}px,${a.top - b.top}px)` }, { transform: 'none' }], { duration: 360, easing: 'cubic-bezier(.2,.9,.25,1.1)' });
+      }
+      last = hit; cool = performance.now() + 260;
+      place(ev);
+    };
+    const up = () => {
+      tile.removeEventListener('pointermove', move);
+      const cur = tile.style.transform;
+      tile.style.transform = '';
+      tile.classList.remove('dragging');
+      if (!reduced() && cur) tile.animate([{ transform: cur }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.2,.9,.25,1.1)' });
+      saveLayout();
+    };
+    tile.addEventListener('pointermove', move);
+    tile.addEventListener('pointerup', up, { once: true });
+    tile.addEventListener('pointercancel', up, { once: true });
+  });
+}
+
+/* ---------- 专注模式：只留「今天值得推进的事」，顶部一个 25 分钟计时 ---------- */
+const FOCUS_SECONDS = 25 * 60;
+let focusLeft = FOCUS_SECONDS, focusRunning = true, focusTimer = null, focusBar = null;
+function paintFocusBar() {
+  if (!focusBar) return;
+  const m = String(Math.floor(focusLeft / 60)).padStart(2, '0');
+  const s = String(focusLeft % 60).padStart(2, '0');
+  focusBar.querySelector('b').textContent = `${m}:${s}`;
+  focusBar.querySelector('.bar').style.strokeDashoffset = String(113.1 * (1 - focusLeft / FOCUS_SECONDS));
+  focusBar.querySelector('[data-focus="pause"]').textContent = focusRunning ? '暂停' : '继续';
+}
+function setFocusing(on) {
+  if (on === focusing) return;
+  if (on && editing) setEditing(false);
+  focusing = on;
+  document.getElementById('dashBento')?.classList.toggle('focusing', on);
+  clearInterval(focusTimer);
+  focusBar?.remove();
+  focusBar = null;
+  syncTools();
+  if (!on) return;
+  focusLeft = FOCUS_SECONDS;
+  focusRunning = true;
+  focusBar = document.createElement('div');
+  focusBar.className = 'dash-focusbar';
+  focusBar.setAttribute('role', 'status');
+  focusBar.innerHTML = `<span class="ring"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="trk" cx="20" cy="20" r="18"/><circle class="bar" cx="20" cy="20" r="18"/></svg></span>
+    <span>专注中</span><b>25:00</b>
+    <button type="button" data-focus="pause">暂停</button><button type="button" data-focus="end">结束</button>`;
+  document.body.appendChild(focusBar);
+  focusBar.addEventListener('click', e => {
+    const b = e.target.closest('[data-focus]');
+    if (!b) return;
+    if (b.dataset.focus === 'pause') { focusRunning = !focusRunning; paintFocusBar(); }
+    else { setFocusing(false); toast('ok', '专注结束，辛苦了'); }
+  });
+  focusTimer = setInterval(() => {
+    if (!focusRunning) return;
+    focusLeft = Math.max(0, focusLeft - 1);
+    paintFocusBar();
+    if (!focusLeft) { setFocusing(false); toast('ok', '25 分钟到了，起来活动一下'); }
+  }, 1000);
+  paintFocusBar();
+  document.querySelector('#v-home .dash-focus')?.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' });
+}
+
+function syncTools() {
+  const f = document.getElementById('dashFocusBtn');
+  const e = document.getElementById('dashEditBtn');
+  if (f) f.setAttribute('aria-pressed', String(focusing));
+  if (e) e.setAttribute('aria-pressed', String(editing));
+}
+
+/** 离开首页：专注计时停掉、布局编辑保存退出（main.js 的 go() 调用） */
+export function leave() {
+  if (focusing) setFocusing(false);
+  if (editing) { editing = false; exitEdit(); }
+}
+
+/** 首页上的点击和快捷键。#v-home 本身不会被重绘，挂一次就够 */
+let bound = false;
+function bindHome(root) {
+  if (bound) return;
+  bound = true;
+  bindDrag(root);
+  // 按下按钮时从手指 / 光标的位置荡开一圈水波纹
+  root.addEventListener('pointerdown', e => {
+    const b = e.target.closest('.rip');
+    if (!b || reduced() || editing) return;
+    const r = b.getBoundingClientRect();
+    const size = Math.max(r.width, r.height) * 2.2;
+    const w = document.createElement('span');
+    w.className = 'dash-ripple';
+    w.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
+    b.appendChild(w);
+    setTimeout(() => w.remove(), 650);
+  });
+  root.addEventListener('click', e => {
+    const check = e.target.closest('.dash-check');
+    if (check) { toggleDone(check.closest('.dash-focus-item').dataset.fid, check); return; }
+    const filter = e.target.closest('[data-filter]');
+    if (filter) {
+      focusFilter = filter.dataset.filter;
+      filter.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === filter)));
+      paintFocus(true);
+      return;
+    }
+    const pipe = e.target.closest('[data-pipe]');
+    if (pipe) {
+      pipeMode = pipe.dataset.pipe;
+      pipe.parentElement.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === pipe)));
+      placePill(pipe.parentElement);
+      root.querySelectorAll('.dash-pipeline-list i[data-w]').forEach(i => { i.style.width = pipeMode === 'rate' ? i.dataset.r : i.dataset.w; });
+      return;
+    }
+    if (e.target.closest('#dashFocusBtn')) { setFocusing(!focusing); return; }
+    if (e.target.closest('#dashEditBtn')) { setEditing(!editing); return; }
+    const lay = e.target.closest('[data-dash-layout]');
+    if (lay) {
+      if (lay.dataset.dashLayout === 'done') setEditing(false);
+      else { flipTiles(() => { layout = { order: [...DEFAULT_ORDER], hidden: [], size: {} }; applyLayout(); }); saveLayout(); toast('ok', '首页布局已恢复默认'); }
+      return;
+    }
+    const show = e.target.closest('[data-tile-show]');
+    if (show) { flipTiles(() => { layout.hidden = layout.hidden.filter(k => k !== show.dataset.tileShow); applyLayout(); }); saveLayout(); return; }
+    const tile = e.target.closest('#dashBento > [data-tile]');
+    if (!tile || !editing) return;
+    const k = tile.dataset.tile;
+    if (e.target.closest('[data-tile-hide]')) {
+      flipTiles(() => { layout.hidden = [...new Set([...layout.hidden, k])]; applyLayout(); });
+      saveLayout();
+    } else if (e.target.closest('[data-tile-size]')) {
+      const sizes = TILES[k].sizes;
+      const cur = layout.size[k] || sizes[0];
+      flipTiles(() => { layout.size[k] = sizes[(sizes.indexOf(cur) + 1) % sizes.length]; applyLayout(); });
+      saveLayout();
+    } else if (e.target.closest('[data-tile-move]')) {
+      const step = Number(e.target.closest('[data-tile-move]').dataset.tileMove);
+      const bento = tile.parentElement;
+      const visible = [...bento.children].filter(n => !n.hidden);
+      const target = visible[visible.indexOf(tile) + step];
+      if (target) flipTiles(() => bento.insertBefore(tile, step < 0 ? target : target.nextSibling));
+      saveLayout();
+      e.target.closest('[data-tile-move]').focus();
+    }
+  });
+  // 快捷键：F 专注、E 编辑布局。只在首页、没在打字、没有弹窗时生效
+  document.addEventListener('keydown', e => {
+    if (!root.classList.contains('on') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Escape') { if (focusing) setFocusing(false); if (editing) setEditing(false); return; }
+    if (e.target.closest('input,textarea,select,[contenteditable]')) return;
+    if (document.querySelector('.modal.on, .drawer.on, .menupop.on')) return;
+    const k = e.key.toLowerCase();
+    if (k === 'f') { e.preventDefault(); setFocusing(!focusing); }
+    else if (k === 'e' && innerWidth > 1180) { e.preventDefault(); setEditing(!editing); }
+  });
+  addEventListener('resize', () => root.querySelectorAll('.dash-seg').forEach(placePill));
+}
+
+/** 给命令面板用：外面也能打开专注模式、布局编辑 */
+export function command(name) {
+  if (name === 'focus') setFocusing(true);
+  if (name === 'edit' && innerWidth > 1180) setEditing(true);
 }
 
 /**
@@ -143,6 +555,7 @@ function composerBusy() {
 export async function render({ force = false } = {}) {
   if (!force && lastAt && Date.now() - lastAt < 30_000) return;
   if (composerBusy()) return;
+  if (editing) return;   // 正在拖卡片排版时不重绘，不然手里的卡片会被换掉
   const root = $('#v-home');
   const cached = root.querySelector('.dash-hero') ? null : readCache();
   if (cached) paintDashboard(root, cached);
@@ -188,26 +601,24 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
   const serviceClients = clientItems.filter(x => ['consulted', 'coaching'].includes(x.stage));
   const incompleteClients = clientItems.filter(x => !x.note || !Number(x.fileCount || 0));
 
-  const focus = [];
-  for (const row of pendingReports.slice(0, 2)) focus.push(focusItem({
-    tone: 'amber', eyebrow: '待我审核', title: row.title || '未命名工作提交',
+  // 今天值得推进的事：待审核 → 评审 → 客户跟进。每条可以在首页上勾掉（只记在这台设备的今天，见 doneStore）
+  focusRows = [];
+  for (const row of pendingReports.slice(0, 2)) focusRows.push({
+    kind: 'review', tone: 'amber', eyebrow: '待我审核', title: row.title || '未命名工作提交',
     meta: `${row.authorName || '同事'} 提交${row.needHelp ? ' · 需要协助' : ''}`,
     board: 'reports', entity: 'report', id: row.id,
-  }));
-  for (const row of reviewing.slice(0, Math.max(1, 3 - focus.length))) focus.push(focusItem({
-    tone: 'violet', eyebrow: '评审进行中', title: row.title,
+  });
+  for (const row of reviewing.slice(0, 2)) focusRows.push({
+    kind: 'idea', tone: 'violet', eyebrow: '评审进行中', title: row.title,
     meta: `${row.voteCount || 0} 人支持 · ${row.commentCount || 0} 条讨论`,
     board: 'pool', entity: 'idea', id: row.id,
-  }));
-  for (const row of serviceClients.slice(0, Math.max(1, 4 - focus.length))) focus.push(focusItem({
-    tone: 'green', eyebrow: '客户跟进', title: row.alias || '未命名客户',
+  });
+  for (const row of serviceClients.slice(0, 3)) focusRows.push({
+    kind: 'client', tone: 'green', eyebrow: '客户跟进', title: row.alias || '未命名客户',
     meta: `${stageLabel[row.stage] || '待分阶段'}${row.ownerName ? ` · ${row.ownerName}负责` : ''}`,
     board: 'clients', entity: 'client', id: row.id,
-  }));
-  if (!focus.length) focus.push(focusItem({
-    tone: 'blue', eyebrow: '当前无待办', title: '去灵感池看看团队正在讨论什么',
-    meta: '保持资料流动，下一步才会自然出现', board: 'pool',
-  }));
+  });
+  focusRows = focusRows.slice(0, 6).map(r => ({ ...r, fid: `${r.entity}:${r.id}` }));
 
   const library = stats.library || [];
   const sales = stats.salesFunnel || [];
@@ -226,23 +637,49 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
   const dayReport = myByDate.get(day) || null;
   const defaultVis = me?.reportVisibilityDefault === 'public' ? 'public' : 'private';
   const curVis = dayReport ? dayReport.visibility : defaultVis;
+  const hot = pendingReports[0];
 
   root.innerHTML = `
-    <section class="dash-hero">
-      <div>
-        <div class="page-kicker">${esc(dateText())}</div>
+    <div class="dash-tools" id="dashTools">
+      <div class="dash-editbar" id="dashEditbar" hidden>
+        <b>拖动卡片换位置，用卡片右上角的按钮改大小或先藏起来</b>
+        <span class="dash-tray" id="dashTray"></span>
+        <button type="button" class="dash-tool" data-dash-layout="reset">恢复默认</button>
+        <button type="button" class="dash-tool is-primary" data-dash-layout="done">完成</button>
+      </div>
+      <button type="button" class="dash-tool" id="dashFocusBtn" aria-pressed="false" title="专注模式（F）">${ICON.clock}<span>专注模式</span></button>
+      <button type="button" class="dash-tool dash-edit-btn" id="dashEditBtn" aria-pressed="false" title="编辑布局（E）">${ICON.layers}<span>编辑布局</span></button>
+    </div>
+
+    <div class="dash-bento" id="dashBento">
+    <section class="dash-hero" data-tile="hero">
+      <div class="dash-hero-main">
+        <div class="page-kicker">${esc(dateText())}<span class="dash-clock" id="dashClock">${clockText()}</span></div>
         <h1>${greeting()}，${esc(me?.name || '伙伴')}</h1>
-        <p>先处理需要判断的事，再把结果沉淀成团队资产。</p>
+        <p id="dashHeroLine"></p>
+      </div>
+      <div class="dash-ring" id="dashRing" role="img" aria-label="">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="bar" id="dashRingBar" cx="60" cy="60" r="52" stroke-dasharray="${RING}" stroke-dashoffset="${RING}"/></svg>
+        <div><b id="dashRingNum">0/0</b><small>今天已推进</small></div>
       </div>
       <div class="dash-quick" aria-label="快捷操作">
-        <button data-dash-create="pool">${ICON.bulb}<span><b>记一条灵感</b><small>发起讨论</small></span></button>
-        <button data-dash-create="clients">${ICON.users}<span><b>新增客户</b><small>跟进信息</small></span></button>
-        <button data-dash-learning="framework">${ICON.layers}<span><b>框架学习</b><small>判断链路</small></span></button>
-        <button data-dash-learning="detail">${ICON.book}<span><b>详细学习</b><small>专业详解</small></span></button>
+        <button class="rip" data-dash-create="pool">${ICON.bulb}<span><b>记一条灵感</b><small>发起讨论</small></span></button>
+        <button class="rip" data-dash-create="clients">${ICON.users}<span><b>新增客户</b><small>跟进信息</small></span></button>
+        <button class="rip" data-dash-learning="framework">${ICON.layers}<span><b>框架学习</b><small>判断链路</small></span></button>
+        <button class="rip" data-dash-learning="detail">${ICON.book}<span><b>详细学习</b><small>专业详解</small></span></button>
       </div>
     </section>
 
-    <section class="dash-panel dash-today${todayOpen ? ' open' : ''}" data-day="${esc(day)}"
+    <section class="dash-hot${hot ? '' : ' is-clear'}" data-tile="hot" aria-labelledby="dashHotHead">
+      <header><h2 id="dashHotHead">待我审核</h2><span class="dash-chip">${hot ? '先做这件' : '已全部审完'}</span></header>
+      <b class="dash-hot-num" data-num="hot">${pendingReports.length}</b>
+      ${hot ? `<div class="dash-hot-card"><small>${esc(hot.authorName || '同事')} 提交${hot.needHelp ? ' · 需要协助' : ''}</small>
+        <b>${esc(hot.title || '未命名工作提交')}</b><span>${pendingReports.length > 1 ? `还有 ${pendingReports.length - 1} 条排在后面` : '需要给出反馈'}</span></div>`
+        : '<p class="dash-hot-empty">没有等你审核的工作提交，今天可以把精力放在客户和灵感上。</p>'}
+      <button class="dash-hot-go rip" data-goto="reports"${hot ? ` data-entity="report" data-ref="${Number(hot.id)}"` : ''}>${hot ? '去审核 →' : '看工作提交'}</button>
+    </section>
+
+    <section class="dash-panel dash-today${todayOpen ? ' open' : ''}" data-tile="today" data-day="${esc(day)}"
         data-report-id="${dayReport ? Number(dayReport.id) : ''}">
       <header>
         <div><h2 id="dashTodayHead">${esc(dayLabel(day))}做了什么</h2>
@@ -274,43 +711,73 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
       </div>
     </section>
 
-    <section class="dash-action-grid">
+    <section class="dash-action-grid" data-tile="stats">
       <button data-goto="reports"><span class="dash-action-icon amber">${ICON.check}</span><small>待我审核</small><b data-num="review">${pendingReports.length}</b><em>${pendingReports.length ? '需要给出反馈' : '当前已清空'}</em></button>
       <button data-goto="pool"><span class="dash-action-icon violet">${ICON.eye}</span><small>评审中的灵感</small><b data-num="reviewing">${reviewing.length}</b><em>${reviewing.length ? '正在形成共识' : '暂无评审中项目'}</em></button>
       <button data-goto="clients"><span class="dash-action-icon green">${ICON.users}</span><small>服务中客户</small><b data-num="clients">${serviceClients.length}</b><em>${incompleteClients.length} 份档案待补完整</em></button>
       <button data-goto="demands"><span class="dash-action-icon blue">${ICON.search}</span><small>用户需求</small><b data-num="demands">${demandItems.length}</b><em>${demandItems.filter(x => !x.quote).length} 条缺少原话证据</em></button>
     </section>
 
-    <div class="dash-layout">
-      <section class="dash-panel dash-focus">
-        <header><div><h2>今天值得推进的事</h2></div><small>按待审核、评审、客户跟进排序</small></header>
-        <div class="dash-focus-list">${focus.slice(0, 4).join('')}</div>
-      </section>
+    <section class="dash-panel dash-focus" data-tile="focus">
+      <header><div><h2>今天值得推进的事</h2><small>按待审核、评审、客户跟进排序；勾掉的沉到下面</small></div>
+        <div class="dash-seg" id="dashFocusSeg" role="group" aria-label="筛选待办"><i class="dash-seg-pill" aria-hidden="true"></i>${[
+          ['all', '全部'], ['review', '审核'], ['idea', '评审'], ['client', '客户'], ['done', '已推进'],
+        ].map(([k, t]) => `<button type="button" data-filter="${k}" aria-pressed="${focusFilter === k}">${t}</button>`).join('')}</div>
+      </header>
+      <div class="dash-focus-list" id="dashFocusList"></div>
+    </section>
 
-      <section class="dash-panel dash-pipeline">
-        <header><div><h2>客户转化</h2></div><button data-goto="funnel">看完整漏斗 →</button></header>
-        <div class="dash-pipeline-list">${sales.map((step, index) => `
+    <section class="dash-panel dash-pipeline" data-tile="pipeline">
+      <header><div><h2>客户转化</h2></div>
+        <div class="dash-seg" id="dashPipeSeg" role="group" aria-label="漏斗显示方式"><i class="dash-seg-pill" aria-hidden="true"></i>${[
+          ['count', '人数'], ['rate', '转化率'],
+        ].map(([k, t]) => `<button type="button" data-pipe="${k}" aria-pressed="${pipeMode === k}">${t}</button>`).join('')}</div>
+        <button data-goto="funnel">看完整漏斗 →</button></header>
+      <div class="dash-pipeline-list">${sales.map((step, index) => {
+        const w = Math.max(8, Number(step.value || 0) / maxSales * 100);
+        const r = index ? Math.max(4, Math.min(100, Number(step.conversion) || 0)) : 100;
+        const cur = pipeMode === 'rate' ? r : w;
+        return `
           <button data-goto="clients" data-stages="${esc((step.stages || []).join(','))}"
-              data-filter-label="销售漏斗 · ${esc(step.name)}">
+              data-filter-label="销售漏斗 · ${esc(step.name)}"
+              title="${index ? `上一步 → ${esc(step.name)}：转化 ${step.conversion ?? '—'}%` : `漏斗起点：${Number(step.value || 0)} 位`}">
             <span><i>${String(index + 1).padStart(2, '0')}</i><b>${esc(step.name)}</b></span>
-            <div><i data-w="${Math.max(8, Number(step.value || 0) / maxSales * 100)}%" style="width:${Math.max(8, Number(step.value || 0) / maxSales * 100)}%"></i></div>
+            <div><i data-w="${w}%" data-r="${r}%" style="width:${cur}%"></i></div>
             <strong>${Number(step.value || 0)}</strong>
             <em>${index ? `${step.conversion ?? '—'}%` : '起点'}</em>
-          </button>`).join('')}</div>
-      </section>
-    </div>
+          </button>`;
+      }).join('')}</div>
+    </section>
 
-    <section class="dash-panel dash-library">
+    <section class="dash-panel dash-library" data-tile="library">
       <header><div><h2>团队资产</h2></div><button data-goto="stats">查看统计 →</button></header>
       <div>${library.map(item => `<button data-goto="${esc(item.board)}"><small>${esc(item.name)}</small><b>${Number(item.value || 0)}</b><em>${esc(item.note || '')}</em><span>打开 →</span></button>`).join('')}</div>
-    </section>`;
+    </section>
+
+    <section class="dash-panel dash-clients" data-tile="clients">
+      <header><div><h2>服务中客户</h2>${incompleteClients.length ? `<small>${incompleteClients.length} 份档案待补完整</small>` : ''}</div><button data-goto="clients">客户档案 →</button></header>
+      ${serviceClients.length ? `<div class="dash-client-grid">${serviceClients.slice(0, 6).map(c => `
+        <button class="dash-client" data-goto="clients" data-entity="client" data-ref="${Number(c.id)}">
+          <i style="background:${avatarColor(c.alias || '?')}">${esc(initial(c.alias || '?'))}</i>
+          <b>${esc(c.alias || '未命名客户')}</b>
+          <span class="dash-chip">${esc(stageLabel[c.stage] || '待分阶段')}</span>
+          <em>${c.ownerName ? `${esc(c.ownerName)}负责` : '还没有负责人'}</em>
+        </button>`).join('')}</div>`
+        : '<p class="dash-empty">已咨询和陪跑中的客户会出现在这里。</p>'}
+    </section>
+    </div>`;
 
   bindToday(root);
+  paintFocus(false);
+  applyLayout();
+  if (editing) enterEdit();
+  if (focusing) root.querySelector('#dashBento').classList.add('focusing');
+  syncTools();
   animateDashboard(root);
 }
 
 /** 鼠标划过卡片时跟着光标走的一圈柔光（样式在 soft.css）。事件挂在 #v-home 上，它不会被重绘，绑一次就够 */
-const SPOT = '.dash-panel, .dash-quick button, .dash-action-grid>button';
+const SPOT = '.dash-panel, .dash-hero, .dash-hot, .dash-quick button, .dash-action-grid>button, .dash-client';
 let spotBound = false;
 
 /** 画完之后放动效。第一次进来：模块依次滑入、漏斗条长出来；之后只有数字变了才滚动 */
@@ -322,7 +789,7 @@ function animateDashboard(root) {
     setTimeout(() => root.classList.remove('dash-enter'), 1200);
     const bars = [...root.querySelectorAll('.dash-pipeline-list i[data-w]')];
     bars.forEach(i => { i.style.width = '0%'; });
-    requestAnimationFrame(() => requestAnimationFrame(() => bars.forEach(i => { i.style.width = i.dataset.w; })));
+    requestAnimationFrame(() => requestAnimationFrame(() => bars.forEach(i => { i.style.width = pipeMode === 'rate' ? i.dataset.r : i.dataset.w; })));
   }
   for (const el of root.querySelectorAll('[data-num]')) {
     const to = Number(el.textContent) || 0;
@@ -330,6 +797,7 @@ function animateDashboard(root) {
     shownNums.set(el.dataset.num, to);
     if (from !== to) countTo(el, to, { from, ms: 700 });
   }
+  bindHome(root);
   if (!spotBound) {
     spotBound = true;
     root.addEventListener('pointermove', e => {

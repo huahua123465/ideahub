@@ -32,6 +32,8 @@ import * as samples from './views/samples.js';
 import * as expenses from './views/expenses.js';
 import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
+import { openLook } from './look.js';
+import { setTheme } from './theme.js';
 import { bindSheetPreview } from './sheet-preview.js';
 import { bindDocPreview } from './doc-preview.js';
 import { bindImagePreview } from './lightbox.js';
@@ -321,6 +323,7 @@ function go(next) {
   if (view === 'collector') collector.leave();
   if (view === 'samples') samples.leave();
   if (view === 'functionTree') functionTree.leave();
+  if (view === 'home') dashboard.leave();   // 离开首页时收掉专注模式、退出布局编辑
   view = next;
   for (const k of VIEWS) {
     $('#v-' + k).classList.toggle('on', k === next);
@@ -571,6 +574,31 @@ function bind() {
   // 灵感池自己的关键词筛选仍然在，只是不再占用这个入口。
   search.bind();
   search.events.addEventListener('goto', e => openAnywhere(e.detail));
+  // 搜索框里的命令（09-24）：没字时列出常用的，打字时名字对得上的排在搜索结果上面
+  search.setCommands(() => {
+    const pages = [...document.querySelectorAll('#appNav [data-go]')].map(b => {
+      const name = [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+      return { group: '跳转', label: `打开「${name}」`, keywords: name, icon: ICON.layers, featured: ['home', 'pool', 'clients', 'reports'].includes(b.dataset.go), run: () => go(b.dataset.go) };
+    });
+    const create = (label, target, keywords) => ({ group: '新建', label, keywords, icon: ICON.plus, featured: true,
+      run: () => { go(target); setTimeout(createForCurrentView, 0); } });
+    const looks = (window.IdeaHubLook?.FAMILIES || []).map(f => ({ group: '外观', label: `配色换成「${f.name}」`, keywords: `配色 主题 ${f.name}`,
+      icon: ICON.sparkle, run: () => window.IdeaHubLook.set({ family: f.id }) }));
+    return [
+      create('记一条灵感', 'pool', '新建 灵感 想法'), create('新增客户', 'clients', '新建 客户'),
+      { group: '新建', label: '智能导入资料', keywords: '导入 上传', icon: ICON.download, run: () => importer.open() },
+      { group: '首页', label: '专注模式（25 分钟）', keywords: '专注 番茄 计时', hint: 'F', icon: ICON.clock, featured: true,
+        run: () => { go('home'); setTimeout(() => dashboard.command('focus'), 60); } },
+      ...(innerWidth > 1180 ? [{ group: '首页', label: '编辑首页布局', keywords: '布局 排版 拖动', hint: 'E', icon: ICON.layers,
+        run: () => { go('home'); setTimeout(() => dashboard.command('edit'), 60); } }] : []),
+      { group: '外观', label: '配色与外观…', keywords: '主题 颜色 配色 圆角 密度 动效', icon: ICON.sparkle, featured: true, run: openLook },
+      { group: '外观', label: '切换到深色', keywords: '深色 暗色 夜间 主题', icon: ICON.eye, run: () => setTheme('dark') },
+      { group: '外观', label: '切换到浅色', keywords: '浅色 亮色 主题', icon: ICON.eye, run: () => setTheme('light') },
+      { group: '外观', label: '外观跟随系统', keywords: '跟随系统 自动 主题', icon: ICON.eye, run: () => setTheme('auto') },
+      ...looks,
+      ...pages,
+    ];
+  });
   importer.events.addEventListener('goto', e => openAnywhere(e.detail));
   importer.events.addEventListener('committed', e => {
     const boards = new Set(e.detail.items.map(x => x.board));

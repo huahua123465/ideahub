@@ -17,12 +17,73 @@ let requestSeq = 0;
  * 页面切换时清空全局搜索。它不是草稿字段，不应把上一个页面的关键词带到
  * 新页面；同时让已发出的旧请求失效，避免稍后返回又把搜索面板打开。
  */
+/**
+ * 命令（09-24）：Ctrl K 聚焦搜索框后，框里还没字时列出能直接做的事（跳到某页、新建、专注模式、换配色……），
+ * 输入时把名字对得上的命令放在搜索结果上面。↑↓ 选，Enter 执行。
+ * 命令清单由 main.js 通过 setCommands 提供 —— 跳页面、新建这些动作都在那边。
+ */
+let commandSource = () => [];
+let shownCommands = [];
+let activeIndex = -1;
+export function setCommands(fn) { commandSource = fn; }
+
+function matchCommands(keyword) {
+  const all = commandSource();
+  if (!keyword) return all.filter(c => c.featured);
+  const k = keyword.toLowerCase();
+  return all.filter(c => c.label.toLowerCase().includes(k) || (c.keywords || '').toLowerCase().includes(k)).slice(0, 6);
+}
+
+function commandHtml(keyword) {
+  shownCommands = matchCommands(keyword);
+  if (!shownCommands.length) return '';
+  const hit = label => {
+    if (!keyword) return esc(label);
+    const i = label.toLowerCase().indexOf(keyword.toLowerCase());
+    return i < 0 ? esc(label) : `${esc(label.slice(0, i))}<mark>${esc(label.slice(i, i + keyword.length))}</mark>${esc(label.slice(i + keyword.length))}`;
+  };
+  let group = '';
+  return `<div class="searchcmds">${keyword ? '<div class="searchgrp-t">命令</div>' : ''}${shownCommands.map((c, i) => {
+    const head = !keyword && c.group !== group ? `<div class="searchgrp-t">${esc(group = c.group)}</div>` : '';
+    return `${head}<button type="button" class="searchcmd" data-cmd="${i}">${c.icon || ''}<span>${hit(c.label)}</span>${c.hint ? `<kbd>${esc(c.hint)}</kbd>` : ''}</button>`;
+  }).join('')}</div>`;
+}
+
+/** 框里没字时的命令列表 */
+function showCommands() {
+  const pop = $('#searchPop');
+  const html = commandHtml('');
+  activeIndex = -1;
+  if (!html) { close(); return; }
+  pop.innerHTML = `${html}<div class="searchcmd-foot">输入关键词搜索全站资料 · ↑↓ 选择 · Enter 执行</div>`;
+  pop.hidden = false;
+  pop.dataset.mode = 'commands';
+}
+
+function runCommand(i) {
+  const c = shownCommands[i];
+  if (!c) return;
+  reset();
+  $('#q')?.blur();
+  c.run();
+}
+
+/** ↑↓ 在命令和搜索结果之间移动，被选中的那一行滚到看得见的地方 */
+function moveActive(step) {
+  const items = [...$('#searchPop').querySelectorAll('.searchcmd, .searchhit')];
+  if (!items.length) return;
+  activeIndex = (activeIndex + step + items.length) % items.length;
+  items.forEach((el, i) => el.classList.toggle('is-active', i === activeIndex));
+  items[activeIndex].scrollIntoView({ block: 'nearest' });
+}
+
 export function reset() {
   clearTimeout(timer);
   timer = null;
   requestSeq++;
   lastQ = '';
   lastMode = 'keyword';
+  activeIndex = -1;
   const input = $('#q');
   if (input) input.value = '';
   if ($('#smartSearchBtn')) smartLoading(false);
@@ -49,12 +110,28 @@ export function bind() {
     requestSeq++; // 正在返回的旧请求作废，不能覆盖用户刚输入的新词
     smartLoading(false);
     const keyword = input.value.trim();
-    if (!keyword) { close(); return; }
+    activeIndex = -1;
+    if (!keyword) { showCommands(); return; }
+    const cmds = commandHtml(keyword);
+    if (cmds) {
+      pop.hidden = false;
+      pop.dataset.mode = 'search';
+      pop.innerHTML = `${cmds}<div class="dim" style="padding:12px">搜索中…</div>`;
+    }
     timer = setTimeout(() => run(keyword, 'keyword'), 320);
   });
 
   input.addEventListener('keydown', event => {
     if (event.key === 'Escape') { input.blur(); close(); }
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !pop.hidden) {
+      event.preventDefault();
+      moveActive(event.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (event.key === 'Enter' && activeIndex >= 0) {
+      const active = pop.querySelector('.is-active');
+      if (active) { event.preventDefault(); active.click(); return; }
+    }
     if (event.key === 'Enter') {
       clearTimeout(timer);
       run(input.value.trim(), 'keyword');
@@ -78,10 +155,19 @@ export function bind() {
   });
 
   input.addEventListener('focus', () => {
-    if (input.value.trim() && lastQ === input.value.trim()) pop.hidden = false;
+    if (!input.value.trim()) { showCommands(); return; }
+    if (lastQ === input.value.trim()) pop.hidden = false;
   });
+  let pressingPop = false;
+  pop.addEventListener('pointerdown', () => { pressingPop = true; });
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (!pressingPop && pop.dataset.mode === 'commands' && !input.value.trim()) close();
+    pressingPop = false;
+  }, 120));
 
   pop.addEventListener('click', event => {
+    const cmd = event.target.closest('[data-cmd]');
+    if (cmd) { event.preventDefault(); runCommand(Number(cmd.dataset.cmd)); return; }
     const retry = event.target.closest('.search-smart-retry');
     if (retry) {
       event.preventDefault();
@@ -100,7 +186,7 @@ export function bind() {
 
 export function close() {
   const pop = $('#searchPop');
-  if (pop) pop.hidden = true;
+  if (pop) { pop.hidden = true; pop.dataset.mode = ''; }
 }
 
 function smartLoading(loading) {
@@ -119,6 +205,9 @@ async function run(keyword, mode = 'keyword') {
   pop.innerHTML = mode === 'smart'
     ? '<div class="searchmode"><b>正在理解你想找的意思…</b></div>'
     : '<div class="dim" style="padding:12px">搜索中…</div>';
+  pop.dataset.mode = 'search';
+  const cmds = commandHtml(keyword);
+  if (cmds && mode !== 'smart') pop.innerHTML = `${cmds}<div class="dim" style="padding:12px">搜索中…</div>`;
   lastQ = keyword;
   lastMode = mode;
   if (mode === 'smart') smartLoading(true);
@@ -135,9 +224,10 @@ async function run(keyword, mode = 'keyword') {
   }
   if (runId !== requestSeq || lastQ !== keyword || lastMode !== mode) return;
 
+  activeIndex = -1;
   if (!data.items.length) {
     const smartTried = data.requestedMode === 'smart';
-    pop.innerHTML = `<div class="searchempty">
+    pop.innerHTML = `${mode === 'smart' ? '' : commandHtml(keyword)}<div class="searchempty">
       没有找到「${esc(keyword)}」
       <div class="dim" style="margin-top:5px">${smartTried
         ? '已经搜索了相近表达，可以换一个更具体的说法'
@@ -159,7 +249,7 @@ async function run(keyword, mode = 'keyword') {
   const warning = data.warning ? `<div class="searchwarn">${esc(data.warning)}</div>` : '';
 
   pop.innerHTML = `
-    ${modeHead}${warning}
+    ${mode === 'smart' ? '' : commandHtml(keyword)}${modeHead}${warning}
     <div class="searchhead">找到 <b>${data.items.length}</b> 条 · 跨 ${byEntity.size} 个模块</div>
     ${data.groups.map(group => {
       const list = byEntity.get(group.entity) || [];

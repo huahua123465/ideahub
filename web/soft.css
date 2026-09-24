@@ -169,20 +169,135 @@ html[data-ui="soft"] .dash-library{border-top-color:light-dark(rgba(94,121,108,.
 html[data-ui="soft"] .dash-library>div button{border-radius:var(--rd-lg)}
 html[data-ui="soft"] .dash-library>div button:hover{background:light-dark(#f7f4f1,#1b1815)}
 
-/* 首页动效（09-24）。第一次打开时模块依次滑入（dashboard.js 加一次 .dash-enter，放完就摘掉，后台重绘不会重放）；
-   鼠标划过卡片有一圈跟着光标走的柔光；漏斗条从零长出来；快捷入口、待办、数字卡片的图标有一点跟手的反馈。
-   「配色与外观」里动效调成简洁 / 关闭、或系统开了减弱动态效果时，JS 不加 .dash-enter，motion.css 也会把过渡压到 0 */
-html[data-ui="soft"] #v-home.dash-enter>*{animation:dash-in .6s var(--ease-smooth-out) backwards}
-html[data-ui="soft"] #v-home.dash-enter>:nth-child(2){animation-delay:60ms}
-html[data-ui="soft"] #v-home.dash-enter>:nth-child(3){animation-delay:120ms}
-html[data-ui="soft"] #v-home.dash-enter>:nth-child(4){animation-delay:180ms}
-html[data-ui="soft"] #v-home.dash-enter>:nth-child(5){animation-delay:240ms}
-html[data-ui="soft"] #v-home.dash-enter .dash-focus-item{animation:dash-in .5s var(--ease-smooth-out) backwards;animation-delay:260ms}
-html[data-ui="soft"] #v-home.dash-enter .dash-focus-item:nth-child(2){animation-delay:320ms}
-html[data-ui="soft"] #v-home.dash-enter .dash-focus-item:nth-child(3){animation-delay:380ms}
-html[data-ui="soft"] #v-home.dash-enter .dash-focus-item:nth-child(4){animation-delay:440ms}
-@keyframes dash-in{from{opacity:0;transform:translateY(10px)}}
-html[data-ui="soft"] #v-home :is(.dash-panel,.dash-quick button,.dash-action-grid>button):hover{
+/* ---------- 首页拼贴（09-24）----------
+   首页改成 12 栏的拼贴网格：每块卡片带 data-tile，宽度来自 --span（布局编辑里可改、记在这台设备上）。
+   顺序仍是「问候 → 每日总结 → 数字 → 待办」，手机上按 order 重排（见 700px 断点）。
+   卡片仍是「细边框、零阴影」；只有拖动中的那张卡片带阴影，表示它浮起来了。 */
+html[data-ui="soft"] #v-home .dash-tools{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-md);min-height:36px;margin-bottom:var(--sp-md)}
+html[data-ui="soft"] #v-home .dash-tool{display:inline-flex;align-items:center;gap:var(--sp-sm);height:36px;padding:0 var(--sp-lg);border:1px solid var(--card-line);border-radius:var(--rd-pill);background:var(--surface);color:var(--ink2);font-size:var(--fs-sm);font-weight:600;white-space:nowrap;transition:transform .3s var(--spring),border-color .2s,background-color .2s,color .2s}
+html[data-ui="soft"] #v-home .dash-tool .ic{width:16px;height:16px}
+html[data-ui="soft"] #v-home .dash-tool:hover{border-color:var(--card-line-hover);color:var(--ink);transform:translateY(-1px)}
+html[data-ui="soft"] #v-home .dash-tool[aria-pressed="true"],
+html[data-ui="soft"] #v-home .dash-tool.is-primary{border-color:var(--blue);background:var(--blue);color:light-dark(#fff,#1c1a1d)}
+html[data-ui="soft"] #v-home .dash-editbar{flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-md);padding:var(--sp-xs) var(--sp-xs) var(--sp-xs) var(--sp-xl);border-radius:var(--rd-pill);background:var(--blue-100);color:var(--blue-dk);animation:dash-in .35s var(--ease-smooth-out)}
+html[data-ui="soft"] #v-home .dash-editbar[hidden]{display:none}
+html[data-ui="soft"] #v-home .dash-editbar b{flex:1;min-width:0;font-size:var(--fs-sm)}
+html[data-ui="soft"] #v-home .dash-tray{display:flex;flex-wrap:wrap;gap:var(--sp-sm)}
+
+html[data-ui="soft"] #v-home .dash-bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-flow:row dense;gap:var(--sp-2xl)}
+html[data-ui="soft"] #v-home .dash-bento>*{position:relative;grid-column:span var(--span,12);min-width:0;margin:0}
+html[data-ui="soft"] #v-home .dash-bento>[hidden]{display:none}
+html[data-ui="soft"] #v-home .dash-action-grid[data-wide="0"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* 问候：左边问候和今天的节奏，右边进度环，下面一排快捷入口；右上角一团慢慢飘的品牌色光 */
+html[data-ui="soft"] #v-home .dash-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main ring" "quick quick";align-items:center;gap:var(--sp-3xl) var(--sp-5xl);padding:var(--sp-6xl);overflow:hidden;isolation:isolate}
+html[data-ui="soft"] #v-home .dash-hero::before{content:"";position:absolute;right:-90px;top:-130px;z-index:-1;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,light-dark(rgba(196,126,120,.2),rgba(179,110,104,.22)),transparent 70%);animation:dash-drift 16s ease-in-out infinite alternate;pointer-events:none}
+@keyframes dash-drift{to{transform:translate(-50px,40px) scale(1.15)}}
+html[data-ui="soft"] #v-home .dash-hero-main{grid-area:main;min-width:0}
+html[data-ui="soft"] #v-home .dash-hero p{max-width:34em}
+html[data-ui="soft"] #v-home .dash-clock{margin-left:var(--sp-md);padding-left:var(--sp-md);border-left:1px solid var(--line);font-variant-numeric:tabular-nums}
+html[data-ui="soft"] #v-home .dash-quick{grid-area:quick}
+html[data-ui="soft"] #v-home .dash-ring{grid-area:ring;position:relative;width:128px;height:128px}
+html[data-ui="soft"] #v-home .dash-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+html[data-ui="soft"] #v-home .dash-ring circle{fill:none;stroke-width:11}
+html[data-ui="soft"] #v-home .dash-ring .trk{stroke:var(--surface-2)}
+html[data-ui="soft"] #v-home .dash-ring .bar{stroke:var(--blue);stroke-linecap:round;transition:stroke-dashoffset 1s var(--spring),stroke .4s}
+html[data-ui="soft"] #v-home .dash-ring.is-full .bar{stroke:var(--good)}
+html[data-ui="soft"] #v-home .dash-ring>div{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+html[data-ui="soft"] #v-home .dash-ring b{font-size:var(--fs-8xl);font-weight:800;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+html[data-ui="soft"] #v-home .dash-ring small{margin-top:var(--sp-2xs);color:var(--muted);font-size:var(--fs-xs)}
+
+/* 待我审核：全页唯一一块有底色的卡片 —— 最该先做的事要一眼看到。审完变成绿色的「已全部审完」 */
+html[data-ui="soft"] #v-home .dash-hot{display:flex;flex-direction:column;gap:var(--sp-lg);padding:var(--sp-4xl);border:1px solid light-dark(#ecd3cc,#4a302c);border-radius:var(--rd-3xl);background:light-dark(#f7e6e1,#2d1f1d);color:var(--ink);overflow:hidden;transition:background-color .5s,border-color .5s}
+html[data-ui="soft"] #v-home .dash-hot header{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-md)}
+html[data-ui="soft"] #v-home .dash-hot h2{font-size:var(--fs-lg)}
+html[data-ui="soft"] #v-home .dash-chip{display:inline-flex;align-items:center;height:26px;padding:0 var(--sp-base);border-radius:var(--rd-pill);background:light-dark(rgba(255,255,255,.62),rgba(255,255,255,.08));color:var(--ink2);font-size:var(--fs-xs);font-weight:650;white-space:nowrap}
+html[data-ui="soft"] #v-home .dash-hot-num{font-size:calc(var(--fs-10xl) * 2.6);font-weight:800;line-height:.9;letter-spacing:-.06em;color:light-dark(#a3564d,#f0b3a6);font-variant-numeric:tabular-nums}
+html[data-ui="soft"] #v-home .dash-hot-card{display:grid;gap:var(--sp-2xs);margin-top:auto;padding:var(--sp-xl);border-radius:var(--rd-2xl);background:light-dark(rgba(255,255,255,.66),rgba(255,255,255,.06))}
+html[data-ui="soft"] #v-home .dash-hot-card small{color:var(--muted);font-size:var(--fs-xs);font-weight:650}
+html[data-ui="soft"] #v-home .dash-hot-card b{font-size:var(--fs-2xl);line-height:1.35}
+html[data-ui="soft"] #v-home .dash-hot-card span,
+html[data-ui="soft"] #v-home .dash-hot-empty{color:var(--ink2);font-size:var(--fs-sm)}
+html[data-ui="soft"] #v-home .dash-hot-empty{margin-top:auto}
+html[data-ui="soft"] #v-home .dash-hot-go{display:flex;align-items:center;justify-content:center;gap:var(--sp-sm);min-height:48px;border-radius:var(--rd-pill);background:light-dark(#8f4a43,#f0b3a6);color:light-dark(#fff,#2a1513);font-size:var(--fs-base);font-weight:700;transition:transform .3s var(--spring),filter .2s}
+html[data-ui="soft"] #v-home .dash-hot-go:hover{transform:scale(1.02);filter:brightness(1.06)}
+html[data-ui="soft"] #v-home .dash-hot-go:active{transform:scale(.97)}
+html[data-ui="soft"] #v-home .dash-hot.is-clear{border-color:var(--good-line);background:var(--good-bg)}
+html[data-ui="soft"] #v-home .dash-hot.is-clear .dash-hot-num{color:var(--good)}
+html[data-ui="soft"] #v-home .dash-hot.is-clear .dash-hot-go{background:var(--good);color:light-dark(#fff,#132019)}
+
+/* 分段切换（待办筛选、漏斗人数 / 转化率）：底下那块跟着点到的按钮滑过去 */
+html[data-ui="soft"] #v-home .dash-panel>header{flex-wrap:wrap;align-items:center}
+html[data-ui="soft"] #v-home .dash-seg{position:relative;display:inline-flex;padding:var(--sp-2xs);border-radius:var(--rd-md);background:var(--surface-2);isolation:isolate}
+html[data-ui="soft"] #v-home .dash-seg button{position:relative;z-index:1;height:30px;padding:0 var(--sp-base);border-radius:var(--rd-sm);color:var(--muted);font-size:var(--fs-xs);font-weight:650;white-space:nowrap;transition:color .2s}
+html[data-ui="soft"] #v-home .dash-seg button:hover,
+html[data-ui="soft"] #v-home .dash-seg button[aria-pressed="true"]{color:var(--ink)}
+html[data-ui="soft"] #v-home .dash-seg-pill{position:absolute;top:var(--sp-2xs);bottom:var(--sp-2xs);left:0;z-index:0;border-radius:var(--rd-sm);background:var(--surface);box-shadow:0 1px 3px light-dark(rgba(48,41,47,.12),rgba(0,0,0,.4));transition:transform .4s var(--spring),width .4s var(--spring)}
+
+/* 待办：左边勾选、右边点进去处理。勾掉的划线、变淡、沉到下面 */
+html[data-ui="soft"] #v-home .dash-focus-item{grid-template-columns:4px 30px minmax(0,1fr);gap:var(--sp-md);padding:var(--sp-xs) var(--sp-xs) var(--sp-xs) var(--sp-md);border-bottom:0;transition:background-color .2s,opacity .3s}
+html[data-ui="soft"] #v-home .dash-focus-item+.dash-focus-item{border-top:1px solid var(--line-soft)}
+html[data-ui="soft"] #v-home .dash-check{width:28px;height:28px;display:grid;place-items:center;border:2px solid var(--muted);border-radius:50%;transition:background-color .25s,border-color .25s,transform .35s var(--spring)}
+html[data-ui="soft"] #v-home .dash-check:hover{transform:scale(1.12);border-color:var(--blue)}
+html[data-ui="soft"] #v-home .dash-check svg{width:15px;height:15px;fill:none;stroke:light-dark(#fff,#1c1a1d);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .35s .08s var(--ease-smooth-out)}
+html[data-ui="soft"] #v-home .dash-focus-item.is-done{opacity:.7}
+html[data-ui="soft"] #v-home .dash-focus-item.is-done .dash-check{border-color:var(--blue);background:var(--blue)}
+html[data-ui="soft"] #v-home .dash-focus-item.is-done .dash-check svg{stroke-dashoffset:0}
+html[data-ui="soft"] #v-home .dash-focus-item.is-done b{color:var(--muted);text-decoration:line-through}
+html[data-ui="soft"] #v-home .dash-focus-open{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--sp-lg);min-width:0;padding:var(--sp-md) var(--sp-sm);border-radius:var(--rd-base);text-align:left}
+html[data-ui="soft"] #v-home .dash-focus-open>span{display:grid;min-width:0;gap:var(--sp-2xs)}
+html[data-ui="soft"] #v-home .dash-focus-open strong{color:var(--muted);font-size:var(--fs-xs);font-weight:600;white-space:nowrap}
+html[data-ui="soft"] #v-home .dash-focus-open strong span{display:inline-block;color:var(--blue-dk);transition:transform .3s var(--ease-smooth-out)}
+html[data-ui="soft"] #v-home .dash-focus-open:hover strong span{transform:translateX(4px)}
+html[data-ui="soft"] #v-home .dash-focus-idle{padding:var(--sp-lg) var(--sp-md)}
+html[data-ui="soft"] #v-home .dash-empty{padding:var(--sp-2xl) var(--sp-4xl);color:var(--muted);font-size:var(--fs-sm)}
+@media (pointer:coarse){html[data-ui="soft"] #v-home .dash-check{width:40px;height:40px}html[data-ui="soft"] #v-home .dash-focus-item{grid-template-columns:4px 40px minmax(0,1fr)}}
+
+/* 服务中客户：一人一张小卡，头像色和全站其他地方一致 */
+html[data-ui="soft"] #v-home .dash-client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--sp-md);padding:var(--sp-lg) var(--sp-2xl) var(--sp-2xl)}
+html[data-ui="soft"] #v-home .dash-client{display:grid;justify-items:start;align-content:start;gap:var(--sp-xs);padding:var(--sp-xl);border:1px solid var(--line-soft);border-radius:var(--rd-2xl);background:var(--surface-3);text-align:left;transition:transform .4s var(--spring),border-color .2s}
+html[data-ui="soft"] #v-home .dash-client:hover{transform:translateY(-3px);border-color:var(--card-line-hover)}
+html[data-ui="soft"] #v-home .dash-client i{width:42px;height:42px;display:grid;place-items:center;margin-bottom:var(--sp-xs);border-radius:var(--rd-xl);color:light-dark(#fff,#fff);font-size:var(--fs-lg);font-style:normal;font-weight:800;transition:transform .45s var(--spring)}
+html[data-ui="soft"] #v-home .dash-client:hover i{transform:rotate(-8deg) scale(1.06)}
+html[data-ui="soft"] #v-home .dash-client b{font-size:var(--fs-base)}
+html[data-ui="soft"] #v-home .dash-client em{color:var(--muted);font-size:var(--fs-xs);font-style:normal}
+
+/* 布局编辑：卡片轻轻晃，表示可以拖；卡片里的内容暂时点不了，只留右上角的工具 */
+html[data-ui="soft"] #v-home .dash-bento.editing>*{cursor:grab;outline:2px dashed var(--blue-200);outline-offset:-2px;animation:dash-wiggle .32s ease-in-out infinite alternate}
+html[data-ui="soft"] #v-home .dash-bento.editing>:nth-child(even){animation-delay:-.16s}
+html[data-ui="soft"] #v-home .dash-bento.editing>*>:not(.dash-tile-tools){pointer-events:none;user-select:none}
+@keyframes dash-wiggle{from{transform:rotate(-.3deg)}to{transform:rotate(.3deg)}}
+html[data-ui="soft"] #v-home .dash-bento>.dragging{z-index:5;cursor:grabbing;animation:none;transition:none;box-shadow:0 30px 60px -20px light-dark(rgba(48,41,47,.35),rgba(0,0,0,.7))}
+html[data-ui="soft"] #v-home .dash-tile-tools{position:absolute;top:var(--sp-md);right:var(--sp-md);z-index:6;display:flex;gap:var(--sp-xs)}
+html[data-ui="soft"] #v-home .dash-tile-tools button{min-width:32px;height:32px;padding:0 var(--sp-md);border-radius:var(--rd-pill);background:var(--ink);color:var(--page);font-size:var(--fs-xs);font-weight:700;box-shadow:0 4px 12px light-dark(rgba(0,0,0,.18),rgba(0,0,0,.5))}
+html[data-ui="soft"] #v-home .dash-tile-tools button:hover{background:var(--blue)}
+
+/* 专注模式：只留「今天值得推进的事」，其余卡片退到后面 */
+html[data-ui="soft"] #v-home .dash-bento>*{transition:filter .4s,opacity .4s}
+html[data-ui="soft"] #v-home .dash-bento.focusing>:not(.dash-focus){filter:blur(4px) saturate(.6);opacity:.3;pointer-events:none}
+html[data-ui="soft"] #v-home .dash-bento.focusing>.dash-focus{z-index:2;outline:3px solid var(--blue);outline-offset:3px}
+html[data-ui="soft"] .dash-focusbar{position:fixed;left:50%;top:calc(var(--sp-4xl) + env(safe-area-inset-top,0px));z-index:70;display:flex;align-items:center;gap:var(--sp-lg);padding:var(--sp-sm) var(--sp-sm) var(--sp-sm) var(--sp-md);border-radius:var(--rd-pill);background:var(--ink);color:var(--page);box-shadow:var(--shadow-lg);transform:translateX(-50%);animation:dash-drop .45s var(--spring)}
+@keyframes dash-drop{from{opacity:0;transform:translate(-50%,-12px)}}
+html[data-ui="soft"] .dash-focusbar .ring,
+html[data-ui="soft"] .dash-focusbar svg{width:40px;height:40px}
+html[data-ui="soft"] .dash-focusbar svg{transform:rotate(-90deg)}
+html[data-ui="soft"] .dash-focusbar circle{fill:none;stroke-width:4}
+html[data-ui="soft"] .dash-focusbar .trk{stroke:light-dark(rgba(255,255,255,.22),rgba(0,0,0,.2))}
+html[data-ui="soft"] .dash-focusbar .bar{stroke:var(--good);stroke-linecap:round;stroke-dasharray:113.1;transition:stroke-dashoffset 1s linear}
+html[data-ui="soft"] .dash-focusbar span{font-size:var(--fs-sm)}
+html[data-ui="soft"] .dash-focusbar b{min-width:4.2em;font-size:var(--fs-3xl);font-variant-numeric:tabular-nums}
+html[data-ui="soft"] .dash-focusbar button{height:36px;padding:0 var(--sp-xl);border-radius:var(--rd-pill);background:light-dark(rgba(255,255,255,.16),rgba(0,0,0,.14));color:inherit;font-size:var(--fs-sm);font-weight:700}
+
+/* 动效：第一次打开依次滑入（dashboard.js 加一次 .dash-enter）、跟着光标的柔光、漏斗条长出来、按下时的水波纹 */
+html[data-ui="soft"] #v-home.dash-enter .dash-bento>*{animation:dash-in .6s var(--ease-smooth-out) backwards}
+html[data-ui="soft"] #v-home.dash-enter .dash-bento>:nth-child(2){animation-delay:50ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-bento>:nth-child(3){animation-delay:100ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-bento>:nth-child(4){animation-delay:150ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-bento>:nth-child(5){animation-delay:200ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-bento>:nth-child(6){animation-delay:250ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-bento>:nth-child(n+7){animation-delay:300ms}
+@keyframes dash-in{from{opacity:0;transform:translateY(12px)}}
+html[data-ui="soft"] #v-home :is(.dash-panel,.dash-hero,.dash-quick button,.dash-action-grid>button,.dash-client):hover{
   background-image:radial-gradient(320px circle at var(--mx,50%) var(--my,50%),light-dark(rgba(121,99,117,.075),rgba(195,166,187,.09)),transparent 70%)}
 html[data-ui="soft"] .dash-pipeline-list button>div i{transition:width .9s var(--ease-smooth-out)}
 html[data-ui="soft"] #v-home .dash-quick .ic,
@@ -190,8 +305,18 @@ html[data-ui="soft"] #v-home .dash-action-icon{transition:transform .45s var(--s
 html[data-ui="soft"] #v-home .dash-quick button:hover .ic{transform:rotate(-10deg) scale(1.12)}
 html[data-ui="soft"] #v-home .dash-action-grid>button:hover .dash-action-icon{transform:translateY(-2px) scale(1.08)}
 html[data-ui="soft"] #v-home .dash-action-grid b{font-variant-numeric:tabular-nums}
-html[data-ui="soft"] #v-home .dash-focus-item strong span{display:inline-block;transition:transform .3s var(--ease-smooth-out)}
-html[data-ui="soft"] #v-home .dash-focus-item:hover strong span{transform:translateX(4px)}
+html[data-ui="soft"] #v-home .rip{position:relative;overflow:hidden;isolation:isolate}
+html[data-ui="soft"] #v-home .dash-ripple{position:absolute;z-index:-1;border-radius:50%;background:currentColor;opacity:.16;transform:scale(0);animation:dash-ripple .6s var(--ease-smooth-out) forwards;pointer-events:none}
+@keyframes dash-ripple{to{opacity:0;transform:scale(1)}}
+html[data-ui="soft"] .dash-confetti{position:fixed;z-index:90;width:8px;height:12px;border-radius:var(--rd-2xs);pointer-events:none}
+
+/* 平板：两栏，宽卡片（原来占 7 栏以上的）占满一行；布局编辑只在桌面上做 */
+@media (max-width:1180px){
+  html[data-ui="soft"] #v-home .dash-bento{grid-template-columns:repeat(2,minmax(0,1fr))}
+  html[data-ui="soft"] #v-home .dash-bento>*{grid-column:span 1}
+  html[data-ui="soft"] #v-home .dash-bento>:is([data-wide="1"],.dash-today,.dash-action-grid,.dash-hero,.dash-focus){grid-column:1/-1}
+  html[data-ui="soft"] #v-home .dash-edit-btn{display:none}
+}
 
 /* ---------- 摘要数字与资料卡 ---------- */
 html[data-ui="soft"] .board-overview{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--sp-md);margin-bottom:var(--sp-4xl);border:0;border-radius:0;background:transparent;box-shadow:none}
@@ -452,15 +577,22 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
 }
 
 @media (max-width:700px){
-  html[data-ui="soft"] #v-home.on{display:flex;flex-direction:column}
-  html[data-ui="soft"] #v-home .dash-hero{order:1}
-  html[data-ui="soft"] #v-home .dash-layout{display:contents}
-  html[data-ui="soft"] #v-home .dash-focus{order:2;margin-bottom:var(--sp-lg)}
-  /* 每日总结原来没写 order（= 0），排在了问候语上面、占满整个首屏；现在排在待办后面，默认收成一行 */
-  html[data-ui="soft"] #v-home .dash-today{order:3;margin-bottom:var(--sp-lg)}
-  html[data-ui="soft"] #v-home .dash-action-grid{order:4}
-  html[data-ui="soft"] #v-home .dash-pipeline{order:5;margin-bottom:var(--sp-lg)}
-  html[data-ui="soft"] #v-home .dash-library{order:6}
+  /* 手机：拼贴改成一列，按 order 排：问候 → 待我审核 → 待办 → 每日总结 → 数字 → 客户 → 漏斗 → 资产。
+     每日总结原来没写 order（= 0），排在了问候语上面、占满整个首屏；现在排在待办后面，默认收成一行 */
+  html[data-ui="soft"] #v-home .dash-tools{display:none}
+  html[data-ui="soft"] #v-home .dash-bento{display:flex;flex-direction:column;gap:var(--sp-lg)}
+  html[data-ui="soft"] #v-home .dash-hero{order:1;gap:var(--sp-xl) var(--sp-lg);padding:var(--sp-4xl) var(--sp-3xl) var(--sp-3xl)}
+  html[data-ui="soft"] #v-home .dash-hot{order:2;padding:var(--sp-3xl)}
+  html[data-ui="soft"] #v-home .dash-focus{order:3}
+  html[data-ui="soft"] #v-home .dash-today{order:4}
+  html[data-ui="soft"] #v-home .dash-action-grid{order:5}
+  html[data-ui="soft"] #v-home .dash-clients{order:6}
+  html[data-ui="soft"] #v-home .dash-pipeline{order:7}
+  html[data-ui="soft"] #v-home .dash-library{order:8}
+  html[data-ui="soft"] #v-home .dash-ring{width:84px;height:84px}
+  html[data-ui="soft"] #v-home .dash-ring b{font-size:var(--fs-4xl)}
+  html[data-ui="soft"] #v-home .dash-hot-num{font-size:calc(var(--fs-10xl) * 1.8)}
+  html[data-ui="soft"] #v-home .dash-client-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:var(--sp-md) var(--sp-lg) var(--sp-lg)}
   /* 收起的规则全宽度通用（styles.css）；手机上窄，收起时连「看历史日报」也藏掉 */
   html[data-ui="soft"] #v-home .dash-today:not(.open) .dash-today-history{display:none}
   html[data-ui="soft"] .page-head h1{font-size:var(--fs-6xl)}
@@ -551,3 +683,23 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
 @media (prefers-reduced-motion:reduce){
   html[data-ui="soft"] *,html[data-ui="soft"] *::before,html[data-ui="soft"] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
+
+/* 搜索框里的命令（09-24）：框里没字时列出常用操作，打字时对得上的排在搜索结果上面；↑↓ 选中的那一行高亮 */
+html[data-ui="soft"] .searchcmds{padding:var(--sp-xs)}
+html[data-ui="soft"] .searchcmd{width:100%;display:flex;align-items:center;gap:var(--sp-base);min-height:40px;padding:0 var(--sp-lg);border-radius:var(--rd-base);color:var(--ink);font-size:var(--fs-sm);text-align:left}
+html[data-ui="soft"] .searchcmd .ic{width:16px;height:16px;flex:none;color:var(--muted)}
+html[data-ui="soft"] .searchcmd span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html[data-ui="soft"] .searchcmd mark{background:none;color:inherit;text-decoration:underline;text-decoration-color:var(--blue);text-decoration-thickness:2px;text-underline-offset:3px}
+html[data-ui="soft"] .searchcmd kbd{padding:0 var(--sp-sm);border:1px solid var(--line);border-radius:var(--rd-sm);color:var(--muted);font-size:var(--fs-xs)}
+html[data-ui="soft"] .searchcmd:hover,
+html[data-ui="soft"] .searchcmd.is-active,
+html[data-ui="soft"] .searchhit.is-active{background:var(--blue-100);color:var(--blue-dk)}
+html[data-ui="soft"] .searchcmd:hover .ic,
+html[data-ui="soft"] .searchcmd.is-active .ic{color:var(--blue-dk)}
+html[data-ui="soft"] .searchcmd-foot{padding:var(--sp-md) var(--sp-lg);border-top:1px solid var(--line-soft);color:var(--muted);font-size:var(--fs-xs)}
+@media (pointer:coarse){html[data-ui="soft"] .searchcmd{min-height:44px}}
+
+/* 通知左右滑动清掉（09-24）：竖向还能正常滚动列表 */
+html[data-ui="soft"] .notifitem{touch-action:pan-y;transition:transform .3s var(--ease-smooth-out),opacity .3s}
+html[data-ui="soft"] .notifitem.swiping{transition:none;cursor:grabbing}
+html[data-ui="soft"] .notif-tip{padding:var(--sp-sm) var(--sp-lg);color:var(--muted);font-size:var(--fs-xs)}
