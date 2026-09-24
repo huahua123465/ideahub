@@ -4,7 +4,7 @@
  * 2026-09-23 按走查结论修的几处，锁住别再退回去。桌面和手机各走一遍：
  *   0. 样式表里不写死 px 字号 / 圆角 / 间距，一律用 --fs-* / --rd-* / --sp-* 阶梯（09-24）
  *   1. 可读性：主要页面上没有小于 12px 的文字；次要文字（var(--muted)）在页面底色上对比度 ≥ 4.5:1；
- *      卡片是细边框、零阴影（09-24）
+ *      卡片是细边框、零阴影（09-24）；阅读正文 17px 且卡片标题比它大（09-24）
  *   2. 首页日报表单的标签、输入框不贴卡片边（左右留出和标题一样的内边距）
  *   4. 聊天按钮：桌面往下滑收起、往上滑回来，有未读消息时不收；手机（≤560）搬进顶栏，滑动不收
  *   5. 客户档案（桌面）左栏的「S 级」、「城市 · 年龄 · 来源」各占一行，不被挤折
@@ -37,7 +37,7 @@ import { createUiHarness, settleDom } from './lib/ui-harness.mjs';
 }
 
 const harness = await createUiHarness({ outputDir: 'scripts/.uidiff/ui-polish' });
-const VIEWS = ['home', 'pool', 'demands', 'formal', 'clients', 'reports', 'expenses', 'purchases', 'stats', 'samples'];
+const VIEWS = ['home', 'pool', 'demands', 'formal', 'clients', 'reports', 'expenses', 'purchases', 'stats', 'samples', 'cases', 'sales', 'delivery'];
 
 /** 先把按钮滚到屏幕中间再点：贴着屏幕底边的话会点到右下角固定的聊天按钮上 */
 async function tap(page, sel) {
@@ -92,6 +92,13 @@ try {
         .map(el => { const cs = getComputedStyle(el); return { el: el.className.split(' ')[0], shadow: cs.boxShadow, border: parseFloat(cs.borderTopWidth) + parseFloat(cs.borderLeftWidth) }; })
         .filter(c => c.shadow !== 'none' || c.border < 1));
       assert.deepEqual(cardSkin.slice(0, 3), [], `${scene}/${view} 有卡片带阴影或没有边框`);
+      // 阅读正文 17px（09-24 用户定），而且卡片标题要比正文大，不能被正文追平
+      const reading = await page.evaluate(() => [...document.querySelectorAll('.view.on :is(#poolGrid .idea-card p,.insight-card blockquote,.client-focus p,.report-summary,.playbook-body,.case-journey p)')]
+        .filter(el => el.getClientRects().length)
+        .map(el => { const card = el.closest('article'); const h = card?.querySelector('h2,h3');
+          return { el: el.className || el.tagName, fs: parseFloat(getComputedStyle(el).fontSize), title: h ? parseFloat(getComputedStyle(h).fontSize) : 99 }; })
+        .filter(r => r.fs !== 17 || r.title <= r.fs));
+      assert.deepEqual(reading.slice(0, 3), [], `${scene}/${view} 阅读正文不是 17px，或卡片标题没比正文大`);
       assert.equal(r.smallCount, 0, `${scene}/${view} 还有 ${r.smallCount} 处小于 12px 的文字：${r.small.join('；')}`);
       assert.ok(r.contrast >= 4.5, `${scene}/${view} 次要文字对比度 ${r.contrast.toFixed(2)} < 4.5`);
     }

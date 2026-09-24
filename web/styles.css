@@ -77,6 +77,10 @@
      17px 单独一档：卡片标题大量用它。以后要整体调字号（比如按区域分层抬大），改这里的值。 */
   --fs-xs:12px; --fs-sm:13px; --fs-base:14px; --fs-md:15px; --fs-lg:16px; --fs-xl:17px; --fs-2xl:18px;
   --fs-3xl:20px; --fs-4xl:22px; --fs-5xl:24px; --fs-6xl:26px; --fs-7xl:28px; --fs-8xl:30px; --fs-9xl:32px; --fs-10xl:36px;
+  /* 阅读正文（09-24 用户定 17px）：卡片和抽屉里成段要读的文字 —— 灵感描述 / 详情正文 / 评论、需求原话、
+     客户「当前判断」、工作提交摘要、案例经历、销售与交付的打法正文。标题、标签、按钮、表格、说明小字都不走它。
+     要改阅读区字号只改这一个值。 */
+  --fs-read:var(--fs-xl);
 
   /* 卡片表面：2026-09-24 用户定「细边框、零阴影」。卡片靠一条细边和底色差跟页面分开，
      悬停只把边加深，不再浮起来；阴影只留给真正浮在上面的东西（弹窗、抽屉、菜单、聊天面板、提示）。
@@ -901,10 +905,11 @@ textarea.inp{resize:none;height:96px;line-height:1.65}
 .drawer.on{transform:none}
 .drawer .dhead{padding:var(--sp-4xl) var(--sp-5xl) var(--sp-2xl);border-bottom:1px solid var(--line-soft)}
 .drawer .dhead .card-top{margin-bottom:var(--sp-md)}
-.drawer h2{font-size:var(--fs-2xl);font-weight:700;line-height:1.45;letter-spacing:-.02em}
+/* 标题比阅读正文（--fs-read 17px）大一截，不然正文抬上来以后和标题差不多大，层级就糊了 */
+.drawer h2{font-size:var(--fs-4xl);font-weight:700;line-height:1.4;letter-spacing:-.02em}
 .dmeta{display:flex;align-items:center;gap:var(--sp-base);margin-top:var(--sp-base);font-size:var(--fs-sm);color:var(--muted)}
 .dbody{flex:1;overflow-y:auto;padding:var(--sp-3xl) var(--sp-5xl)}
-.dbody .content{font-size:var(--fs-base);line-height:1.85;color:var(--ink2);white-space:pre-line}
+.dbody .content{font-size:var(--fs-read);line-height:1.85;color:var(--ink2);white-space:pre-line}
 .sec-title{font-size:var(--fs-sm);font-weight:700;color:var(--muted);letter-spacing:.04em;
   margin:var(--sp-5xl) 0 var(--sp-lg);display:flex;align-items:center;gap:var(--sp-md)}
 .sec-title::after{content:"";flex:1;height:1px;background:var(--line-soft)}
@@ -914,7 +919,7 @@ textarea.inp{resize:none;height:96px;line-height:1.65}
 .cmt-body{flex:1}
 .cmt-body .n{font-size:var(--fs-sm);font-weight:600}
 .cmt-body .n span{color:var(--muted);font-weight:400;margin-left:var(--sp-sm);font-size:var(--fs-xs)}
-.cmt-body .t{font-size:var(--fs-base);color:var(--ink2);line-height:1.7;margin-top:var(--sp-2xs)}
+.cmt-body .t{font-size:var(--fs-read);color:var(--ink2);line-height:1.7;margin-top:var(--sp-2xs)}
 .cmt-item.enter{animation:enter .35s}
 .timeline{border-left:2px solid var(--line-soft);margin-left:var(--sp-xs);padding-left:var(--sp-2xl)}
 .tl{position:relative;font-size:var(--fs-sm);color:var(--ink2);padding-bottom:var(--sp-lg);line-height:1.6}
@@ -1624,6 +1629,7 @@ body:has(.chatpanel.on) .chatbtn{opacity:0;pointer-events:none;transform:transla
   .grid{gap:var(--sp-lg)}
   .card{padding:var(--sp-2xl) var(--sp-2xl) var(--sp-xl)}
   .drawer .dhead{padding:var(--sp-2xl) var(--sp-2xl) var(--sp-xl)}
+  .drawer h2{font-size:var(--fs-3xl)}
   .drawer .dbody{padding:var(--sp-2xl)}
   .drawer .dfoot{padding:10px 14px max(10px,env(safe-area-inset-bottom))}
   .cmt-input{gap:var(--sp-sm);margin-bottom:var(--sp-md)}
@@ -1780,9 +1786,9 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 
 /* 用户需求：用原话和真实目标阅读，而不是横向扫六列表头。 */
 .insight-card{display:flex;flex-direction:column;padding:var(--sp-4xl);min-height:300px}
-.insight-card h3{margin:var(--sp-lg) 0 var(--sp-lg);font-size:var(--fs-xl);font-weight:700;line-height:1.5;letter-spacing:-.015em}
+.insight-card h3{margin:var(--sp-lg) 0 var(--sp-lg);font-size:var(--fs-3xl);font-weight:700;line-height:1.5;letter-spacing:-.015em}
 .insight-card blockquote{position:relative;margin:0 0 var(--sp-2xl);padding:var(--sp-xl) var(--sp-2xl) var(--sp-xl) var(--sp-3xl);border-radius:var(--rd-xl);
-  background:#f7f7fa;color:#555e6e;font-size:var(--fs-base);line-height:1.72}
+  background:#f7f7fa;color:#555e6e;font-size:var(--fs-read);line-height:1.72}
 .insight-card blockquote::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:var(--rd-sm);background:#c9cffa}
 .insight-goal{padding:0 var(--sp-2xs);margin-bottom:var(--sp-2xl)}.insight-goal span{display:block;margin-bottom:var(--sp-xs);color:#9a7280;font-size:var(--fs-xs);font-weight:700;letter-spacing:.06em}
 .insight-goal b{font-size:var(--fs-base);line-height:1.65;font-weight:620;color:#3e4552}
@@ -1812,8 +1818,8 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 .meta-pill{padding:var(--sp-xs) var(--sp-md);border-radius:var(--rd-md);background:#f3f4f7;color:#636b79;font-size:var(--fs-xs)}
 .meta-pill i{margin-right:var(--sp-xs);color:var(--muted);font-style:normal}
 .playbook-label{display:inline-flex;align-self:flex-start;margin:var(--sp-3xl) 0 var(--sp-md);padding:var(--sp-sm) var(--sp-base);border-radius:var(--rd-base);background:#f0effb;color:#6258a6;font-size:var(--fs-xs);font-weight:700}
-.playbook-card h3{font-size:var(--fs-xl);line-height:1.48;font-weight:700;letter-spacing:-.015em}
-.playbook-body{margin:var(--sp-lg) 0 var(--sp-3xl);color:#656d7b;font-size:var(--fs-base);line-height:1.72}
+.playbook-card h3{font-size:var(--fs-3xl);line-height:1.48;font-weight:700;letter-spacing:-.015em}
+.playbook-body{margin:var(--sp-lg) 0 var(--sp-3xl);color:#656d7b;font-size:var(--fs-read);line-height:1.72}
 .playbook-card footer{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:var(--sp-xl);border-top:1px solid var(--line-soft);color:var(--muted);font-size:var(--fs-xs)}
 .playbook-card footer b{color:var(--blue-dk);font-size:var(--fs-xs)}
 .flow-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#78a69d}
@@ -1825,13 +1831,13 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 .client-card.tier-s{border-top-color:#9b7654}.client-card.tier-a{border-top-color:#6571cf}.client-card.tier-b{border-top-color:#5c9483}.client-card.tier-c{border-top-color:#9aa1ad}
 .client-card>header{display:flex;align-items:center;gap:var(--sp-base)}
 .client-avatar{width:42px;height:42px;display:grid;place-items:center;border-radius:var(--rd-xl);background:#eef0f7;color:#596171;font-size:var(--fs-xl);font-weight:720}
-.client-name{display:flex;align-items:center;gap:var(--sp-sm)}.client-name h3{font-size:var(--fs-2xl);font-weight:720}
+.client-name{display:flex;align-items:center;gap:var(--sp-sm)}.client-name h3{font-size:var(--fs-3xl);font-weight:720}
 .client-card header p{margin-top:var(--sp-2xs);color:var(--muted);font-size:var(--fs-xs)}
 .client-card header .stagepill{margin-left:auto}.client-card header .card-delete{margin-left:0}
 .tier-badge{padding:var(--sp-2xs) var(--sp-md);border-radius:var(--rd-md);background:#f4eee7;color:#916c49;font-size:var(--fs-xs);font-weight:720}
 .client-focus{margin:var(--sp-2xl) 0 var(--sp-base);padding:var(--sp-xl);border-radius:var(--rd-xl);background:#f7f8fa}
 .client-focus span,.client-next span{display:block;margin-bottom:var(--sp-xs);color:var(--muted);font-size:var(--fs-xs);font-weight:700;letter-spacing:.05em}
-.client-focus p{color:#515967;font-size:var(--fs-base);line-height:1.65}
+.client-focus p{color:#515967;font-size:var(--fs-read);line-height:1.65}
 .client-next{display:grid;grid-template-columns:88px 1fr auto;align-items:center;padding:var(--sp-lg) 0;border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
 .client-next span{margin:0}.client-next b{font-size:var(--fs-sm);font-weight:650}.client-next i{color:var(--blue-dk);font-size:var(--fs-xs);font-style:normal}
 .client-card footer{display:flex;align-items:center;gap:var(--sp-md);margin-top:auto;padding-top:var(--sp-xl)}.client-card footer .file-count{margin-left:auto}
@@ -1844,7 +1850,7 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 .case-journey{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-md);margin:var(--sp-3xl) 0}
 .case-journey>div{min-width:0;padding:var(--sp-lg);border-radius:var(--rd-xl);background:#f8f8fa}
 .case-journey i{display:block;color:var(--muted);font-size:var(--fs-xs);font-style:normal}.case-journey span{display:block;margin:var(--sp-xs) 0 var(--sp-sm);color:var(--muted);font-size:var(--fs-xs);font-weight:700}
-.case-journey p{color:#414956;font-size:var(--fs-sm);line-height:1.6}
+.case-journey p{color:#414956;font-size:var(--fs-read);line-height:1.6}
 .case-card footer{display:flex;align-items:center;gap:var(--sp-md);margin-top:auto;padding-top:var(--sp-xl);border-top:1px solid var(--line-soft)}
 .reusable-pill{display:inline-flex;align-items:center;gap:var(--sp-xs);margin-left:auto;color:var(--good);font-size:var(--fs-xs);font-weight:650}
 
@@ -1903,9 +1909,9 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 .report-status.plain{background:var(--page);color:var(--muted);border:1px solid var(--line)}
 /* 没请人点评时那行没有箭头，「没请人点评」四个字只是补充说明，压低存在感 */
 .report-route.solo span{color:var(--muted);font-weight:400}
-.report-card h3{margin:var(--sp-lg) 0 var(--sp-sm);font-size:var(--fs-xl);font-weight:710;line-height:1.5}
+.report-card h3{margin:var(--sp-lg) 0 var(--sp-sm);font-size:var(--fs-3xl);font-weight:710;line-height:1.5}
 .report-route{display:flex;align-items:center;gap:var(--sp-md);color:var(--muted);font-size:var(--fs-xs)}.report-route b{color:#4f5664}.report-route i{font-style:normal;color:var(--muted)}
-.report-summary{margin:var(--sp-xl) 0;color:#68707f;font-size:var(--fs-base);line-height:1.65}
+.report-summary{margin:var(--sp-xl) 0;color:#68707f;font-size:var(--fs-read);line-height:1.65}
 .report-callout{margin-top:var(--sp-md);padding:var(--sp-base) var(--sp-lg);border-radius:var(--rd-lg);color:#626a78;font-size:var(--fs-sm);line-height:1.55}.report-callout span{display:block;margin-bottom:var(--sp-2xs);font-size:var(--fs-xs);font-weight:720}
 .report-callout.help{background:#fff6ea}.report-callout.help span{color:#b27631}.report-callout.feedback{background:#edf6f2}.report-callout.feedback span{color:#3c826f}
 .report-card footer{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:var(--sp-xl);color:var(--blue-dk);font-size:var(--fs-xs)}
@@ -2071,7 +2077,7 @@ th{height:46px;font-size:var(--fs-sm);color:var(--muted);background:#f8f9fb}td{p
   letter-spacing:-.025em;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
   transition:color .2s var(--ease)}
 #poolGrid .idea-card:hover h3{color:#414bb0}
-#poolGrid .idea-card p{min-height:66px;margin-top:var(--sp-md);color:#66707f;font-size:var(--fs-base);line-height:1.72;
+#poolGrid .idea-card p{min-height:66px;margin-top:var(--sp-md);color:#66707f;font-size:var(--fs-read);line-height:1.72;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 .idea-tags{min-height:28px;margin:var(--sp-lg) var(--sp-4xl) var(--sp-2xl);gap:var(--sp-sm);align-content:flex-start}
 .idea-tags .tag{padding:var(--sp-xs) var(--sp-base);border:0;border-radius:var(--rd-pill);background:#f3f4f7;color:var(--muted);font-size:var(--fs-xs)}

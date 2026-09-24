@@ -192,7 +192,7 @@ html[data-ui="soft"] .record-menu>div{border-radius:var(--rd-lg);background:#fff
 
 html[data-ui="soft"] .board-demands{grid-template-columns:repeat(2,minmax(0,1fr))}
 html[data-ui="soft"] .insight-card{min-height:270px;padding:var(--sp-5xl) var(--sp-5xl);border-color:rgba(184,110,112,.13);background:linear-gradient(155deg,#fffdfa,#fbf7f4)}
-html[data-ui="soft"] .insight-card h3{font-size:var(--fs-2xl)}
+html[data-ui="soft"] .insight-card h3{font-size:var(--fs-3xl)}
 html[data-ui="soft"] .insight-quote{border-radius:var(--rd-base);background:#f4efec}
 
 html[data-ui="soft"] .board-persona,html[data-ui="soft"] .board-matrix{grid-template-columns:1fr}
@@ -280,7 +280,7 @@ html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-head{grid-colum
 html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-index{background:#f4e9ee;color:#8a526d}
 html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-copy{grid-column:1;grid-row:2;padding:var(--sp-2xl) var(--sp-5xl) 0}
 html[data-ui="soft"] #poolGrid .idea-card:first-child h3{max-width:760px;font-size:var(--fs-7xl);line-height:1.32;letter-spacing:-.04em}
-html[data-ui="soft"] #poolGrid .idea-card:first-child p{max-width:850px;min-height:0;font-size:var(--fs-base);-webkit-line-clamp:3}
+html[data-ui="soft"] #poolGrid .idea-card:first-child p{max-width:850px;min-height:0;font-size:var(--fs-read);-webkit-line-clamp:3}
 html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-tags{grid-column:1;grid-row:3;margin:var(--sp-xl) var(--sp-5xl) var(--sp-4xl)}
 html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-foot{grid-column:2;grid-row:1/4;min-height:0;margin:0;padding:var(--sp-5xl) var(--sp-4xl);
   flex-direction:column;align-items:stretch;justify-content:space-between;border-top:0;border-left:1px solid rgba(78,61,72,.08);
@@ -482,7 +482,7 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-head{padding:var(--sp-2xl) var(--sp-3xl) var(--sp-base)}
   html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-card-copy{padding:var(--sp-xs) var(--sp-3xl) 0}
   html[data-ui="soft"] #poolGrid .idea-card:first-child h3{font-size:var(--fs-3xl);line-height:1.45}
-  html[data-ui="soft"] #poolGrid .idea-card:first-child p{font-size:var(--fs-base);-webkit-line-clamp:3}
+  html[data-ui="soft"] #poolGrid .idea-card:first-child p{font-size:var(--fs-read);-webkit-line-clamp:3}
   html[data-ui="soft"] .idea-tags{margin:var(--sp-base) var(--sp-2xl) var(--sp-xl)}
   html[data-ui="soft"] #poolGrid .idea-card:first-child .idea-tags{margin:var(--sp-base) var(--sp-2xl) var(--sp-xl)}
   html[data-ui="soft"] #poolGrid .idea-card-foot,
@@ -510,7 +510,7 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .insight-card,html[data-ui="soft"] .playbook-card,
   html[data-ui="soft"] .case-card,html[data-ui="soft"] .report-card{padding:var(--sp-3xl)}
   html[data-ui="soft"] #poolGrid .idea-card{border-radius:var(--rd-2xl)}
-  html[data-ui="soft"] #poolGrid .idea-card h3{font-size:var(--fs-2xl)}
+  html[data-ui="soft"] #poolGrid .idea-card h3{font-size:var(--fs-3xl)}   /* 比阅读正文 17px 大一截；长标题折两行可以接受 */
   html[data-ui="soft"] .stat-key-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   html[data-ui="soft"] .stat-key-card:last-child{grid-column:1/-1}
   html[data-ui="soft"] body.authpage{display:grid;padding:var(--sp-5xl) var(--sp-3xl);background:radial-gradient(650px 420px at 50% 0,rgba(185,143,160,.15),transparent 70%),#f7f5f2}
