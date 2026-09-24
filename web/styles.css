@@ -3190,6 +3190,12 @@ body.learning-fullscreen-open{overflow:hidden}
 /* 所有选择器带 exp- 前缀；颜色只用现有 tokens（soft.css 会整体换色，这里跟着走）。
    页面主角是每张单上的四段进度条：申请人最关心「卡在谁那儿」。 */
 .nav .badge.is-empty{display:none}
+/* 收起的导航组标题上的待办数（main.js paintNavTodo），用警示色，和展开后的普通角标区分开 */
+/* 字色比 --warn 深一档：--warn 压在 --warn-bg 上对比度只有 2.9，#95591a 是 5.2 */
+.navtop-todo{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--warn-bg);color:#95591a;
+  font-size:12px;font-weight:700;line-height:18px;text-align:center;letter-spacing:0;font-variant-numeric:tabular-nums}
+.navtop-todo[hidden]{display:none}
+.navtop-todo:not([hidden]) + .caret{margin-left:6px}
 .exp-setup{margin:-6px 0 14px}
 .exp-toolbar .exp-tab-n{margin-left:1px;color:var(--warn);font-variant-numeric:tabular-nums;font-weight:720}
 .exp-body{min-width:0}

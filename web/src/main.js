@@ -87,6 +87,57 @@ function paintChrome(next = view) {
   }
 }
 
+/**
+ * 侧栏分组的开合。默认全部展开（用户 09-24 定的：新人第一次进来要看得到全部入口，
+ * 任务表第 1 条的「6 组分法」也要一眼看得出），谁嫌长谁自己收，收起的组记在这台设备上。
+ * 存的是「收起了哪些组」而不是「展开了哪些」：以后新加的组默认就是展开的。
+ */
+const NAV_COLLAPSE_KEY = 'ideahub.navCollapsed.v1';
+
+function initNavCollapse() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(NAV_COLLAPSE_KEY) || '[]'); } catch { /* 存储不可用就全展开 */ }
+  for (const g of document.querySelectorAll('.navgrp')) {
+    g.classList.toggle('collapsed', Array.isArray(saved) && saved.includes(g.dataset.group));
+    g.querySelector('.navtop').setAttribute('aria-expanded', String(!g.classList.contains('collapsed')));
+    const n = document.createElement('span');
+    n.className = 'navtop-todo';
+    n.hidden = true;
+    g.querySelector('.caret').before(n);
+  }
+  // 待办数由各自页面写进导航角标（expenses.js / purchases.js 的 paintBadge），这里只跟着看
+  const watch = new MutationObserver(paintNavTodo);
+  for (const b of document.querySelectorAll('.nav [data-todo]')) {
+    watch.observe(b, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  paintNavTodo();
+}
+
+function saveNavCollapse() {
+  const keys = [...document.querySelectorAll('.navgrp.collapsed')].map(g => g.dataset.group);
+  try { localStorage.setItem(NAV_COLLAPSE_KEY, JSON.stringify(keys)); } catch { /* 隐私模式下只是记不住 */ }
+}
+
+/**
+ * 收起的组把里面「待我处理」的数加起来挂在组标题上 —— 报销待审被收进「团队」里看不见，
+ * 收纳就成了漏事。灵感池、正式库那种角标是总条数不是待办，不算（只认带 data-todo 的）。
+ */
+function paintNavTodo() {
+  for (const g of document.querySelectorAll('.navgrp')) {
+    const el = g.querySelector('.navtop-todo');
+    if (!el) continue;
+    const n = [...g.querySelectorAll('[data-todo]')]
+      .reduce((sum, b) => sum + (b.classList.contains('is-empty') ? 0 : Number(b.textContent) || 0), 0);
+    const show = g.classList.contains('collapsed') && n > 0;
+    el.hidden = !show;
+    el.textContent = show ? String(n) : '';
+    const top = g.querySelector('.navtop');
+    const name = top.firstChild.textContent.trim();
+    if (show) top.setAttribute('aria-label', `${name}，${n} 项待我处理`);
+    else top.removeAttribute('aria-label');
+  }
+}
+
 function closeMobileNav() {
   $('#appNav').classList.remove('mobile-open');
   $('#navMask').classList.remove('on');
@@ -420,12 +471,15 @@ function bind() {
   });
 
   // 导航。桌面是常驻侧栏，手机是抽屉；组标题只负责折叠自己的页面列表。
+  initNavCollapse();
   document.querySelector('.nav').addEventListener('click', e => {
     const top = e.target.closest('.navtop');
     if (top) {
       const grp = top.closest('.navgrp');
       grp.classList.toggle('collapsed');
       top.setAttribute('aria-expanded', String(!grp.classList.contains('collapsed')));
+      saveNavCollapse();
+      paintNavTodo();
       return;
     }
     const b = e.target.closest('[data-go]');
