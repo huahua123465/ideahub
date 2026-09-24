@@ -1891,6 +1891,9 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 .playbook-card{display:flex;flex-direction:column;padding:var(--sp-4xl);min-height:250px}
 .meta-pill{padding:var(--sp-xs) var(--sp-md);border-radius:var(--rd-md);background:light-dark(#f3f4f7,#17181b);color:light-dark(#636b79,#b8c1d1);font-size:var(--fs-xs)}
 .meta-pill i{margin-right:var(--sp-xs);color:var(--muted);font-style:normal}
+/* 方法 / 步骤卡的顶栏标签多，窄屏上整颗换到下一行，不把「咨询」这类两字值拆成两行 */
+.playbook-card .record-top{flex-wrap:wrap;row-gap:var(--sp-sm)}
+.playbook-card :is(.playbook-no,.meta-pill){white-space:nowrap}
 .playbook-label{display:inline-flex;align-self:flex-start;margin:var(--sp-3xl) 0 var(--sp-md);padding:var(--sp-sm) var(--sp-base);border-radius:var(--rd-base);background:light-dark(#f0effb,#151420);color:light-dark(#6258a6,#beb7ff);font-size:var(--fs-xs);font-weight:700}
 .playbook-card h3{font-size:var(--fs-3xl);line-height:1.48;font-weight:700;letter-spacing:-.015em}
 .playbook-body{margin:var(--sp-lg) 0 var(--sp-3xl);color:light-dark(#656d7b,#b7c0d0);font-size:var(--fs-read);line-height:1.72}
