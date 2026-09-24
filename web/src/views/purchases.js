@@ -12,6 +12,7 @@
  * 页面骨架（标题、标签栏、内容区）只搭一次：标签栏由 motion.js 统一增强，之后切标签、推送刷新都只换内容区。
  */
 import { api } from '../api.js';
+import { skeleton as skeletonHtml } from '../anim.js';   // loadList 有个同名布尔参数 skeleton，这里起别名
 import { $, esc, fromNow } from '../util.js';
 import { toast } from '../toast.js';
 import { ICON } from '../icons.js';
@@ -236,7 +237,7 @@ async function loadList({ skeleton = false } = {}) {
   if (skeleton) {
     root.querySelector('.pur-count').textContent = '…';
     body.setAttribute('aria-busy', 'true');
-    body.innerHTML = '<div class="exp-state" role="status">正在读取采购申请…</div>';
+    body.innerHTML = skeletonHtml('exp', { n: 4, label: '正在读取采购申请…' });
   }
   try {
     const [list, config] = await Promise.all([api.purchases({ scope: tab }), api.expenseConfig()]);
@@ -263,7 +264,10 @@ export async function render() {
   const root = $('#v-purchases');
   if (!root.dataset.built) build(root);
   if (!state.tab) {
-    // 第一次进来：有待办先看待办，否则看自己发起的
+    // 第一次进来：有待办先看待办，否则看自己发起的。
+    // 这一趟也要等接口，骨架得在它之前画上，不然这段时间列表区是空白的
+    root.querySelector('.pur-count').textContent = '…';
+    root.querySelector('.pur-body').innerHTML = skeletonHtml('exp', { n: 4, label: '正在读取采购申请…' });
     try {
       const todo = await api.purchases({ scope: 'todo' });
       state.todoCount = todo.todoCount;

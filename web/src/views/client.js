@@ -10,6 +10,7 @@
  * 技术2 还没接上的区显示成空，不隐藏 —— 隐藏的话没人知道这里将来会有东西。
  */
 import { api } from '../api.js';
+import { skeleton } from '../anim.js';
 import { esc, $ } from '../util.js';
 import { toast } from '../toast.js';
 import { STAGE } from '../boards.js';
@@ -27,7 +28,7 @@ export function current() { return cur; }
 export async function open(id) {
   cur = Number(id);
   const root = $('#v-clientDetail');
-  root.innerHTML = '<div class="page-head"><div><h1>客户档案</h1><div class="sub">加载中…</div></div></div>';
+  root.innerHTML = skeleton('client', { label: '正在读取客户档案…' });
   events.dispatchEvent(new CustomEvent('show'));
   await paint();
 }

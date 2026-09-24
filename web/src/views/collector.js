@@ -4,6 +4,7 @@
  * 都留在内网 Collector 中。页面不把任务复制进 localStorage，离开页面立即停止轮询。
  */
 import { api, collectorQrUrl, collectorImageUrl, collectorMediaUrl } from '../api.js';
+import { skeleton } from '../anim.js';
 import { $, esc, fromNow } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
@@ -12,6 +13,7 @@ import { confirmAction } from '../confirm.js';
 const events = new EventTarget();
 export { events };
 
+let tasksLoaded = false;   // 采集记录第一次读回来之前显示骨架，不显示空状态
 let me = null;
 let active = false;
 let initialized = false;
@@ -90,7 +92,7 @@ function scaffold() {
     <section class="collector-workspace">
       <aside class="collector-history">
         <header><div><span>采集记录</span><b id="collectorCount">0 条</b></div><button class="collector-reload" id="collectorReload" type="button" title="刷新记录">刷新</button></header>
-        <div class="collector-task-list" id="collectorTaskList"><div class="collector-list-loading">正在读取采集记录…</div></div>
+        <div class="collector-task-list" id="collectorTaskList">${skeleton('task', { n: 4, label: '正在读取采集记录…' })}</div>
       </aside>
       <main class="collector-detail" id="collectorDetail">
         <div class="collector-empty-detail">${ICON.layers}<b>选择一条采集记录</b><span>已完成的任务可以查看原图、评论和 AI 分析。</span></div>
@@ -123,6 +125,7 @@ export async function render() {
   else health = { ok:false, collector:'down', error:settled[0].reason?.message || '无法连接采集服务' };
   if (settled[1].status === 'fulfilled') tasks = listFrom(settled[1].value);
   else toast('info', settled[1].reason?.message || '采集记录加载失败');
+  tasksLoaded = true;
   if (isAdmin()) {
     if (settled[2]?.status === 'fulfilled') login = settled[2].value;
     else if (settled[2]?.reason?.status !== 403) login = { status:'failed', message:settled[2]?.reason?.message || '平台状态读取失败' };
@@ -196,6 +199,12 @@ function paintAccount() {
 function paintTasks() {
   const list = $('#collectorTaskList');
   if (!list) return;
+  // 第一次还没读回来时别画「还没有采集记录」—— 那是在说假话，读回来之前一律是骨架
+  if (!tasksLoaded) {
+    $('#collectorCount').textContent = '…';
+    list.innerHTML = skeleton('task', { n: 4, label: '正在读取采集记录…' });
+    return;
+  }
   $('#collectorCount').textContent = `${tasks.length} 条`;
   if (!tasks.length) {
     list.innerHTML = `<div class="collector-task-empty">${ICON.clip}<b>还没有采集记录</b><span>在上方粘贴一条分享链接开始。</span></div>`;

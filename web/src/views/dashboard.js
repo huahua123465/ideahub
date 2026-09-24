@@ -5,6 +5,7 @@
  * 而是把需要处理、需要跟进和可以继续沉淀的事情放到登录后的第一屏。
  */
 import { api } from '../api.js';
+import { skeleton } from '../anim.js';
 import { esc, $ } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
@@ -139,7 +140,7 @@ export async function render({ force = false } = {}) {
   const cached = root.querySelector('.dash-hero') ? null : readCache();
   if (cached) paintDashboard(root, cached);
   else if (!root.querySelector('.dash-hero')) {
-    root.innerHTML = `<div class="dash-loading"><i></i><span>正在整理今天的工作…</span></div>`;
+    root.innerHTML = skeleton('home', { label: '正在整理今天的工作…' });
   }
   const requestId = ++loadSeq;
 

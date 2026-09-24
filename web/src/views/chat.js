@@ -11,6 +11,7 @@
  * 管理员接入的模型。所以它不走已读、撤回、附件那一套。
  */
 import { api, state } from '../api.js';
+import { skeleton } from '../anim.js';
 import { esc, $, fromNow, avatarColor, initial } from '../util.js';
 import { toast } from '../toast.js';
 import { ICON } from '../icons.js';
@@ -396,7 +397,7 @@ async function openConv(kind, id) {
   $('#chatInput').value = drafts.get(draftKey(conv)) || '';
   $('#chatPanel').classList.add('has-conv');    // 手机上靠它切到会话视图
   paintList();                                   // 重画左栏，让选中态跟上
-  $('#chatMsgs').innerHTML = '<div class="dim" style="padding:16px">加载中…</div>';
+  $('#chatMsgs').innerHTML = skeleton('chat', { n: 4, label: '正在读取消息…' });
   paintConv();
   await loadMsgs();
 }
@@ -904,6 +905,7 @@ function bindChatBtnPlacement() {
 
 export function bind() {
   $('#chatBtn').addEventListener('click', () => toggle());
+  $('#chatBtn').classList.add('bound');   // 绑上点击之后才露面，见 styles.css .chatbtn:not(.bound)
   bindChatBtnPlacement();
   bindChatBtnTuck();
   $('#chatClose').addEventListener('click', () => close());

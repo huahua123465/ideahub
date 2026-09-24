@@ -93,6 +93,9 @@
   --card-shadow:none; --card-shadow-hover:none;
   /* 可点的卡片悬停时底色略微加深（09-24）：零阴影以后只加深边框太不明显，看不出卡片能点 */
   --card-bg-hover:#f7f8fb;
+  /* 骨架屏底色与扫光高光（两个不透明色），见下方「骨架屏」一节 */
+  --sk-base:#eceef2; --sk-hi:#f7f8fa;
+  --sk-fill:linear-gradient(90deg,var(--sk-base) 25%,var(--sk-hi) 37%,var(--sk-base) 63%);
   --shadow:0 1px 1px rgba(22,22,30,.04),0 2px 6px rgba(22,22,30,.05),0 8px 20px rgba(30,58,110,.045);
   --shadow-md:0 1px 2px rgba(22,22,30,.05),0 4px 12px rgba(22,22,30,.07),0 16px 36px rgba(30,58,110,.09);
   --shadow-lg:0 2px 8px rgba(22,22,30,.08),0 12px 32px rgba(22,22,30,.10),0 32px 64px rgba(30,58,110,.14);
@@ -539,6 +542,9 @@ tr:hover .bd-del{color:var(--crit)}
   background:var(--grad-primary);color:#fff;box-shadow:var(--shadow-md);
   display:grid;place-items:center;transition:.18s}
 .chatbtn:hover{transform:translateY(-2px);filter:brightness(1.06)}
+/* chat.bind() 要等首屏数据都回来才跑（main.js boot）。在那之前按钮点了没反应，手机上也还没搬进顶栏，
+   网慢时会先在右下角停一会儿 —— 所以绑好之前不露面 */
+.chatbtn:not(.bound){visibility:hidden}
 /* 往下滑时收起（views/chat.js bindChatBtnTuck），免得压住卡片；选择器写重一点，压过 soft.css 的 :hover 位移 */
 html[data-ui] body .chatbtn.tucked{transform:translateY(calc(100% + 28px));opacity:0;pointer-events:none;transition:transform .2s ease,opacity .2s ease}
 @media (prefers-reduced-motion:reduce){html[data-ui] body .chatbtn.tucked{transition:none}}
@@ -992,13 +998,40 @@ textarea.inp{resize:none;height:96px;line-height:1.65}
 
 /* ---------- 骨架屏 ---------- */
 /* 以前加载时是一片空白或者「加载中…」四个字，网络稍慢就像页面坏了。 */
-/* 骨架屏的底色不跟 --line-soft 走：那个变量现在是半透明的，扫光的高光色
-   （#f6f4ee）跟它拉不开差距，微光会看不见。这里用两个明确的不透明色。 */
-.sk-line{background:linear-gradient(90deg,#eeece5 25%,#f8f6f1 37%,#eeece5 63%);
-  background-size:400% 100%;border-radius:var(--rd-sm);animation:shimmer 1.4s ease infinite}
-@keyframes shimmer{from{background-position:100% 50%}to{background-position:0 50%}}
+/* ---------- 骨架屏（09-24 统一成这一套） ----------
+   原来有四套：这里的 .sk-line、看板的 .board-sk-card（冷灰色）、学习页和采集账号各一份，颜色和扫光速度都不一样。
+   现在全部用 --sk-fill + sk-shimmer。底色不跟 --line-soft 走：那个变量是半透明的，扫光的高光拉不开差距，看不见。
+   形状由 anim.js 的 skeleton() 按页面画，外层 display:contents 让占位块直接参与父容器布局。 */
+.sk-line{display:block;flex:none;max-width:100%;background:var(--sk-fill);background-size:400% 100%;border-radius:var(--rd-sm);
+  animation:sk-shimmer 1.4s ease infinite}
+@keyframes sk-shimmer{from{background-position:100% 50%}to{background-position:0 50%}}
+.sk-group{display:contents}
+.sk-stack{display:flex;flex-direction:column;gap:var(--sp-base);min-width:0}
+.sk-row{display:flex;align-items:center;gap:var(--sp-base);flex-wrap:wrap}
+.sk-pad{padding:var(--sp-2xl)}
+.sk-box{padding:var(--sp-4xl) var(--sp-5xl);border:1px solid var(--card-line);border-radius:var(--rd-3xl);background:var(--surface);margin-bottom:var(--sp-2xl)}
+.sk-home-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);align-items:center;gap:var(--sp-7xl)}
+.sk-home-quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-md)}
+.sk-home-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-5xl)}
+.sk-home-cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:var(--sp-2xl)}
+.sk-home-cols>.sk-box{margin-bottom:0;min-height:260px}
+/* 骨架自己的外壳，照着真实组件的尺寸画，但不借用它们的类名（见 anim.js skeleton() 的说明） */
+.sk-surface{pointer-events:none;padding:var(--sp-3xl);border:1px solid var(--card-line);border-radius:var(--rd-3xl);background:var(--surface)}
+.sk-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-xl)}
+.sk-sample{display:grid;grid-template-columns:126px minmax(0,1fr);gap:var(--sp-2xl);min-height:166px;padding:0 var(--sp-2xl) 0 0;overflow:hidden}
+.sk-sample>.sk-stack{padding:var(--sp-2xl) 0}
+.sk-task{padding:var(--sp-lg);border-radius:var(--rd-xl);margin-bottom:var(--sp-sm)}
+.sk-head{margin-bottom:var(--sp-5xl)}
+.sk-msg{display:flex;padding:var(--sp-xs) var(--sp-2xl)}.sk-msg.mine{justify-content:flex-end}
+.sk-bubble{padding:var(--sp-md) var(--sp-lg);border:1px solid var(--line-soft);border-radius:var(--rd-lg);background:var(--surface)}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+@media (max-width:700px){
+  .sk-box{padding:var(--sp-3xl)}
+  .sk-home-hero,.sk-home-cols{grid-template-columns:1fr;gap:var(--sp-3xl)}
+  .sk-home-stats{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:var(--sp-3xl)}
+  .sk-sample{grid-template-columns:96px minmax(0,1fr);min-height:130px}
+}
 .card.sk{cursor:default;pointer-events:none;gap:var(--sp-base);min-height:168px}
-.card.sk::before{background:var(--line-soft)}
 .card.sk .sk-foot{margin-top:auto;padding-top:var(--sp-base);border-top:1px solid var(--line-soft)}
 tr.sk-row td{padding:var(--sp-2xl) var(--sp-2xl)}
 .urow.sk{pointer-events:none}
@@ -1919,7 +1952,7 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 
 /* 骨架卡 */
 .board-sk-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-2xl)}.board-sk-card{display:flex;flex-direction:column;gap:var(--sp-lg);padding:var(--sp-4xl);min-height:240px;cursor:default}
-.board-sk-card>*{display:block;border-radius:var(--rd-md);background:linear-gradient(90deg,#f0f1f4,#f7f8fa,#f0f1f4);background-size:200% 100%;animation:shimmer 1.2s infinite}
+.board-sk-card>*{display:block;border-radius:var(--rd-md);background:var(--sk-fill);background-size:400% 100%;animation:sk-shimmer 1.4s ease infinite}
 .board-sk-card i{width:80px;height:12px}.board-sk-card b{width:68%;height:24px}.board-sk-card span{width:100%;height:46px}.board-sk-card span+span{width:82%}.board-sk-card em{width:45%;height:14px;margin-top:auto}
 
 /* 原有表格仍用于正式库，但行高和字号放松。 */
@@ -2301,8 +2334,6 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
 }
 
 /* ---------- 今日工作台 ---------- */
-.dash-loading{min-height:360px;display:flex;align-items:center;justify-content:center;gap:var(--sp-base);color:var(--muted)}
-.dash-loading i{width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 5px var(--blue-100);animation:dash-pulse 1.2s ease-in-out infinite}
 @keyframes dash-pulse{50%{opacity:.45;transform:scale(.72)}}
 
 .dash-hero{position:relative;display:flex;align-items:center;justify-content:space-between;gap:var(--sp-6xl);margin-bottom:var(--sp-2xl);
@@ -2395,8 +2426,7 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
   padding:0 var(--sp-sm);border-radius:var(--rd-md);background:rgba(31,28,27,.62);color:#fff;font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
 .learning-pdf-page canvas{display:block;max-width:100%;height:auto;background:#fff}
 .learning-page-wait{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:var(--fs-xs);
-  background:linear-gradient(110deg,#f8f6f3 25%,#efebe7 45%,#f8f6f3 65%);background-size:220% 100%;animation:learning-shimmer 1.5s linear infinite}
-@keyframes learning-shimmer{to{background-position:-220% 0}}
+  background:var(--sk-fill);background-size:400% 100%;animation:sk-shimmer 1.4s ease infinite}
 .learning-loading{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:var(--sp-base);
   background:#f4f1ed;color:var(--muted);font-size:var(--fs-sm)}.learning-loading[hidden]{display:none}
 .learning-loading i{width:9px;height:9px;border-radius:50%;background:var(--violet);box-shadow:0 0 0 5px var(--violet-bg);animation:dash-pulse 1.2s ease-in-out infinite}
@@ -2869,7 +2899,7 @@ body.learning-fullscreen-open{overflow:hidden}
 .collector-account-copy span,.collector-account>div span{display:block;margin-top:var(--sp-xs);color:var(--muted);font-size:var(--fs-xs);line-height:1.45}
 .collector-account-actions{display:flex;flex-direction:column;gap:var(--sp-sm)}.collector-account-actions button,.collector-login-btn{min-height:34px;padding:0 var(--sp-base);border:1px solid var(--line);border-radius:var(--rd-base);background:#fff;font-size:var(--fs-xs);font-weight:650}
 .collector-account-minor{display:flex;gap:var(--sp-md);margin-top:var(--sp-sm)}.collector-account-minor button{border:0;background:transparent;color:var(--violet);font-size:var(--fs-xs)}.collector-account-minor button[data-account-logout]{color:var(--crit)}.collector-label-editor{flex:0 0 100%;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--sp-sm);margin-top:var(--sp-xs);padding-top:var(--sp-base);border-top:1px solid var(--line-soft)}.collector-label-editor input{min-width:0;height:34px;padding:0 var(--sp-base);border:1px solid var(--line);border-radius:var(--rd-base);background:#fff;font-size:var(--fs-xs);outline:0}.collector-label-editor input:focus{border-color:var(--violet-line);box-shadow:0 0 0 3px var(--violet-bg)}.collector-label-editor button{padding:0 var(--sp-base);border:1px solid var(--line);border-radius:var(--rd-base);background:#fff;font-size:var(--fs-xs)}.collector-label-editor small{grid-column:1/-1;color:var(--muted);font-size:var(--fs-xs)}
-.collector-mini-skeleton{width:100%;height:72px;border-radius:var(--rd-lg);background:linear-gradient(100deg,#f5f2ef 25%,#ebe6e2 45%,#f5f2ef 65%);background-size:220% 100%;animation:learning-shimmer 1.5s linear infinite}
+.collector-mini-skeleton{width:100%;height:72px;border-radius:var(--rd-lg);background:var(--sk-fill);background-size:400% 100%;animation:sk-shimmer 1.4s ease infinite}
 
 .collector-workspace{display:grid;grid-template-columns:310px minmax(0,1fr);align-items:start;gap:var(--sp-xl)}
 .collector-history,.collector-detail{border-radius:var(--rd-3xl);overflow:hidden}.collector-history{position:sticky;top:10px}
@@ -2887,7 +2917,7 @@ body.learning-fullscreen-open{overflow:hidden}
 .collector-progress,.collector-detail-progress{height:5px;margin-top:var(--sp-base);overflow:hidden;border-radius:var(--rd-pill);background:#e8e3e0}.collector-progress i,.collector-detail-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--violet),#b896b5);transition:width .25s}
 .collector-task>small{display:block;margin-top:var(--sp-xs);color:var(--muted);font-size:var(--fs-xs)}.collector-task footer{margin-top:var(--sp-base);color:var(--muted);font-size:var(--fs-xs)}
 .collector-task footer button{height:28px;padding:0 var(--sp-md);border:0;border-radius:var(--rd-md);background:#fff;color:var(--ink2);font-size:var(--fs-xs)}.collector-task footer button.danger{display:inline-flex;align-items:center;gap:var(--sp-2xs);color:var(--crit)}.collector-task footer button .ic{width:13px}
-.collector-list-loading,.collector-task-empty{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-sm);color:var(--muted);font-size:var(--fs-xs);text-align:center}.collector-task-empty .ic{width:24px;color:var(--muted)}.collector-task-empty b{color:var(--ink2);font-size:var(--fs-sm)}
+.collector-task-empty{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-sm);color:var(--muted);font-size:var(--fs-xs);text-align:center}.collector-task-empty .ic{width:24px;color:var(--muted)}.collector-task-empty b{color:var(--ink2);font-size:var(--fs-sm)}
 
 .collector-detail{min-width:0;min-height:620px}.collector-empty-detail,.collector-result-loading,.collector-state-detail{min-height:620px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-md);padding:var(--sp-6xl);text-align:center}
 .collector-empty-detail .ic{width:34px;color:var(--muted)}.collector-empty-detail b,.collector-result-loading b{font-size:var(--fs-md)}.collector-empty-detail span,.collector-result-loading span,.collector-state-detail p{max-width:440px;color:var(--muted);font-size:var(--fs-xs);line-height:1.65}

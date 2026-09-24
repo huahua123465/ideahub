@@ -11,6 +11,7 @@
  * 整块重绘会把那层增强冲掉。之后切标签、推送刷新都只换 .bd-body 里的内容。
  */
 import { api } from '../api.js';
+import { skeleton as skeletonHtml } from '../anim.js';   // loadList 有个同名布尔参数 skeleton，这里起别名
 import { $, esc, fromNow } from '../util.js';
 import { toast } from '../toast.js';
 import { ICON } from '../icons.js';
@@ -206,7 +207,7 @@ async function loadList({ skeleton = false } = {}) {
   if (skeleton) {
     root.querySelector('.exp-count').textContent = '…';
     body.setAttribute('aria-busy', 'true');
-    body.innerHTML = '<div class="exp-state" role="status">正在读取报销单…</div>';
+    body.innerHTML = skeletonHtml('exp', { n: 4, label: '正在读取报销单…' });
   }
   try {
     const [list, config] = await Promise.all([api.expenses({ scope: tab }), api.expenseConfig()]);
@@ -232,7 +233,10 @@ export async function render() {
   const root = $('#v-expenses');
   if (!root.dataset.built) build(root);
   if (!state.tab) {
-    // 第一次进来：有待办先看待办，否则看自己发起的
+    // 第一次进来：有待办先看待办，否则看自己发起的。
+    // 这一趟也要等接口，骨架得在它之前画上，不然这段时间列表区是空白的
+    root.querySelector('.exp-count').textContent = '…';
+    root.querySelector('.exp-body').innerHTML = skeletonHtml('exp', { n: 4, label: '正在读取报销单…' });
     try {
       const todo = await api.expenses({ scope: 'todo' });
       state.todoCount = todo.todoCount;

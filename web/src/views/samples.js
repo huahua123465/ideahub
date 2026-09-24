@@ -1,5 +1,6 @@
 /** 内容样本库：原始归档入口 + 第二阶段内容研究工作台。 */
 import { api } from '../api.js';
+import { skeleton } from '../anim.js';
 import { uploadProgress } from '../upload-progress.js';
 import { $, esc, fromNow } from '../util.js';
 import { ICON } from '../icons.js';
@@ -127,7 +128,7 @@ function scaffold() {
           <button type="button" data-sample-nav-toggle aria-expanded="true" title="收起样本导航"><span>收起</span>«</button>
           <label>${ICON.search}<input id="sampleFocusQuery" placeholder="搜索样本标题" aria-label="搜索样本标题"></label>
         </header>
-        <div class="samples-list" id="samplesList"><div class="samples-loading">正在读取样本…</div></div>
+        <div class="samples-list" id="samplesList">${skeleton('sample', { n: 3, label: '正在读取样本…' })}</div>
       </div>
       <aside class="samples-detail" id="samplesDetail"><div class="samples-empty">${ICON.layers}<b>选择一篇样本</b><span>查看原始正文、媒体、完整度和历次采集版本。</span></div></aside>
     </section></section>
@@ -421,7 +422,7 @@ function metricBadges(engagement) {
 function paintList() {
   const list = $('#samplesList');
   paintFocusNav();
-  if(listLoading){list.innerHTML='<div class="samples-list-state"><i></i><b>正在筛选样本…</b><span>组合条件只查询当前有效且未驳回的元素。</span></div>';return;}
+  if(listLoading){list.innerHTML=skeleton('sample',{n:3,label:'正在读取样本…'});return;}
   if(listError){list.innerHTML=`<div class="samples-list-state error"><b>样本列表没有读出来</b><span>${esc(listError)}</span><button type="button" id="sampleReload">重试</button></div>`;return;}
   if (!items.length) { list.innerHTML = `<div class="samples-empty-list">${ICON.layers}<b>还没有符合条件的样本</b><span>可以从链接、手动信息或媒体文件开始建立。</span></div>`; return; }
   list.innerHTML = items.map(item => {

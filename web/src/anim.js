@@ -64,6 +64,38 @@ export const skeletonCards = (n = 6) => Array.from({ length: n }, () => `
     <div class="sk-foot"><div class="sk-line" style="width:44%;height:12px"></div></div>
   </article>`).join('');
 
+/**
+ * 页面 / 列表第一次加载时的骨架（09-24 起全站统一用这一套）。
+ * 形状贴着真实内容画：数据回来时版面不跳，也不会一片空白让人以为页面坏了。
+ * 外层是 display:contents，占位块直接参与父容器的网格 / 弹性布局；
+ * 读屏软件读到的是 label，所以原来的「正在读取…」那句话仍然会被读出来。
+ * 骨架一律不用真实组件的类名（.dash-hero / .sample-card / .exp-card / .msg …）：页面代码和测试会拿这些类名
+ * 判断「内容到了没有」、数有几条，骨架混进去就会数错（首页靠 .dash-hero 判断有没有缓存内容）。
+ */
+const L = (w, h, more = '') => `<span class="sk-line" style="width:${w};height:${h}px${more}"></span>`;
+const repeat = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join('');
+const SKELETON = {
+  home: () => `
+    <div class="sk-box sk-home-hero"><div class="sk-stack">${L('120px', 12)}${L('min(280px,70%)', 34)}${L('min(360px,90%)', 14)}</div>
+      <div class="sk-home-quick">${repeat(4, () => L('100%', 58, ';border-radius:var(--rd-lg)'))}</div></div>
+    <div class="sk-box sk-row">${L('min(220px,50%)', 18)}${L('84px', 38, ';margin-left:auto;border-radius:var(--rd-base)')}</div>
+    <div class="sk-box sk-home-stats">${repeat(4, () => `<div class="sk-stack">${L('60%', 12)}${L('32px', 26)}${L('80%', 12)}</div>`)}</div>
+    <div class="sk-home-cols">${repeat(2, () => `<div class="sk-box sk-stack">${L('40%', 18)}${repeat(3, () => L('100%', 44, ';margin-top:var(--sp-sm)'))}</div>`)}</div>`,
+  exp: n => `<div class="sk-cards">${repeat(n, () => `<div class="sk-surface sk-stack">
+    ${L('45%', 12)}${L('80%', 20)}${L('38%', 26)}${L('100%', 8, ';margin-top:var(--sp-sm)')}${L('62%', 12)}</div>`)}</div>`,
+  sample: n => repeat(n, () => `<div class="sk-surface sk-sample">${L('100%', 0, ';height:auto;border-radius:0')}
+    <div class="sk-stack">${L('35%', 12)}${L('85%', 18)}${L('60%', 13)}${L('45%', 12, ';margin-top:auto')}</div></div>`),
+  task: n => repeat(n, () => `<div class="sk-surface sk-stack sk-task">${L('30%', 11)}${L('88%', 15)}${L('52%', 11)}</div>`),
+  tag: n => repeat(n, () => `<div class="sk-surface sk-stack">${L('36%', 14)}
+    <div class="sk-row">${repeat(4, i => L(`${56 + (i % 3) * 14}px`, 26, ';border-radius:var(--rd-pill)'))}</div>${L('100%', 40, ';border-radius:var(--rd-base)')}</div>`),
+  client: () => `
+    <div class="sk-head sk-stack">${L('80px', 12)}${L('220px', 30)}${L('320px', 13)}</div>
+    <div class="sk-cards">${repeat(3, () => `<div class="sk-surface sk-stack">${L('30%', 14)}${repeat(3, () => L('100%', 14))}${L('70%', 14)}</div>`)}</div>`,
+  chat: n => repeat(n, i => `<div class="sk-msg${i % 2 ? ' mine' : ''}"><div class="sk-bubble">${L(`${120 + (i * 53) % 110}px`, 14)}</div></div>`),
+};
+export const skeleton = (kind, { n = 3, label = '正在读取…' } = {}) =>
+  `<div class="sk-group" role="status" aria-busy="true"><span class="sr-only">${label}</span>${SKELETON[kind](n)}</div>`;
+
 export const skeletonRows = (n = 5, cols = 6) => Array.from({ length: n }, () => `
   <tr class="sk-row">${Array.from({ length: cols }, () =>
     '<td><div class="sk-line" style="height:14px"></div></td>').join('')}</tr>`).join('');

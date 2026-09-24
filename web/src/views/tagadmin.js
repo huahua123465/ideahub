@@ -6,6 +6,7 @@
  * （知道系统里有哪些标准说法），能改就乱了。
  */
 import { api } from '../api.js';
+import { skeleton } from '../anim.js';
 import { esc, $ } from '../util.js';
 import { toast } from '../toast.js';
 import { tagDict, invalidate, KIND_ORDER, KIND_LABEL } from '../tagstore.js';
@@ -26,7 +27,7 @@ export async function render() {
           admin ? '' : '（只有管理员能修改）'}</div>
       </div>
     </div>
-    <div id="taRoot" class="tag-admin-grid"><div class="dim">加载中…</div></div>
+    <div id="taRoot" class="tag-admin-grid">${skeleton('tag', { n: 4, label: '正在读取标签字典…' })}</div>
     ${admin ? '<div id="keyRoot"></div>' : ''}`;
 
   await paintTags();
