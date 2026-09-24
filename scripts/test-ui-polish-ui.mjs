@@ -2,7 +2,8 @@
  * 界面细节专项验收：npm run test:ui-polish:ui
  *
  * 2026-09-23 按走查结论修的几处，锁住别再退回去。桌面和手机各走一遍：
- *   1. 可读性：主要页面上没有小于 12px 的文字；次要文字（var(--muted)）在页面底色上对比度 ≥ 4.5:1
+ *   1. 可读性：主要页面上没有小于 12px 的文字；次要文字（var(--muted)）在页面底色上对比度 ≥ 4.5:1；
+ *      卡片是细边框、零阴影（09-24）
  *   2. 首页日报表单的标签、输入框不贴卡片边（左右留出和标题一样的内边距）
  *   4. 聊天按钮：桌面往下滑收起、往上滑回来，有未读消息时不收；手机（≤560）搬进顶栏，滑动不收
  *   5. 客户档案（桌面）左栏的「S 级」、「城市 · 年龄 · 来源」各占一行，不被挤折
@@ -68,6 +69,12 @@ try {
         const [a, b] = [lum(muted), lum(bg)].sort((x, y) => y - x);
         return { small: small.slice(0, 5), smallCount: small.length, contrast: (a + .05) / (b + .05) };
       });
+      // 卡片是「细边框、零阴影」（09-24 用户定）：看得见一条边，没有阴影；阴影只留给弹窗、抽屉、菜单
+      const cardSkin = await page.evaluate(() => [...document.querySelectorAll('.dash-panel,.dash-hero,.record-card,#poolGrid .idea-card,.panel,.stat-key-card,.card,.exp-card,.cdcard,.table,.funnel-hero,.client-detail-head')]
+        .filter(el => el.getClientRects().length && el !== document.activeElement)
+        .map(el => { const cs = getComputedStyle(el); return { el: el.className.split(' ')[0], shadow: cs.boxShadow, border: parseFloat(cs.borderTopWidth) + parseFloat(cs.borderLeftWidth) }; })
+        .filter(c => c.shadow !== 'none' || c.border < 1));
+      assert.deepEqual(cardSkin.slice(0, 3), [], `${scene}/${view} 有卡片带阴影或没有边框`);
       assert.equal(r.smallCount, 0, `${scene}/${view} 还有 ${r.smallCount} 处小于 12px 的文字：${r.small.join('；')}`);
       assert.ok(r.contrast >= 4.5, `${scene}/${view} 次要文字对比度 ${r.contrast.toFixed(2)} < 4.5`);
     }
