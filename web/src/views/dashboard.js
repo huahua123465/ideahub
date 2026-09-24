@@ -27,10 +27,10 @@ let pickedDay = '';
 /** 我自己的日报按日期索引。切日期直接查这张表，不用为了看一眼那天写没写再跑一趟接口。 */
 let myByDate = new Map();
 /**
- * 手机上「每日总结」默认收成一行（状态 + 「写日报」按钮），点开才是表单：
+ * 「每日总结」默认收成一行（状态 + 「写日报」按钮），点开才是表单：
  * 大多数人打开首页是来看待办的，原来一整屏都是这张表单，待办要往下滑很远。
+ * 手机先这么做（09-23），桌面 09-24 跟上 —— 桌面上那张空表单同样占掉了半个首屏。
  * 开合状态放在模块里而不是 DOM 上 —— 首页会被推送整块重绘，放 DOM 上一重绘就又收回去了。
- * 桌面宽度下样式不收起，这个变量不起作用。
  */
 let todayOpen = false;
 const todayStatus = (day, report) => report ? `已写：${report.title}` : `${dayLabel(day)}还没写`;
@@ -227,7 +227,6 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
         <p>先处理需要判断的事，再把结果沉淀成团队资产。</p>
       </div>
       <div class="dash-quick" aria-label="快捷操作">
-        <button data-dash-action="import">${ICON.sparkle}<span><b>AI 整理</b><small>粘贴内容</small></span></button>
         <button data-dash-create="pool">${ICON.bulb}<span><b>记一条灵感</b><small>发起讨论</small></span></button>
         <button data-dash-create="clients">${ICON.users}<span><b>新增客户</b><small>跟进信息</small></span></button>
         <button data-dash-learning="framework">${ICON.layers}<span><b>框架学习</b><small>判断链路</small></span></button>
@@ -238,7 +237,7 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
     <section class="dash-panel dash-today${todayOpen ? ' open' : ''}" data-day="${esc(day)}"
         data-report-id="${dayReport ? Number(dayReport.id) : ''}">
       <header>
-        <div><span>每日总结</span><h2 id="dashTodayHead">${esc(dayLabel(day))}做了什么</h2>
+        <div><h2 id="dashTodayHead">${esc(dayLabel(day))}做了什么</h2>
           <p class="dash-today-status" id="dashTodayStatus">${esc(todayStatus(day, dayReport))}</p></div>
         <button data-goto="reports" class="dash-today-history">看历史日报 →</button>
         <button type="button" class="btn btn-primary dash-today-toggle" id="dashTodayToggle"
@@ -276,12 +275,12 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
 
     <div class="dash-layout">
       <section class="dash-panel dash-focus">
-        <header><div><span>优先处理</span><h2>今天值得推进的事</h2></div><small>按待审核、评审、客户跟进排序</small></header>
+        <header><div><h2>今天值得推进的事</h2></div><small>按待审核、评审、客户跟进排序</small></header>
         <div class="dash-focus-list">${focus.slice(0, 4).join('')}</div>
       </section>
 
       <section class="dash-panel dash-pipeline">
-        <header><div><span>经营脉搏</span><h2>客户转化</h2></div><button data-goto="funnel">看完整漏斗 →</button></header>
+        <header><div><h2>客户转化</h2></div><button data-goto="funnel">看完整漏斗 →</button></header>
         <div class="dash-pipeline-list">${sales.map((step, index) => `
           <button data-goto="clients" data-stages="${esc((step.stages || []).join(','))}"
               data-filter-label="销售漏斗 · ${esc(step.name)}">
@@ -294,7 +293,7 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
     </div>
 
     <section class="dash-panel dash-library">
-      <header><div><span>团队资产</span><h2>持续沉淀，而不是散落在聊天里</h2></div><button data-goto="stats">查看统计 →</button></header>
+      <header><div><h2>团队资产</h2></div><button data-goto="stats">查看统计 →</button></header>
       <div>${library.map(item => `<button data-goto="${esc(item.board)}"><small>${esc(item.name)}</small><b>${Number(item.value || 0)}</b><em>${esc(item.note || '')}</em><span>打开 →</span></button>`).join('')}</div>
     </section>`;
 
@@ -416,7 +415,7 @@ function bindToday(root) {
       btn.textContent = saveLabel(day, saved);
       whenEl.textContent = whenNote(day, saved);
       showHint('');
-      // 手机上存完就收起来，那一行直接显示「已写：……」；桌面上这个开关不起作用
+      // 存完就收起来，那一行直接显示「已写：……」
       todayOpen = false;
       syncToggle();
       // 首页的「待我审核」等数字跟这条无关，但缓存里得留下新内容，

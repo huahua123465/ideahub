@@ -7,7 +7,9 @@
  *   4. 聊天按钮往下滑收起、往上滑回来；有未读消息时不收
  *   5. 客户档案（桌面）左栏的「S 级」、「城市 · 年龄 · 来源」各占一行，不被挤折
  *   7. 顶栏搜索框的提示语完整显示，不被截断（桌面）
- *   8. 手机首页：问候 → 待办 → 每日总结；每日总结默认收成一行，点「写日报」展开并聚焦；桌面不收
+ *   8. 首页顺序（手机：问候 → 待办 → 每日总结；桌面：问候 → 每日总结 → 数字 → 待办，待办在首屏内）；
+ *      每日总结默认收成一行，点「写日报」展开并聚焦（09-24 起桌面也收）；
+ *      四个快捷入口一行排满、字不折行；桌面上右下角聊天按钮不压首页卡片
  *   9. 手机顶栏：新建按钮带短标签（「＋ 报销」），AI 按钮带「AI」，顶栏按钮互不重叠、不出屏（390 / 360 宽）
  *  10. 报销 / 采购卡片上的审批步骤名不被截断（360 宽时「部门负责人」放不下，卡片上叫「负责人」）
  * 截图和 report.json 写到 scripts/.uidiff/ui-polish/。
@@ -69,9 +71,9 @@ try {
       assert.ok(r.contrast >= 4.5, `${scene}/${view} 次要文字对比度 ${r.contrast.toFixed(2)} < 4.5`);
     }
 
-    // 2. 日报表单不贴边（手机上默认收起，先展开再量）
+    // 2. 日报表单不贴边（默认收起，先展开再量）
     await go(page, 'home');
-    if (mobile) await tap(page, '#dashTodayToggle');
+    await tap(page, '#dashTodayToggle');
     const inset = await page.evaluate(() => {
       const card = document.querySelector('.dash-today').getBoundingClientRect();
       const items = [...document.querySelectorAll('.dash-today-body label, .dash-today-body .inp')]
@@ -85,10 +87,8 @@ try {
     });
     assert.ok(inset.left >= 12 && inset.right >= 12, `日报表单贴边了 ${JSON.stringify(inset)}`);
     assert.ok(Math.abs(inset.left - inset.header) <= 2, `日报表单没和标题对齐 ${JSON.stringify(inset)}`);
-    if (mobile) {
-      await tap(page, '#dashTodayToggle');
-      await page.evaluate(() => document.activeElement?.blur());
-    }
+    await tap(page, '#dashTodayToggle');
+    await page.evaluate(() => document.activeElement?.blur());
     await harness.screenshot(page, `home-${scene}`);
 
     // 4. 聊天按钮：往下滑收起，往上滑回来；有未读时不收
@@ -147,10 +147,12 @@ try {
         body: vis('.dash-today-body'), toggle: vis('#dashTodayToggle'), status: vis('#dashTodayStatus'),
         label: document.querySelector('#dashTodayToggle').textContent.trim(), statusText: document.querySelector('#dashTodayStatus').textContent.trim() };
     });
-    if (mobile) {
-      assert.ok(home.hero < home.focus && home.focus < home.today && home.today < home.grid, `手机首页顺序不对 ${JSON.stringify(home)}`);
-      assert.deepEqual([home.body, home.toggle, home.status, home.label], [false, true, true, '写日报'], JSON.stringify(home));
-      assert.match(home.statusText, /还没写|已写/);
+    // 桌面：问候 → 每日总结（收成一行）→ 数字 → 待办；手机：问候 → 待办 → 每日总结 → 数字
+    if (mobile) assert.ok(home.hero < home.focus && home.focus < home.today && home.today < home.grid, `手机首页顺序不对 ${JSON.stringify(home)}`);
+    else assert.ok(home.hero < home.today && home.today < home.grid && home.grid < home.focus && home.focus < 900, `桌面首页顺序不对，或待办没进首屏 ${JSON.stringify(home)}`);
+    assert.deepEqual([home.body, home.toggle, home.status, home.label], [false, true, true, '写日报'], JSON.stringify(home));
+    assert.match(home.statusText, /还没写|已写/);
+    {
       await tap(page, '#dashTodayToggle');
       await page.waitForFunction(() => getComputedStyle(document.querySelector('.dash-today-body')).display !== 'none');
       assert.equal(await page.evaluate(() => document.activeElement?.id), 'dashTodayTitle', '展开后光标应在标题框里');
@@ -158,8 +160,26 @@ try {
       await harness.screenshot(page, `home-open-${scene}`);
       await tap(page, '#dashTodayToggle');
       await page.waitForFunction(() => getComputedStyle(document.querySelector('.dash-today-body')).display === 'none');
-    } else {
-      assert.deepEqual([home.body, home.toggle, home.status], [true, false, false], `桌面上每日总结不该收起 ${JSON.stringify(home)}`);
+    }
+
+    // 8b. 首页快捷入口一行排满，不横向滑动；右下角聊天按钮停着时不压住卡片
+    const quick = await page.evaluate(() => {
+      const box = document.querySelector('.dash-quick');
+      const tops = new Set([...box.children].map(b => Math.round(b.getBoundingClientRect().top)));
+      const wrapped = [...box.querySelectorAll('b')].filter(b => b.getBoundingClientRect().height > parseFloat(getComputedStyle(b).fontSize) * 1.9 || b.scrollWidth > b.clientWidth + 1).map(b => b.textContent);
+      return { rows: tops.size, overflow: box.scrollWidth - box.clientWidth, count: box.children.length, wrapped };
+    });
+    assert.deepEqual([quick.count, quick.rows, quick.overflow <= 1, quick.wrapped], [4, 1, true, []], `快捷入口没排成一行 ${JSON.stringify(quick)}`);
+    await page.evaluate(() => { (document.querySelector('.main').scrollTop = 0); document.scrollingElement.scrollTop = 0; });
+    await harness.screenshot(page, `home-top-${scene}`);
+    if (!mobile) {
+      const gap = await page.evaluate(() => {
+        const fab = document.querySelector('#chatBtn').getBoundingClientRect();
+        const right = Math.max(...[...document.querySelectorAll('#v-home .dash-panel, #v-home .dash-hero, #v-home .dash-action-grid')]
+          .map(el => el.getBoundingClientRect().right));
+        return fab.left - right;
+      });
+      assert.ok(gap >= 4, `聊天按钮压住了首页卡片（间距 ${gap}px）`);
     }
 
     // 9. 手机顶栏按钮带字、互不重叠、不出屏

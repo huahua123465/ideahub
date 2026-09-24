@@ -89,7 +89,9 @@ html[data-ui="soft"] .topbar .avatar{background:#7a6375!important;color:#fff!imp
   html[data-ui="soft"] .topbar .navmenu button.on::before{left:9px;width:3px;height:15px;border-radius:3px;background:#b86d70;box-shadow:none}
   html[data-ui="soft"] .topbar .navmenu button.on .badge{background:#eadde3;color:#604a5a}
   html[data-ui="soft"] .topbar .nav .badge{background:rgba(84,70,79,.075);color:var(--muted)}
-  html[data-ui="soft"] .main{background:transparent;padding:34px 40px 84px}
+  /* 右边距比左边宽出一截：给右下角的聊天按钮（right:22px + 52px）让出一条竖道，
+     原来停着不动时它正好压住客户转化那一列的百分比 */
+  html[data-ui="soft"] .main{background:transparent;padding:34px 80px 84px 40px}
   html[data-ui="soft"] .wrap{max-width:1340px}
 }
 
@@ -125,7 +127,7 @@ html[data-ui="soft"] .dash-hero{display:grid;grid-template-columns:minmax(300px,
 html[data-ui="soft"] .dash-hero::after{content:"";display:block;position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(180deg,#c47e78,#8c6d80);pointer-events:none}
 html[data-ui="soft"] .dash-hero h1{font-size:36px;line-height:1.1}
 html[data-ui="soft"] .dash-hero p{max-width:440px;margin-top:9px;color:#706970;font-size:13.5px;line-height:1.65}
-html[data-ui="soft"] .dash-quick{grid-template-columns:repeat(5,minmax(100px,1fr));gap:8px;border:0}
+html[data-ui="soft"] .dash-quick{grid-template-columns:repeat(4,minmax(100px,1fr));gap:8px;border:0}
 html[data-ui="soft"] .dash-quick button{min-width:0;padding:11px 10px;border:1px solid rgba(83,68,78,.08);border-radius:12px;background:#faf7f5;box-shadow:none}
 html[data-ui="soft"] .dash-quick button:hover{transform:translateY(-2px);border-color:#dfd1d8;background:#fff;box-shadow:0 10px 22px rgba(70,55,65,.07)}
 html[data-ui="soft"] .dash-quick .ic{color:var(--muted)}
@@ -444,19 +446,15 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] #v-home .dash-action-grid{order:4}
   html[data-ui="soft"] #v-home .dash-pipeline{order:5;margin-bottom:12px}
   html[data-ui="soft"] #v-home .dash-library{order:6}
-  html[data-ui="soft"] #v-home .dash-today>header{align-items:center}
-  html[data-ui="soft"] #v-home .dash-today>header>div{min-width:0;flex:1 1 auto}
-  html[data-ui="soft"] #v-home .dash-today .dash-today-status{display:block}
-  html[data-ui="soft"] #v-home .dash-today .dash-today-toggle{display:inline-flex}
-  html[data-ui="soft"] #v-home .dash-today:not(.open)>header{border-bottom:0}
-  html[data-ui="soft"] #v-home .dash-today:not(.open) .dash-today-body,
+  /* 收起的规则全宽度通用（styles.css）；手机上窄，收起时连「看历史日报」也藏掉 */
   html[data-ui="soft"] #v-home .dash-today:not(.open) .dash-today-history{display:none}
   html[data-ui="soft"] .page-head h1{font-size:27px}
   html[data-ui="soft"] .dash-hero{gap:18px;padding:20px 18px 17px;border-radius:18px}
   html[data-ui="soft"] .dash-hero h1{font-size:30px}
-  html[data-ui="soft"] .dash-quick{display:grid;width:100%;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(104px,1fr);gap:7px;padding:0 1px 5px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:inline proximity;scrollbar-width:none}
-  html[data-ui="soft"] .dash-quick::-webkit-scrollbar{display:none}
-  html[data-ui="soft"] .dash-quick button{min-width:0;min-height:62px;scroll-snap-align:start}
+  /* 四个快捷入口一行排满。原来是五个横向滑动，第三个露半截，看着像显示坏了；
+     「AI 整理」顶栏已经有，这里拿掉之后四个正好放得下，不用再滑 */
+  html[data-ui="soft"] .dash-quick{display:grid;width:100%;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+  html[data-ui="soft"] .dash-quick button{min-width:0;min-height:62px}
   html[data-ui="soft"] .dash-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
   html[data-ui="soft"] .dash-action-grid>button{min-height:88px}
   html[data-ui="soft"] .dash-action-grid>button:nth-child(3)::before{display:none}
@@ -521,6 +519,13 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .authcard{padding:12px 21px 24px;border-radius:0}
   html[data-ui="soft"] .authfoot{position:static;margin:0 18px 20px;color:var(--muted);text-align:center}
 }
+/* 360 宽时四格各只有 68px 左右，「记一条灵感」会折成两行；左右内边距收到 2px 刚好放下 */
+@media (max-width:400px){
+  html[data-ui="soft"] .dash-quick{gap:6px}
+  html[data-ui="soft"] .dash-quick button{padding:11px 2px}
+  html[data-ui="soft"] .dash-quick b{white-space:nowrap}
+}
+
 
 @media (prefers-reduced-motion:reduce){
   html[data-ui="soft"] *,html[data-ui="soft"] *::before,html[data-ui="soft"] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
