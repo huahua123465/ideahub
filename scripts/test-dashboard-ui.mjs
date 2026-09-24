@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { createUiHarness, settleDom } from './lib/ui-harness.mjs';
 
 const harness = await createUiHarness({ outputDir: 'scripts/.uidiff/dashboard' });
-const KEYS = ['ideahub.dash.layout.v1', 'ideahub.look'];
+const KEYS = ['ideahub.dash.layout.v1', 'ideahub.look', 'ideahub.navRail.v1'];
 
 async function reload(page) {
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -69,6 +69,25 @@ try {
     await page.click('#dashPipeSeg [data-pipe="count"]');
 
     if (!mobile) {
+      // 侧栏（09-24 晚按原型改）：滑动色块对准当前页；收成窄栏只剩图标、刷新后记住、再点展开
+      const aligned = () => page.waitForFunction(() => {
+        const ind = document.querySelector('.nav-ind').getBoundingClientRect();
+        const on = document.querySelector('.navmenu button.on').getBoundingClientRect();
+        return Math.abs(ind.top - on.top) < 2 && Math.abs(ind.height - on.height) < 2 && getComputedStyle(document.querySelector('.nav-ind')).opacity === '1';
+      }, { timeout: 4000 });
+      await aligned();
+      assert.equal(await page.$$eval('.navmenu button[data-go] .nav-ic svg', els => els.length), await page.$$eval('.navmenu button[data-go]', els => els.length), '每一项都该有图标');
+      await page.click('#navRailBtn');
+      await page.waitForFunction(() => document.querySelector('#appNav').getBoundingClientRect().width === 76 && parseFloat(getComputedStyle(document.querySelector('.main')).marginLeft) === 76, { timeout: 4000 });
+      assert.equal(await page.$eval('.navmenu button.on .nav-label', el => getComputedStyle(el).display), 'none', '窄栏只显示图标');
+      await aligned();
+      await harness.screenshot(page, `rail-${scene}`);
+      await reload(page);
+      assert.equal(await page.evaluate(() => document.documentElement.classList.contains('nav-rail')), true, '刷新后窄栏要记住');
+      await page.click('#navRailBtn');
+      await page.waitForFunction(() => document.querySelector('#appNav').getBoundingClientRect().width === 230, { timeout: 4000 });
+      assert.equal(await page.evaluate(() => localStorage.getItem('ideahub.navRail.v1')), '0');
+
       // 布局编辑：藏起「团队资产」、把「待办」改宽、把「待我审核」挪到最前面
       await page.click('#dashEditBtn');
       assert.equal(await page.$eval('#dashBento', el => el.classList.contains('editing')), true);

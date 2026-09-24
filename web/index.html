@@ -129,7 +129,8 @@
     }
   }
 
-  var RD = { '2xs': 2, xs: 4, sm: 6, md: 8, base: 10, lg: 12, xl: 14, '2xl': 16, '3xl': 18, '4xl': 20, '5xl': 24 };
+  /* 圆角基准：和 soft.css 里调大一档之后的 --rd-* 一致（09-24 晚跟原型对齐） */
+  var RD = { '2xs': 2, xs: 4, sm: 6, md: 8, base: 10, lg: 14, xl: 16, '2xl': 20, '3xl': 24, '4xl': 26, '5xl': 28 };
   var SP = { '2xs': 2, xs: 4, sm: 6, md: 8, base: 10, lg: 12, xl: 14, '2xl': 16, '3xl': 18, '4xl': 20, '5xl': 24, '6xl': 28, '7xl': 32, '8xl': 40, '9xl': 48 };
   var DENSITY = { compact: 0.8, cozy: 1, roomy: 1.18 };
 
@@ -183,6 +184,8 @@
     }
   };
   try { var saved = load(); if (saved) apply(saved); } catch (e) { /* 外观出错不能拦住整个应用 */ }
+  /* 侧栏收成窄栏的状态也在首次绘制前恢复，不会先宽后窄（开关在 main.js 的 decorateNav） */
+  try { if (localStorage.getItem('ideahub.navRail.v1') === '1') root.classList.add('nav-rail'); } catch (e) { /* 存储不可用就用默认宽度 */ }
 })();
 </script>
 <!-- 提前并行拉取全部模块。

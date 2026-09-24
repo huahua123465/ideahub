@@ -13,7 +13,8 @@ const LEARNING = join(dirname(fileURLToPath(import.meta.url)), '..', 'server', '
 const PORT = Number(process.env.WEB_PORT || 5173);
 const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.mjs':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8', '.json':'application/json; charset=utf-8',
-  '.svg':'image/svg+xml', '.png':'image/png', '.pdf':'application/pdf', '.ico':'image/x-icon' };
+  '.svg':'image/svg+xml', '.png':'image/png', '.pdf':'application/pdf', '.ico':'image/x-icon',
+  '.webp':'image/webp', '.woff2':'font/woff2' };
 
 http.createServer(async (req, res) => {
   let rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^([/\\])+/, '');

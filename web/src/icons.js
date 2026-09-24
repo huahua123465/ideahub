@@ -14,6 +14,22 @@ const svg = (d, extra = '') => `<svg class="ic" viewBox="0 0 20 20" fill="none"
   aria-hidden="true">${d}${extra}</svg>`;
 
 export const ICON = {
+  // 侧栏导航用（09-24 侧栏改成「图标 + 文字」，收起时只剩图标）
+  home:    svg('<path d="M3.5 9.2 10 4l6.5 5.2"/><path d="M5 8.2V16h10V8.2"/><path d="M8.3 16v-4h3.4v4"/>'),
+  tree:    svg('<circle cx="5" cy="5" r="1.6"/><circle cx="15" cy="10" r="1.6"/><circle cx="15" cy="15.4" r="1.6"/><path d="M5 6.6v6.2a2.6 2.6 0 0 0 2.6 2.6h5.8M5 10h8.4"/>'),
+  film:    svg('<rect x="3" y="4.5" width="14" height="11" rx="2"/><path d="M8.5 8v4l3.5-2z"/>'),
+  grid:    svg('<rect x="3.5" y="3.5" width="5.2" height="5.2" rx="1.2"/><rect x="11.3" y="3.5" width="5.2" height="5.2" rx="1.2"/><rect x="3.5" y="11.3" width="5.2" height="5.2" rx="1.2"/><rect x="11.3" y="11.3" width="5.2" height="5.2" rx="1.2"/>'),
+  live:    svg('<circle cx="10" cy="10" r="2"/><path d="M6.2 6.2a5.4 5.4 0 0 0 0 7.6M13.8 6.2a5.4 5.4 0 0 1 0 7.6M3.9 3.9a8.6 8.6 0 0 0 0 12.2M16.1 3.9a8.6 8.6 0 0 1 0 12.2"/>'),
+  trend:   svg('<path d="M3.5 14 8 9.5l3 3 5.5-5.5"/><path d="M12.5 7h4v4"/>'),
+  box:     svg('<path d="M3.5 6.5 10 3.5l6.5 3v7L10 16.5l-6.5-3z"/><path d="M3.5 6.5 10 9.5l6.5-3M10 9.5v7"/>'),
+  briefcase: svg('<rect x="3" y="6.5" width="14" height="9.5" rx="2"/><path d="M7.5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 12.5 5v1.5M3 10.5h14"/>'),
+  receipt: svg('<path d="M5.5 3.5h9v13l-2.2-1.4-2.3 1.4-2.3-1.4-2.2 1.4z"/><path d="M8 7.5h4M8 10.5h4"/>'),
+  cart:    svg('<path d="M3 4h2l1.6 8.2h8.2L16.5 6.5H6"/><circle cx="8" cy="15.5" r="1"/><circle cx="14" cy="15.5" r="1"/>'),
+  tag:     svg('<path d="M3.5 10.2V4.5a1 1 0 0 1 1-1h5.7l6.3 6.3-6.7 6.7z"/><circle cx="7" cy="7" r="1.1"/>'),
+  funnel:  svg('<path d="M3.5 4.5h13l-5 6v4.5l-3 1.5v-6z"/>'),
+  chart:   svg('<path d="M4 16V9M8.5 16V5M13 16v-5M16.5 16H3.5"/>'),
+  database: svg('<ellipse cx="10" cy="5.5" rx="5.5" ry="2"/><path d="M4.5 5.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M4.5 10c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/>'),
+  sidebar: svg('<rect x="3" y="3.5" width="14" height="13" rx="2"/><path d="M8 3.5v13"/>'),
   chat:    svg('<path d="M3.2 15.2V5.6a2 2 0 0 1 2-2h9.6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6.6z"/>'),
   bell:    svg('<path d="M10 3a4.2 4.2 0 0 0-4.2 4.2c0 3.6-1.3 4.7-1.3 4.7h11c0 0-1.3-1.1-1.3-4.7A4.2 4.2 0 0 0 10 3Z"/><path d="M8.6 15a1.6 1.6 0 0 0 2.8 0"/>'),
   clip:    svg('<path d="M14.7 9.1 9.9 14a2.8 2.8 0 0 1-4-4l5.4-5.4a1.9 1.9 0 0 1 2.7 2.7l-5.4 5.4a.9.9 0 0 1-1.3-1.3l4.8-4.8"/>'),

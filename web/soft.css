@@ -708,3 +708,100 @@ html[data-ui="soft"] .searchcmd-foot{padding:var(--sp-md) var(--sp-lg);border-to
 html[data-ui="soft"] .notifitem{touch-action:pan-y;transition:transform .3s var(--ease-smooth-out),opacity .3s}
 html[data-ui="soft"] .notifitem.swiping{transition:none;cursor:grabbing}
 html[data-ui="soft"] .notif-tip{padding:var(--sp-sm) var(--sp-lg);color:var(--muted);font-size:var(--fs-xs)}
+
+/* ============================================================
+   原型风格（09-24 晚，用户确认「按原型来」）
+   1. 卡片：细边框 + 一层柔和阴影，可点的卡片悬停时浮起来（推翻了 09-24 早上的「零阴影」，测试已同步改）
+   2. 圆角整体大一档；顶栏搜索框、按钮、头像改成圆胶囊
+   3. 侧栏：图标 + 文字，当前项底下一块跟着滑动的实心色块；桌面上可以收成只剩图标的窄栏
+   4. 数字用 Bricolage Grotesque（字体文件放在 assets/fonts，不走外网；只含拉丁字符，中文照旧用系统字体）
+   ============================================================ */
+@font-face{font-family:"Bricolage Grotesque";src:url("./assets/fonts/bricolage-grotesque-latin.woff2") format("woff2");font-weight:500 800;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2212}
+
+html[data-ui="soft"]{
+  --rd-lg:14px; --rd-xl:16px; --rd-2xl:20px; --rd-3xl:24px; --rd-4xl:26px; --rd-5xl:28px;
+  --num-font:"Bricolage Grotesque",var(--font);
+  --card-shadow:0 1px 2px light-dark(rgba(48,41,47,.04),rgba(0,0,0,.35)),0 12px 30px -14px light-dark(rgba(48,41,47,.2),rgba(0,0,0,.7));
+  --card-shadow-hover:0 2px 4px light-dark(rgba(48,41,47,.05),rgba(0,0,0,.4)),0 22px 44px -18px light-dark(rgba(48,41,47,.3),rgba(0,0,0,.8));
+}
+
+/* 1. 卡片：统一一层柔和阴影；能点的卡片悬停时浮起 2px、阴影加深 */
+html[data-ui="soft"] :is(.dash-panel,.dash-hero,.dash-hot,.dash-action-grid,.record-card,.panel,.stat-key-card,.card,.exp-card,.cdcard,.table,.funnel-hero,.client-detail-head){box-shadow:var(--card-shadow)}
+html[data-ui="soft"] #poolGrid .idea-card{box-shadow:var(--card-shadow)}
+html[data-ui="soft"] :is(.record-card,.exp-card,.cdcard,.dash-quick button,.dash-client){transition:transform .35s var(--spring),box-shadow .3s var(--ease-smooth-out),border-color .2s,background-color .2s}
+html[data-ui="soft"] :is(.record-card,.exp-card,.cdcard,.dash-client):hover{transform:translateY(-2px);box-shadow:var(--card-shadow-hover)}
+html[data-ui="soft"] #poolGrid .idea-card:hover{transform:translateY(-2px);box-shadow:var(--card-shadow-hover)}
+html[data-ui="soft"] #v-home .dash-quick button{box-shadow:0 1px 2px light-dark(rgba(48,41,47,.04),rgba(0,0,0,.3))}
+html[data-ui="soft"] #v-home .dash-quick button:hover{transform:translateY(-3px);box-shadow:var(--card-shadow-hover)}
+html[data-ui="soft"] #v-home .dash-quick button:active,
+html[data-ui="soft"] :is(.record-card,.dash-client):active{transform:scale(.98)}
+html[data-ui="soft"] #v-home .dash-hot{box-shadow:0 1px 2px light-dark(rgba(143,74,67,.06),rgba(0,0,0,.35)),0 16px 36px -16px light-dark(rgba(143,74,67,.35),rgba(0,0,0,.7))}
+html[data-ui="soft"] #v-home .dash-hot.is-clear{box-shadow:var(--card-shadow)}
+
+/* 2. 顶栏：搜索框、按钮、头像都是圆胶囊，带一点阴影 */
+html[data-ui="soft"] .topbar .search{border-radius:var(--rd-pill)!important;box-shadow:0 1px 2px light-dark(rgba(48,41,47,.05),rgba(0,0,0,.3))!important}
+html[data-ui="soft"] .topbar .search:focus-within{box-shadow:0 0 0 3px var(--blue-100),0 8px 20px -10px light-dark(rgba(48,41,47,.25),rgba(0,0,0,.6))!important}
+html[data-ui="soft"] .search-ai{border-radius:0 var(--rd-pill) var(--rd-pill) 0}
+html[data-ui="soft"] .smart-import-trigger{border-radius:var(--rd-pill);transition:transform .3s var(--spring),box-shadow .3s,background-color .2s}
+html[data-ui="soft"] .smart-import-trigger:hover{transform:translateY(-2px)}
+html[data-ui="soft"] .topbar .avatar{border-radius:50%!important;transition:transform .35s var(--spring)}
+html[data-ui="soft"] .topbar .avatar:hover{transform:scale(1.06)}
+html[data-ui="soft"] .notifbtn{border-radius:50%;transition:transform .3s var(--spring),background-color .2s}
+html[data-ui="soft"] .notifbtn:hover{transform:translateY(-2px)}
+html[data-ui="soft"] .btn{border-radius:var(--rd-pill)}
+html[data-ui="soft"] .btn-primary{transition:transform .3s var(--spring),box-shadow .3s,filter .2s}
+html[data-ui="soft"] .btn-primary:active{transform:scale(.96)}
+
+/* 4. 数字字体：首页和各页摘要里的大数字 */
+html[data-ui="soft"] :is(.dash-action-grid b,.dash-ring b,.dash-hot-num,.dash-library button b,.dash-clock,.dash-pipeline-list strong,.overview-cell b,.dash-focusbar b){font-family:var(--num-font);font-feature-settings:"tnum"}
+/* 问候里的名字：品牌主色到点缀色的渐变，慢慢流动 */
+/* 文字本身保留主色（读屏、对比度检查、不支持 background-clip 的浏览器都按它来），渐变只盖在显示层上 */
+html[data-ui="soft"] #v-home .dash-name{font-style:normal;color:var(--blue);background:linear-gradient(100deg,var(--blue),light-dark(#c47e78,#e0a39b),var(--blue));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:dash-shine 7s linear infinite}
+@keyframes dash-shine{to{background-position:-200% 0}}
+
+/* 3. 侧栏（桌面）：图标 + 文字，当前项底下的色块跟着滑；收起时只剩图标 */
+@media (min-width:1181px){
+  html[data-ui="soft"] .topbar .nav{transition:width .45s var(--spring),padding .45s var(--spring)}
+  html[data-ui="soft"] .topbar .navmenu button{display:flex;align-items:center;gap:var(--sp-md);height:38px;padding:0 var(--sp-md);border-radius:var(--rd-lg);z-index:1;white-space:nowrap}
+  html[data-ui="soft"] .topbar .navmenu button .nav-ic{display:grid;place-items:center;flex:none;width:20px;height:20px;transition:transform .4s var(--spring)}
+  html[data-ui="soft"] .topbar .navmenu button .nav-ic .ic{width:18px;height:18px}
+  html[data-ui="soft"] .topbar .navmenu button:hover .nav-ic{transform:scale(1.15) rotate(-6deg)}
+  html[data-ui="soft"] .topbar .navmenu button .nav-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:left}
+  html[data-ui="soft"] .topbar .navmenu button:hover{transform:none}
+  /* 当前项：色块滑到位的同时，按钮自己也铺上同色底（延迟 .3s 接上），静止时按钮本身就是实心的，文字对比度按它算 */
+  html[data-ui="soft"] .topbar .navmenu button{transition:background-color .12s,color .2s}
+  html[data-ui="soft"] .topbar .navmenu button.on,
+  html[data-ui="soft"] .topbar .navmenu button.on:hover{background:var(--blue);box-shadow:none;color:light-dark(#fff,#1c1a1d);font-weight:680;transition:background-color .15s .3s,color .2s}
+  html[data-ui="soft"] .topbar .navmenu button.on::before{display:none}
+  html[data-ui="soft"] .topbar .navmenu button.on .badge{background:light-dark(rgba(255,255,255,.24),rgba(0,0,0,.18));color:inherit}
+  html[data-ui="soft"] .nav-ind{position:absolute;left:var(--sp-lg);right:var(--sp-lg);top:0;z-index:0;height:38px;border-radius:var(--rd-lg);background:var(--blue);box-shadow:0 8px 20px -8px var(--blue);opacity:0;pointer-events:none;transition:transform .5s var(--spring),height .3s,opacity .25s,left .45s var(--spring),right .45s var(--spring)}
+  html[data-ui="soft"] .nav-rail-btn{display:flex;align-items:center;gap:var(--sp-md);width:100%;height:38px;margin-top:var(--sp-lg);padding:0 var(--sp-md);border-top:1px solid var(--line-soft);border-radius:var(--rd-lg);color:var(--muted);font-size:var(--fs-sm);white-space:nowrap}
+  html[data-ui="soft"] .nav-rail-btn:hover{background:light-dark(rgba(255,255,255,.55),rgba(34,34,34,.55));color:var(--ink)}
+  html[data-ui="soft"] .nav-rail-btn .nav-ic{display:grid;place-items:center;flex:none;width:20px;transition:transform .45s var(--spring)}
+  html[data-ui="soft"] .nav-rail-btn .ic{width:18px;height:18px}
+
+  /* 窄栏：76px，只剩图标；组标题藏起来，收起的组也全部露出来（图标本身就是入口）；角标变成右上角的小圆点 */
+  html.nav-rail[data-ui="soft"] .topbar .nav{width:76px;padding-left:var(--sp-md);padding-right:var(--sp-md);overflow-x:hidden}
+  html.nav-rail[data-ui="soft"] .navtop{display:none}
+  html.nav-rail[data-ui="soft"] .navgrp{margin-bottom:var(--sp-sm);padding-bottom:var(--sp-sm);border-bottom:1px solid var(--line-soft)}
+  html.nav-rail[data-ui="soft"] .navgrp.collapsed .navmenu{display:block}
+  html.nav-rail[data-ui="soft"] .topbar .navmenu button{justify-content:center;padding:0}
+  html.nav-rail[data-ui="soft"] .topbar .navmenu button .nav-label,
+  html.nav-rail[data-ui="soft"] .nav-rail-btn .nav-label{display:none}
+  html.nav-rail[data-ui="soft"] .topbar .navmenu button .badge{position:absolute;top:var(--sp-2xs);right:var(--sp-2xs);min-width:0;height:auto;padding:0 var(--sp-xs);font-size:var(--fs-xs);line-height:1.4}
+  html.nav-rail[data-ui="soft"] .nav-ind{left:var(--sp-md);right:var(--sp-md)}
+  html.nav-rail[data-ui="soft"] .nav-rail-btn{justify-content:center;padding:0}
+  html.nav-rail[data-ui="soft"] .nav-rail-btn .nav-ic{transform:rotate(180deg)}
+  html.nav-rail[data-ui="soft"] .main{margin-left:76px}
+  html.nav-rail[data-ui="soft"] .topbar{background:linear-gradient(90deg,light-dark(#f0ece8,#16120e) 0 76px,light-dark(rgba(255,253,250,.96),rgba(34,32,29,0.96)) 76px)}
+  html.nav-rail[data-ui="soft"] .topbar .brand{flex-basis:76px;min-width:76px;width:76px;overflow:hidden}
+  html.nav-rail[data-ui="soft"] .topbar .brand :is(.brand-name,small){display:none}
+  html[data-ui="soft"] .main,
+  html[data-ui="soft"] .topbar .brand{transition:margin-left .45s var(--spring),flex-basis .45s var(--spring),min-width .45s var(--spring),width .45s var(--spring)}
+}
+@media (max-width:1180px){
+  html[data-ui="soft"] .nav-ind,
+  html[data-ui="soft"] .nav-rail-btn{display:none}
+  html[data-ui="soft"] .navmenu button .nav-ic{display:inline-grid;place-items:center;width:20px;margin-right:var(--sp-sm);vertical-align:middle}
+  html[data-ui="soft"] .navmenu button .nav-ic .ic{width:18px;height:18px}
+}

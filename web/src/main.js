@@ -115,6 +115,82 @@ function initNavCollapse() {
   paintNavTodo();
 }
 
+/**
+ * 侧栏（09-24 晚改成原型的样式）：每一项前面加图标、文字包进 .nav-label；当前项底下垫一块跟着滑动的实心色块；
+ * 桌面上可以收成只剩图标的窄栏（记在这台设备上，<head> 里的外观引擎会在首次绘制前把 .nav-rail 加上，不会先宽后窄）。
+ */
+const NAV_ICON = {
+  home: 'home', functionTree: 'tree', pool: 'bulb', demands: 'comment', formal: 'archive',
+  persona: 'film', matrix: 'grid', live: 'live', sales: 'trend', clients: 'users',
+  delivery: 'box', cases: 'briefcase', reports: 'send', expenses: 'receipt', purchases: 'cart',
+  tagadmin: 'tag', funnel: 'funnel', stats: 'chart', samples: 'database', collector: 'download',
+};
+const NAV_RAIL_KEY = 'ideahub.navRail.v1';
+const desktopNav = matchMedia('(min-width:1181px)');
+
+function decorateNav() {
+  const nav = $('#appNav');
+  for (const b of nav.querySelectorAll('.navmenu button[data-go]')) {
+    const texts = [...b.childNodes].filter(n => n.nodeType === 3);
+    const label = document.createElement('span');
+    label.className = 'nav-label';
+    label.textContent = texts.map(n => n.textContent).join('').trim();
+    texts.forEach(n => n.remove());
+    b.prepend(label);
+    b.insertAdjacentHTML('afterbegin', `<span class="nav-ic">${ICON[NAV_ICON[b.dataset.go]] || ICON.layers}</span>`);
+    b.title = label.textContent;
+  }
+
+  const ind = document.createElement('i');
+  ind.className = 'nav-ind';
+  ind.setAttribute('aria-hidden', 'true');
+  nav.appendChild(ind);
+  let first = true;
+  const place = () => {
+    const on = nav.querySelector('.navmenu button.on');
+    if (!desktopNav.matches || !on || !on.getClientRects().length) { ind.style.opacity = '0'; return; }
+    let top = 0;
+    for (let el = on; el && el !== nav; el = el.offsetParent) top += el.offsetTop;
+    if (first) { ind.style.transition = 'none'; requestAnimationFrame(() => { ind.style.transition = ''; }); first = false; }
+    ind.style.opacity = '1';
+    ind.style.height = `${on.offsetHeight}px`;
+    ind.style.transform = `translateY(${top}px)`;
+  };
+  let raf = 0;
+  const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(place); };
+  new MutationObserver(schedule).observe(nav, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  addEventListener('resize', schedule);
+  desktopNav.addEventListener('change', schedule);
+
+  const rail = document.createElement('button');
+  rail.type = 'button';
+  rail.className = 'nav-rail-btn';
+  rail.id = 'navRailBtn';
+  rail.innerHTML = `<span class="nav-ic">${ICON.sidebar}</span><span class="nav-label"></span>`;
+  nav.appendChild(rail);
+  const setRail = on => {
+    document.documentElement.classList.toggle('nav-rail', on);
+    rail.setAttribute('aria-pressed', String(on));
+    rail.title = on ? '展开侧栏' : '收起侧栏';
+    rail.querySelector('.nav-label').textContent = rail.title;
+    try { localStorage.setItem(NAV_RAIL_KEY, on ? '1' : '0'); } catch { /* 记不住只影响这一次 */ }
+    setTimeout(schedule, 450);   // 等宽度动画走完再对位
+  };
+  rail.addEventListener('click', () => {
+    setRail(!document.documentElement.classList.contains('nav-rail'));
+    // 收起 / 展开后侧栏高度变了，把当前页那一项滚回看得见的地方（点的是最底下的按钮，不处理就停在底部）
+    setTimeout(() => {
+      const on = nav.querySelector('.navmenu button.on');
+      if (!on) return;
+      let top = 0;
+      for (let el = on; el && el !== nav; el = el.offsetParent) top += el.offsetTop;
+      nav.scrollTo({ top: Math.max(0, top - nav.clientHeight / 3), behavior: 'smooth' });
+    }, 460);
+  });
+  setRail(document.documentElement.classList.contains('nav-rail'));
+  schedule();
+}
+
 function saveNavCollapse() {
   const keys = [...document.querySelectorAll('.navgrp.collapsed')].map(g => g.dataset.group);
   try { localStorage.setItem(NAV_COLLAPSE_KEY, JSON.stringify(keys)); } catch { /* 隐私模式下只是记不住 */ }
@@ -189,6 +265,7 @@ async function boot() {
   for (const el of document.querySelectorAll('[data-ico]')) {
     el.innerHTML = ICON[el.dataset.ico] || '';
   }
+  decorateNav();
 
   await probe();
 
@@ -577,7 +654,7 @@ function bind() {
   // 搜索框里的命令（09-24）：没字时列出常用的，打字时名字对得上的排在搜索结果上面
   search.setCommands(() => {
     const pages = [...document.querySelectorAll('#appNav [data-go]')].map(b => {
-      const name = [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+      const name = (b.querySelector('.nav-label')?.textContent || b.textContent).trim();
       return { group: '跳转', label: `打开「${name}」`, keywords: name, icon: ICON.layers, featured: ['home', 'pool', 'clients', 'reports'].includes(b.dataset.go), run: () => go(b.dataset.go) };
     });
     const create = (label, target, keywords) => ({ group: '新建', label, keywords, icon: ICON.plus, featured: true,

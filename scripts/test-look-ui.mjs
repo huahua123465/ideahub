@@ -115,17 +115,17 @@ try {
 
     // 圆角、密度、动效
     await page.$eval('#lookRadius', el => { el.value = '1.5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
-    await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--rd-lg').trim() === '18px');
+    await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--rd-lg').trim() === '21px');
     await page.click('[data-look-density="compact"]');
     await page.click('[data-look-motion="off"]');
     st = await probe(page);
-    assert.deepEqual([st.rdLg, st.sp2xl, st.motion], ['18px', '13px', 'off'], JSON.stringify(st));
+    assert.deepEqual([st.rdLg, st.sp2xl, st.motion], ['21px', '13px', 'off'], JSON.stringify(st));
     await harness.screenshot(page, `custom-${scene}`);
 
     // 恢复默认：样式表原样还回去，圆角 / 间距不再被覆盖，存储清掉，明暗回到跟随系统
     await page.click('[data-look-reset]');
     st = await probe(page);
-    assert.deepEqual([st.family, st.blue, st.rdLg, st.sp2xl, st.motion, st.stored], ['default', ORIGINAL_BLUE, '12px', '16px', 'full', null], JSON.stringify(st));
+    assert.deepEqual([st.family, st.blue, st.rdLg, st.sp2xl, st.motion, st.stored], ['default', ORIGINAL_BLUE, '14px', '16px', 'full', null], JSON.stringify(st));
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'auto');
 
     // Esc 关面板，焦点回到头像

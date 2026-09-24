@@ -655,7 +655,7 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
     <section class="dash-hero" data-tile="hero">
       <div class="dash-hero-main">
         <div class="page-kicker">${esc(dateText())}<span class="dash-clock" id="dashClock">${clockText()}</span></div>
-        <h1>${greeting()}，${esc(me?.name || '伙伴')}</h1>
+        <h1>${greeting()}，<em class="dash-name">${esc(me?.name || '伙伴')}</em></h1>
         <p id="dashHeroLine"></p>
       </div>
       <div class="dash-ring" id="dashRing" role="img" aria-label="">
