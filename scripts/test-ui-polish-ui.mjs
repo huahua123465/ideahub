@@ -9,7 +9,8 @@
  *   7. 顶栏搜索框的提示语完整显示，不被截断（桌面）
  *   8. 首页顺序（手机：问候 → 待办 → 每日总结；桌面：问候 → 每日总结 → 数字 → 待办，待办在首屏内）；
  *      每日总结默认收成一行，点「写日报」展开并聚焦（09-24 起桌面也收）；
- *      四个快捷入口一行排满、字不折行；桌面上右下角聊天按钮不压首页卡片
+ *      四个快捷入口一行排满、字不折行；桌面上右下角聊天按钮不压首页卡片；
+ *      数字卡片的数字紧贴在标签正下方（09-24 前数字被推到卡片最右端）
  *   9. 手机顶栏：新建按钮带短标签（「＋ 报销」），AI 按钮带「AI」，顶栏按钮互不重叠、不出屏（390 / 360 宽）
  *  10. 报销 / 采购卡片上的审批步骤名不被截断（360 宽时「部门负责人」放不下，卡片上叫「负责人」）
  * 截图和 report.json 写到 scripts/.uidiff/ui-polish/。
@@ -192,6 +193,17 @@ try {
       return { rows: tops.size, overflow: box.scrollWidth - box.clientWidth, count: box.children.length, wrapped };
     });
     assert.deepEqual([quick.count, quick.rows, quick.overflow <= 1, quick.wrapped], [4, 1, true, []], `快捷入口没排成一行 ${JSON.stringify(quick)}`);
+    // 8c. 数字卡片：数字紧贴在标签正下方（左对齐），说明不压数字、不出卡片
+    const cards = await page.evaluate(() => [...document.querySelectorAll('.dash-action-grid>button')].map(btn => {
+      const r = sel => btn.querySelector(sel).getBoundingClientRect();
+      const [card, label, num, note] = [btn.getBoundingClientRect(), r('small'), r('b'), r('em')];
+      const overlap = (a, c) => a.left < c.right - .5 && a.right > c.left + .5 && a.top < c.bottom - .5 && a.bottom > c.top + .5;
+      return { name: btn.querySelector('small').textContent, dx: Math.abs(num.left - label.left), gap: num.top - label.bottom,
+        clash: overlap(num, note) || overlap(num, label), out: note.right > card.right + .5 || num.right > card.right + .5 };
+    }));
+    for (const c of cards) {
+      assert.ok(c.dx <= 2 && c.gap >= -2 && c.gap <= 12 && !c.clash && !c.out, `${scene} 数字卡片「${c.name}」排版不对 ${JSON.stringify(c)}`);
+    }
     await page.evaluate(() => { (document.querySelector('.main').scrollTop = 0); document.scrollingElement.scrollTop = 0; });
     await harness.screenshot(page, `home-top-${scene}`);
     if (!mobile) {

@@ -2425,11 +2425,15 @@ body.learning-fullscreen-open{overflow:hidden}
 @media (prefers-reduced-motion:reduce){.learning-page-wait{animation:none}}
 
 .dash-action-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:16px}
-.dash-action-grid>button{position:relative;display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;align-items:center;gap:3px 10px;min-height:104px;padding:15px 16px;border:1px solid rgba(48,54,72,.07);border-radius:16px;background:#fff;text-align:left;box-shadow:0 1px 2px rgba(26,31,44,.02),0 7px 22px rgba(35,42,60,.03);transition:.18s var(--ease)}
+.dash-action-grid>button{position:relative;display:grid;grid-template-columns:auto auto 1fr;grid-template-rows:auto auto;align-items:center;gap:3px 10px;min-height:104px;padding:15px 16px;border:1px solid rgba(48,54,72,.07);border-radius:16px;background:#fff;text-align:left;box-shadow:0 1px 2px rgba(26,31,44,.02),0 7px 22px rgba(35,42,60,.03);transition:.18s var(--ease)}
 .dash-action-grid>button:hover{transform:translateY(-2px);border-color:#d9dcf3;box-shadow:0 12px 28px rgba(35,42,60,.075)}
 .dash-action-icon{grid-row:1/3;width:38px;height:38px;display:grid;place-items:center;border-radius:12px}
 .dash-action-icon .ic{width:18px;height:18px}.dash-action-icon.amber{background:#fff4e8;color:#b97932}.dash-action-icon.violet{background:#f0efff;color:#6259bd}.dash-action-icon.green{background:#eaf6f1;color:#398269}.dash-action-icon.blue{background:#edf3fb;color:#4d739f}
-.dash-action-grid small{color:var(--muted);font-size:12px;font-weight:650}.dash-action-grid b{grid-column:3;grid-row:1/3;font-size:27px;letter-spacing:-.04em}.dash-action-grid em{grid-column:2;color:var(--muted);font-size:12px;font-style:normal}
+/* 数字紧跟在标签下面、说明跟在数字右边同一条基线上：原来数字被推到卡片最右端，
+   眼睛要横跨一整格才能把「待我审核」和「1」对上（09-24 走查） */
+.dash-action-grid small{grid-column:2/4;grid-row:1;color:var(--muted);font-size:12px;font-weight:650}
+.dash-action-grid b{grid-column:2;grid-row:2;align-self:baseline;font-size:27px;line-height:1.1;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.dash-action-grid em{grid-column:3;grid-row:2;align-self:baseline;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px;font-style:normal}
 
 .dash-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(340px,.8fr);gap:16px;margin-bottom:16px}
 .dash-panel{border:1px solid rgba(48,54,72,.07);border-radius:18px;background:#fff;box-shadow:0 1px 2px rgba(26,31,44,.02),0 8px 26px rgba(35,42,60,.035)}
@@ -2539,7 +2543,7 @@ body.learning-fullscreen-open{overflow:hidden}
 
   .dash-hero{margin:0 -2px 12px;padding:18px;border-radius:17px}.dash-hero p{font-size:12.5px;line-height:1.6}
   .dash-quick{gap:6px}.dash-quick button{flex-direction:column;gap:5px;text-align:center}.dash-quick .ic{width:18px;height:18px}.dash-quick b{font-size:12px}
-  .dash-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:12px}.dash-action-grid>button{grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;gap:2px 8px}.dash-action-icon{grid-row:1/3;width:34px;height:34px}.dash-action-grid b{grid-column:2;grid-row:2;font-size:23px}.dash-action-grid em{grid-column:1/-1;margin-top:4px}
+  .dash-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:12px}.dash-action-grid>button{grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;gap:2px 8px}.dash-action-icon{grid-row:1/3;width:34px;height:34px}.dash-action-grid small{grid-column:2}.dash-action-grid b{grid-column:2;grid-row:2;font-size:23px}.dash-action-grid em{grid-column:1/-1;grid-row:3;align-self:start;white-space:normal;margin-top:4px}
   .dash-layout{gap:12px;margin-bottom:12px}.dash-panel{border-radius:16px}.dash-panel>header{align-items:flex-start;padding:15px}.dash-panel>header small{display:none}
   .dash-focus-list{padding:4px 9px 9px}.dash-focus-item{grid-template-columns:4px minmax(0,1fr);gap:10px}.dash-focus-item>strong{display:none}
   .dash-pipeline-list{padding:8px 13px 12px}.dash-pipeline-list button{grid-template-columns:92px 1fr 25px 34px}
