@@ -12,7 +12,7 @@
  */
 import { api, state } from '../api.js';
 import { skeleton } from '../anim.js';
-import { esc, $, fromNow, avatarColor, initial } from '../util.js';
+import { esc, $, fromNow, avatarColor, initial, GROUP_AVATAR } from '../util.js';
 import { toast } from '../toast.js';
 import { ICON } from '../icons.js';
 import * as alertBox from './alert.js';
@@ -152,7 +152,7 @@ const convRow = (c, sub) => `
   <button class="peer${conv && conv.kind === c.kind && conv.id === c.id ? ' on' : ''}"
           data-kind="${c.kind}" data-id="${c.id}">
     <span class="av${c.kind === 'group' ? ' av-group' : ''}"
-          style="background:${c.kind === 'group' ? 'var(--ink2)' : avatarColor(c.name)}">${
+          style="background:${c.kind === 'group' ? GROUP_AVATAR : avatarColor(c.name)}">${
       c.kind === 'group' ? '群' : esc(initial(c.name))}</span>
     <span class="peer-main">
       <b>${esc(c.name)}${sub ? `<span class="dim"> · ${esc(sub)}</span>` : ''}</b>

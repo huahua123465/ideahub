@@ -5,7 +5,7 @@
  * 头像菜单「外观」三选一（跟随系统 / 浅色 / 深色），记在 localStorage ideahub.theme。桌面和手机各走一遍：
  *   1. 默认跟随系统：系统深色 → 深底，系统浅色 → 浅底
  *   2. 菜单选「深色」/「浅色」：立即生效、按钮 aria-pressed 对、不关菜单、写进存储；刷新后仍然是选的那个
- *   3. 深色下逐页对比度：所有可见文字 ≥ 4.5（大字 ≥ 3）。头像例外 —— 颜色按人名生成，浅色下也一样，不是深色引入的
+ *   3. 深色下逐页对比度：所有可见文字 ≥ 4.5（大字 ≥ 3），包括头像上的白字（util.js 的头像色 09-24 压暗过）
  *   4. Word / PDF 预览的纸面保持浅色（color-scheme:light）
  *   5. 登录页也跟着选择走
  * 截图写到 scripts/.uidiff/dark-mode/。
@@ -36,7 +36,7 @@ const AUDIT = () => {
   const over = (t, u) => ({ r: t.r * t.a + u.r * (1 - t.a), g: t.g * t.a + u.g * (1 - t.a), b: t.b * t.a + u.b * (1 - t.a), a: 1 });
   const out = [];
   for (const el of document.querySelectorAll('body *')) {
-    if (!el.getClientRects().length || el.closest('.sr-only,[aria-hidden="true"],.av,.docx-host,.learning-pdf-page')) continue;
+    if (!el.getClientRects().length || el.closest('.sr-only,[aria-hidden="true"],.docx-host,.learning-pdf-page')) continue;
     if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
     const cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || +cs.opacity === 0) continue;
