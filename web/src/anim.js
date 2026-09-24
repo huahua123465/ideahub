@@ -97,12 +97,21 @@ export const skeletonCards = (n = 6) => Array.from({ length: n }, () => `
 const L = (w, h, more = '') => `<span class="sk-line" style="width:${w};height:${h}px${more}"></span>`;
 const repeat = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join('');
 const SKELETON = {
+  // 首页拼贴（09-24）：右上两颗按钮 → 问候（进度环 + 快捷入口）| 待我审核 → 每日总结 → 数字 → 待办 | 客户转化
   home: () => `
-    <div class="sk-box sk-home-hero"><div class="sk-stack">${L('120px', 12)}${L('min(280px,70%)', 34)}${L('min(360px,90%)', 14)}</div>
-      <div class="sk-home-quick">${repeat(4, () => L('100%', 58, ';border-radius:var(--rd-lg)'))}</div></div>
-    <div class="sk-box sk-row">${L('min(220px,50%)', 18)}${L('84px', 38, ';margin-left:auto;border-radius:var(--rd-base)')}</div>
-    <div class="sk-box sk-home-stats">${repeat(4, () => `<div class="sk-stack">${L('60%', 12)}${L('32px', 26)}${L('80%', 12)}</div>`)}</div>
-    <div class="sk-home-cols">${repeat(2, () => `<div class="sk-box sk-stack">${L('40%', 18)}${repeat(3, () => L('100%', 44, ';margin-top:var(--sp-sm)'))}</div>`)}</div>`,
+    <div class="sk-row sk-home-tools">${L('104px', 36, ';border-radius:var(--rd-pill)')}${L('104px', 36, ';border-radius:var(--rd-pill)')}</div>
+    <div class="sk-home-bento">
+      <div class="sk-box sk-home-hero">
+        <div class="sk-stack">${L('150px', 12)}${L('min(300px,80%)', 36)}${L('min(420px,95%)', 14)}${L('min(300px,70%)', 14)}</div>
+        <span class="sk-line sk-home-ring"></span>
+        <div class="sk-home-quick">${repeat(4, () => L('100%', 58, ';border-radius:var(--rd-lg)'))}</div>
+      </div>
+      <div class="sk-box sk-stack sk-home-hot">${L('40%', 16)}${L('72px', 84)}${L('100%', 70, ';margin-top:auto;border-radius:var(--rd-2xl)')}${L('100%', 48, ';border-radius:var(--rd-pill)')}</div>
+      <div class="sk-box sk-row sk-home-wide">${L('min(220px,50%)', 18)}${L('84px', 38, ';margin-left:auto;border-radius:var(--rd-pill)')}</div>
+      <div class="sk-box sk-home-stats sk-home-wide">${repeat(4, () => `<div class="sk-stack">${L('60%', 12)}${L('32px', 26)}${L('80%', 12)}</div>`)}</div>
+      <div class="sk-box sk-stack sk-home-focus">${L('40%', 18)}${repeat(4, () => L('100%', 48, ';margin-top:var(--sp-sm)'))}</div>
+      <div class="sk-box sk-stack sk-home-pipe">${L('50%', 18)}${repeat(5, i => L(`${100 - i * 16}%`, 10, ';margin-top:var(--sp-md)'))}</div>
+    </div>`,
   exp: n => `<div class="sk-cards">${repeat(n, () => `<div class="sk-surface sk-stack">
     ${L('45%', 12)}${L('80%', 20)}${L('38%', 26)}${L('100%', 8, ';margin-top:var(--sp-sm)')}${L('62%', 12)}</div>`)}</div>`,
   sample: n => repeat(n, () => `<div class="sk-surface sk-sample">${L('100%', 0, ';height:auto;border-radius:0')}

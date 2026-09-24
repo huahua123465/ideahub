@@ -3,6 +3,7 @@
  */
 import { bindThemeMenu } from '../theme.js';
 import { openLook } from '../look.js';
+import { startTour } from '../tour.js';
 import { api } from '../api.js';
 import { $, avatarColor, initial, esc } from '../util.js';
 import { toast } from '../toast.js';
@@ -52,6 +53,8 @@ export function bindMenu() {
   bindThemeMenu();   // 外观切换就地生效，不关菜单：点完能马上看到效果、不满意再换
   // 配色与外观是一整块面板，先关菜单再打开；面板关掉时焦点回到头像
   $('#miLook').addEventListener('click', () => { setOpen(false); avatar.focus(); openLook(); });
+  // 再看一次新功能引导：先回首页（引导指的都是首页和顶栏上的东西），首页画出来后开始
+  $('#miTour').addEventListener('click', () => { setOpen(false); document.querySelector('[data-go="home"]')?.click(); startTour(); });
 
   $('#btnVisSave').addEventListener('click', saveVisibilityDefault);
   $('#btnVisAllPublic').addEventListener('click', () => applyVisibilityToAll('public'));

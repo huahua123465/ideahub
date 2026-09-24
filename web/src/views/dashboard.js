@@ -10,6 +10,7 @@ import { esc, $, avatarColor, initial } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
 import { confirmAction } from '../confirm.js';
+import { maybeStartTour } from '../tour.js';
 
 let me = null;
 let lastAt = 0;
@@ -784,6 +785,7 @@ let spotBound = false;
 function animateDashboard(root) {
   const first = !entered;
   entered = true;
+  if (first) maybeStartTour();   // 新功能引导：没看过的人第一次打开首页时出现
   if (first && !reduced()) {
     root.classList.add('dash-enter');
     setTimeout(() => root.classList.remove('dash-enter'), 1200);

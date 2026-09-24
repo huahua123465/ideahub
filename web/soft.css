@@ -805,3 +805,62 @@ html[data-ui="soft"] #v-home .dash-name{font-style:normal;color:var(--blue);back
   html[data-ui="soft"] .navmenu button .nav-ic{display:inline-grid;place-items:center;width:20px;margin-right:var(--sp-sm);vertical-align:middle}
   html[data-ui="soft"] .navmenu button .nav-ic .ic{width:18px;height:18px}
 }
+
+/* ============================================================
+   其他页面跟上首页的风格（09-24 晚）—— 改的是全站共用的组件，灵感池、客户档案、工作提交和其余资料页一起变：
+   页头是一张带品牌色光晕的卡片；数字概况合成一整条（和首页的数字卡一样用分隔线）、数字会滚动；
+   列表卡片切到页面时依次滑入，鼠标划过有跟着光标的柔光；空状态的插画轻轻浮动
+   ============================================================ */
+html[data-ui="soft"] .view>.page-head{overflow:hidden;isolation:isolate;padding:var(--sp-5xl) var(--sp-6xl);border:1px solid var(--card-line);border-radius:var(--rd-3xl);background:var(--surface);box-shadow:var(--card-shadow)}
+html[data-ui="soft"] .view>.page-head::before{content:"";position:absolute;right:-80px;top:-150px;z-index:-1;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,light-dark(rgba(196,126,120,.16),rgba(179,110,104,.18)),transparent 70%);animation:dash-drift 18s ease-in-out infinite alternate;pointer-events:none}
+html[data-ui="soft"] .view>.page-head .page-kicker{color:var(--blue-dk)}
+
+html[data-ui="soft"] .board-overview{gap:0;padding:var(--sp-sm);border:1px solid var(--card-line);border-radius:var(--rd-2xl);background:var(--surface);box-shadow:var(--card-shadow)}
+html[data-ui="soft"] .overview-cell{position:relative;border:0;border-radius:var(--rd-lg);background:transparent;transition:background-color .2s}
+html[data-ui="soft"] .overview-cell:hover{background:var(--surface-2)}
+html[data-ui="soft"] .overview-cell+.overview-cell::before{content:"";display:block;position:absolute;left:0;top:var(--sp-xl);bottom:var(--sp-xl);width:1px;background:var(--line-soft)}
+html[data-ui="soft"] .overview-cell b{font-size:var(--fs-7xl);line-height:1.15}
+
+html[data-ui="soft"] .view.on .board-grid>:nth-child(-n+9),
+html[data-ui="soft"] .view.on #poolGrid>:nth-child(-n+9){animation:card-in .5s var(--ease-smooth-out) backwards}
+html[data-ui="soft"] .view.on :is(.board-grid,#poolGrid)>:nth-child(2){animation-delay:40ms}
+html[data-ui="soft"] .view.on :is(.board-grid,#poolGrid)>:nth-child(3){animation-delay:80ms}
+html[data-ui="soft"] .view.on :is(.board-grid,#poolGrid)>:nth-child(4){animation-delay:120ms}
+html[data-ui="soft"] .view.on :is(.board-grid,#poolGrid)>:nth-child(5){animation-delay:160ms}
+html[data-ui="soft"] .view.on :is(.board-grid,#poolGrid)>:nth-child(n+6){animation-delay:200ms}
+@keyframes card-in{from{opacity:0;transform:translateY(10px)}}
+html[data-motion="lite"] .view.on :is(.board-grid,#poolGrid)>*{animation:none}
+
+html[data-ui="soft"] :is(.record-card,.exp-card,.cdcard):hover,
+html[data-ui="soft"] #poolGrid .idea-card:hover{background-image:radial-gradient(360px circle at var(--mx,50%) var(--my,50%),light-dark(rgba(121,99,117,.07),rgba(195,166,187,.08)),transparent 70%)}
+
+html[data-ui="soft"] .board-empty .empty svg{animation:empty-float 5s ease-in-out infinite alternate}
+@keyframes empty-float{to{transform:translateY(-6px)}}
+
+@media (max-width:700px){
+  html[data-ui="soft"] .view>.page-head{padding:var(--sp-3xl)}
+  html[data-ui="soft"] .view>.page-head::before{right:-120px;top:-170px}
+  html[data-ui="soft"] .board-overview{gap:0}
+  html[data-ui="soft"] .overview-cell:nth-child(odd)::before{display:none}
+  html[data-ui="soft"] .overview-cell:nth-child(n+3)::after{content:"";position:absolute;left:var(--sp-lg);right:var(--sp-lg);top:0;height:1px;background:var(--line-soft)}
+  html[data-ui="soft"] .board-overview:has(>.overview-cell:nth-child(3):last-child) .overview-cell+.overview-cell::before{display:block}
+  html[data-ui="soft"] .board-overview:has(>.overview-cell:nth-child(3):last-child) .overview-cell::after{display:none}
+}
+
+/* 新功能引导（09-24，src/tour.js）：聚光框圈住目标，旁边一张说明卡；不挡页面，点别处就关 */
+html[data-ui="soft"] .tour{position:fixed;inset:0;z-index:95;pointer-events:none}
+html[data-ui="soft"] .tour-spot{position:fixed;left:0;top:0;border-radius:var(--rd-lg);box-shadow:0 0 0 3px var(--blue),0 0 0 200vmax light-dark(rgba(20,16,20,.42),rgba(0,0,0,.6));transition:left .45s var(--spring),top .45s var(--spring),width .45s var(--spring),height .45s var(--spring),border-radius .3s;pointer-events:none}
+html[data-ui="soft"] .tour-card{position:fixed;left:0;top:0;width:min(340px,calc(100vw - 24px));padding:var(--sp-3xl);border:1px solid var(--card-line);border-radius:var(--rd-3xl);background:var(--surface);color:var(--ink);box-shadow:var(--shadow-lg);pointer-events:auto;transition:left .45s var(--spring),top .45s var(--spring);animation:tour-in .4s var(--spring)}
+@keyframes tour-in{from{opacity:0;transform:translateY(8px) scale(.97)}}
+html[data-ui="soft"] .tour-step{display:flex;align-items:center;gap:var(--sp-sm);color:var(--blue-dk);font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em}
+html[data-ui="soft"] .tour-step kbd{margin-left:auto;padding:0 var(--sp-sm);border:1px solid var(--line);border-radius:var(--rd-sm);background:var(--surface-2);color:var(--ink2);font-size:var(--fs-xs);font-weight:600}
+html[data-ui="soft"] .tour-card h2{margin-top:var(--sp-sm);font-size:var(--fs-2xl);line-height:1.35}
+html[data-ui="soft"] .tour-card p{margin-top:var(--sp-sm);color:var(--ink2);font-size:var(--fs-sm);line-height:1.75}
+html[data-ui="soft"] .tour-dots{display:flex;gap:var(--sp-xs);margin-top:var(--sp-xl)}
+html[data-ui="soft"] .tour-dots i{width:6px;height:6px;border-radius:var(--rd-pill);background:var(--line);transition:width .3s var(--spring),background-color .3s}
+html[data-ui="soft"] .tour-dots i.on{width:18px;background:var(--blue)}
+html[data-ui="soft"] .tour-foot{display:flex;align-items:center;gap:var(--sp-sm);margin-top:var(--sp-xl)}
+html[data-ui="soft"] .tour-grow{flex:1}
+html[data-ui="soft"] .tour-skip{min-height:36px;padding:0 var(--sp-sm);color:var(--muted);font-size:var(--fs-sm)}
+html[data-ui="soft"] .tour-skip:hover{color:var(--ink)}
+html[data-ui="soft"] .tour-foot [hidden]{display:none}

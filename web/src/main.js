@@ -33,6 +33,7 @@ import * as expenses from './views/expenses.js';
 import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
 import { openLook } from './look.js';
+import { startTour } from './tour.js';
 import { setTheme } from './theme.js';
 import { bindSheetPreview } from './sheet-preview.js';
 import { bindDocPreview } from './doc-preview.js';
@@ -649,6 +650,14 @@ function bind() {
   // 顶栏搜索现在是全局搜索：一个词跨灵感 / 需求 / 正式库 / 客户 / 案例 / 台账。
   // 原来它只筛灵感池 —— 那正是任务表里说的「每个页面单独搜」。
   // 灵感池自己的关键词筛选仍然在，只是不再占用这个入口。
+  // 列表卡片跟着光标走的一圈柔光（09-24，样式在 soft.css）：全站一个监听，只记位置，不重绘
+  document.addEventListener('pointermove', e => {
+    const card = e.target.closest?.('.record-card, .exp-card, .cdcard, #poolGrid .idea-card');
+    if (!card) return;
+    const r = card.getBoundingClientRect();
+    card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    card.style.setProperty('--my', `${e.clientY - r.top}px`);
+  }, { passive: true });
   search.bind();
   search.events.addEventListener('goto', e => openAnywhere(e.detail));
   // 搜索框里的命令（09-24）：没字时列出常用的，打字时名字对得上的排在搜索结果上面
@@ -668,6 +677,7 @@ function bind() {
         run: () => { go('home'); setTimeout(() => dashboard.command('focus'), 60); } },
       ...(innerWidth > 1180 ? [{ group: '首页', label: '编辑首页布局', keywords: '布局 排版 拖动', hint: 'E', icon: ICON.layers,
         run: () => { go('home'); setTimeout(() => dashboard.command('edit'), 60); } }] : []),
+      { group: '首页', label: '新功能介绍', keywords: '引导 教程 帮助 新功能 介绍', icon: ICON.sparkle, run: () => { go('home'); startTour(); } },
       { group: '外观', label: '配色与外观…', keywords: '主题 颜色 配色 圆角 密度 动效', icon: ICON.sparkle, featured: true, run: openLook },
       { group: '外观', label: '切换到深色', keywords: '深色 暗色 夜间 主题', icon: ICON.eye, run: () => setTheme('dark') },
       { group: '外观', label: '切换到浅色', keywords: '浅色 亮色 主题', icon: ICON.eye, run: () => setTheme('light') },

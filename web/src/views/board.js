@@ -17,6 +17,7 @@ import * as tagfilter from './tagfilter.js';
 import * as bench from './bench.js';
 import { openLightbox } from '../lightbox.js';
 import { confirmAction } from '../confirm.js';
+import { countTo } from '../anim.js';
 
 /** 每个板块各自记住当前选中的小板块和数据，切走再切回来不用重新选 */
 const st = {};
@@ -406,7 +407,20 @@ function paintHead(key, root) {
   box.innerHTML = cells.map(([label, value, note]) => `<div class="overview-cell">
     <span>${esc(label)}</span><b>${esc(value)}</b><small>${esc(note)}</small>
   </div>`).join('');
+  // 数字滚动（09-24）：第一次画出来、或者这个数真的变了才滚；后台刷新同样的数不重放。「1.2万」这种缩写不滚
+  for (const cell of box.querySelectorAll('.overview-cell')) {
+    const b = cell.querySelector('b');
+    const text = b.textContent.trim();
+    if (!/^\d+$/.test(text)) continue;
+    const id = `${key}:${cell.querySelector('span').textContent}`;
+    const to = Number(text);
+    const from = overviewShown.has(id) ? overviewShown.get(id) : 0;
+    overviewShown.set(id, to);
+    if (from !== to) countTo(b, to, { from, ms: 650 });
+  }
 }
+/** 概况里每个数上一次显示的值，用来判断要不要滚动 */
+const overviewShown = new Map();
 
 function paintRows(key, root) {
   const s = stateOf(key);
