@@ -12,27 +12,27 @@
 
 .menupop{position:absolute;right:0;top:calc(100% + 9px);width:210px;background:var(--surface);
   border:1px solid var(--line);border-radius:var(--rd-lg);box-shadow:var(--shadow-lg);
-  padding:6px;z-index:60;opacity:0;pointer-events:none;transform:translateY(-4px);
+  padding:var(--sp-sm);z-index:60;opacity:0;pointer-events:none;transform:translateY(-4px);
   transition:opacity .16s,transform .16s}
 .menupop.on{opacity:1;pointer-events:auto;transform:none}
 
-.menuhead{padding:9px 10px 10px;border-bottom:1px solid var(--line-soft);margin-bottom:5px}
+.menuhead{padding:var(--sp-base) var(--sp-base) var(--sp-base);border-bottom:1px solid var(--line-soft);margin-bottom:var(--sp-xs)}
 .menuhead b{display:block;font-size:var(--fs-base);font-weight:700;letter-spacing:-.01em}
-.menuhead span{display:block;font-size:var(--fs-xs);color:var(--muted);margin-top:2px}
+.menuhead span{display:block;font-size:var(--fs-xs);color:var(--muted);margin-top:var(--sp-2xs)}
 
-.menuitem{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:var(--rd-md);
+.menuitem{display:block;width:100%;text-align:left;padding:var(--sp-md) var(--sp-base);border-radius:var(--rd-md);
   font-size:var(--fs-sm);color:var(--ink2);transition:.12s}
 .menuitem:hover{background:var(--line-soft);color:var(--ink)}
 .menuitem.danger{color:var(--crit)}
 .menuitem.danger:hover{background:var(--crit-bg)}
-.menusep{height:1px;background:var(--line-soft);margin:5px 0}
+.menusep{height:1px;background:var(--line-soft);margin:var(--sp-xs) 0}
 
 /* ---------- 用户管理 ---------- */
 .modal-wide{width:min(900px,calc(100vw - 32px))}
 
-.userlist{max-height:60vh;overflow-y:auto;padding:4px 22px 0}
+.userlist{max-height:60vh;overflow-y:auto;padding:var(--sp-xs) var(--sp-5xl) 0}
 
-.urow{display:flex;align-items:center;gap:12px;padding:11px 0;
+.urow{display:flex;align-items:center;gap:var(--sp-lg);padding:var(--sp-lg) 0;
   border-bottom:1px solid var(--line-soft)}
 .urow:last-child{border-bottom:none}
 
@@ -40,25 +40,25 @@
   font-size:var(--fs-sm);font-weight:700;flex:none}
 .urow .who{flex:1;min-width:0}
 .urow .who b{display:block;font-size:var(--fs-base);font-weight:650;letter-spacing:-.01em}
-.urow .who span{display:block;font-size:var(--fs-xs);color:var(--muted);margin-top:2px;
+.urow .who span{display:block;font-size:var(--fs-xs);color:var(--muted);margin-top:var(--sp-2xs);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* 角色是个三档选择，用分段控件而不是下拉：三个选项全摆出来，
    谁是什么角色、能改成什么，一眼看全，不用点开才知道。 */
 .roles{display:flex;background:var(--page);border:1px solid var(--line);border-radius:var(--rd-md);
-  padding:2px;gap:2px;flex:none}
-.roles button{padding:5px 10px;border-radius:var(--rd-sm);font-size:var(--fs-xs);font-weight:600;
+  padding:var(--sp-2xs);gap:var(--sp-2xs);flex:none}
+.roles button{padding:var(--sp-sm) var(--sp-base);border-radius:var(--rd-sm);font-size:var(--fs-xs);font-weight:600;
   color:var(--muted);transition:.12s;white-space:nowrap}
 .roles button:hover:not(.on):not([disabled]){color:var(--ink2);background:var(--line-soft)}
 .roles button.on{background:var(--surface);color:var(--blue);box-shadow:var(--shadow)}
 .roles button[disabled]{cursor:not-allowed;opacity:.45}
 
 /* 部门：报销单按它找部门负责人审批。手机上挤不下就换到第二行 */
-.urow .udept{flex:none;width:150px;height:32px;padding:0 8px;font-size:var(--fs-sm)}
+.urow .udept{flex:none;width:150px;height:32px;padding:0 var(--sp-md);font-size:var(--fs-sm)}
 /* 职能：总经理 / 财务 / 出纳 / 普通成员，报销和采购审批按它找人 */
-.urow .uduty{flex:none;width:112px;height:32px;padding:0 8px;font-size:var(--fs-sm)}
+.urow .uduty{flex:none;width:112px;height:32px;padding:0 var(--sp-md);font-size:var(--fs-sm)}
 /* 部门负责人开关：按下 = 这个人是他所在部门的负责人 */
-.urow .ulead{flex:none;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:var(--rd-md);background:var(--surface);
+.urow .ulead{flex:none;height:32px;padding:0 var(--sp-base);border:1px solid var(--line);border-radius:var(--rd-md);background:var(--surface);
   color:var(--muted);font-size:var(--fs-xs);font-weight:600;white-space:nowrap;transition:.12s}
 .urow .ulead:hover:not([disabled]){color:var(--ink2);border-color:var(--blue-200)}
 .urow .ulead.on{border-color:var(--good-line);background:var(--good-bg);color:var(--good)}
@@ -68,7 +68,7 @@
 .urow:not(.sk) .who{display:block;min-width:170px}
 /* 下面 .urow .who span{display:block} 是给账号那行用的，标签要保持行内小胶囊 */
 .urow .who .utag{display:inline-block;margin-top:0}
-.uduties{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.uduties{display:flex;flex-wrap:wrap;gap:var(--sp-xs);margin-top:var(--sp-xs)}
 .uduties .utag.duty{margin-left:0;background:var(--good-bg);color:var(--good)}
 @media (max-width:560px){
   /* .modal-wide 写死 720px，这个文件又在 styles.css 之后加载，会盖掉手机端的弹窗宽度 */
@@ -84,10 +84,10 @@
   .urow .roles{order:4}
   .urow .more{order:5;min-height:44px}
 }
-.urow .more{flex:none;font-size:var(--fs-xs);color:var(--muted);padding:5px 8px;border-radius:var(--rd-sm)}
+.urow .more{flex:none;font-size:var(--fs-xs);color:var(--muted);padding:var(--sp-sm) var(--sp-md);border-radius:var(--rd-sm)}
 .urow .more:hover{background:var(--line-soft);color:var(--ink2)}
 
-.utag{font-size:var(--fs-xs);font-weight:700;padding:2px 6px;border-radius:var(--rd-sm);
-  background:var(--violet-bg);color:var(--violet);margin-left:6px;vertical-align:1px}
+.utag{font-size:var(--fs-xs);font-weight:700;padding:var(--sp-2xs) var(--sp-sm);border-radius:var(--rd-sm);
+  background:var(--violet-bg);color:var(--violet);margin-left:var(--sp-sm);vertical-align:1px}
 
-.uempty{padding:26px 0 30px;text-align:center;color:var(--muted);font-size:var(--fs-sm)}
+.uempty{padding:var(--sp-6xl) 0 var(--sp-7xl);text-align:center;color:var(--muted);font-size:var(--fs-sm)}

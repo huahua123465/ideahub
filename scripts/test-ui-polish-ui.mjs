@@ -2,7 +2,7 @@
  * 界面细节专项验收：npm run test:ui-polish:ui
  *
  * 2026-09-23 按走查结论修的几处，锁住别再退回去。桌面和手机各走一遍：
- *   0. 样式表里不写死 px 字号 / 圆角，一律用 --fs-* / --rd-* 阶梯（09-24）
+ *   0. 样式表里不写死 px 字号 / 圆角 / 间距，一律用 --fs-* / --rd-* / --sp-* 阶梯（09-24）
  *   1. 可读性：主要页面上没有小于 12px 的文字；次要文字（var(--muted)）在页面底色上对比度 ≥ 4.5:1；
  *      卡片是细边框、零阴影（09-24）
  *   2. 首页日报表单的标签、输入框不贴卡片边（左右留出和标题一样的内边距）
@@ -29,6 +29,10 @@ import { createUiHarness, settleDom } from './lib/ui-harness.mjs';
     assert.deepEqual(hard, [], `web/${f} 里写死了字号，请改用 var(--fs-*)：${hard.slice(0, 5).join('；')}`);
     const radius = (css.match(/border-radius:[^;}]*/g) || []).filter(d => /\d+(?:\.\d+)?px/.test(d));
     assert.deepEqual(radius, [], `web/${f} 里写死了圆角，请改用 var(--rd-*)：${radius.slice(0, 5).join('；')}`);
+    // 间距：2~48px 之间的 padding / margin / gap 要用 --sp-*；<2px 微调、>48px 布局尺寸、负值、calc()/env() 里的不算
+    const spacing = (css.match(/(?<![\w-])(?:padding|margin)(?:-[a-z-]+)?:[^;}]*|(?<![\w-])(?:row-|column-)?gap:[^;}]*/g) || [])
+      .filter(d => !d.includes('(') && (d.match(/(?<![\w.-])\d+(?:\.\d+)?px/g) || []).some(v => parseFloat(v) >= 2 && parseFloat(v) <= 48));
+    assert.deepEqual(spacing, [], `web/${f} 里写死了间距，请改用 var(--sp-*)：${spacing.slice(0, 5).join('；')}`);
   }
 }
 

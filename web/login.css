@@ -7,7 +7,7 @@
 
 body.authpage{
   overflow:auto;                       /* styles.css 把 body 锁成 overflow:hidden，登录页要能滚 */
-  display:grid;place-items:center;min-height:100vh;padding:32px 20px;
+  display:grid;place-items:center;min-height:100vh;padding:var(--sp-7xl) var(--sp-4xl);
   background:
     radial-gradient(1100px 520px at 50% -8%, var(--blue-100), transparent 62%),
     var(--page);
@@ -20,7 +20,7 @@ body.authpage{
 .authstory{display:none}
 .authstory h1,.authstory p,.authstory figure{margin:0}
 
-.authbrand{display:flex;align-items:center;gap:11px;margin-bottom:20px;justify-content:center}
+.authbrand{display:flex;align-items:center;gap:var(--sp-base);margin-bottom:var(--sp-4xl);justify-content:center}
 .authbrand .bulb{width:36px;height:36px;border-radius:var(--rd-base);
   background:var(--grad-primary);display:grid;place-items:center;color:#fff;
   box-shadow:0 7px 18px rgba(73,81,183,.2)}
@@ -30,41 +30,41 @@ body.authpage{
 .authbrand small{color:var(--muted);font-size:var(--fs-sm)}
 
 .authcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--rd-2xl);
-  box-shadow:var(--shadow);padding:6px 24px 24px}
+  box-shadow:var(--shadow);padding:var(--sp-sm) var(--sp-5xl) var(--sp-5xl)}
 
 /* ---------- 登录 / 注册切换 ---------- */
-.authtabs{display:flex;gap:4px;border-bottom:1px solid var(--line-soft);margin:0 -24px 20px;
-  padding:0 24px}
-.authtab{padding:14px 4px 12px;font-size:var(--fs-base);font-weight:600;color:var(--muted);
+.authtabs{display:flex;gap:var(--sp-xs);border-bottom:1px solid var(--line-soft);margin:0 -24px var(--sp-4xl);
+  padding:0 var(--sp-5xl)}
+.authtab{padding:var(--sp-xl) var(--sp-xs) var(--sp-lg);font-size:var(--fs-base);font-weight:600;color:var(--muted);
   border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s}
 .authtab:hover{color:var(--ink2)}
 .authtab.on{color:var(--blue);border-bottom-color:var(--blue)}
-.authtab + .authtab{margin-left:18px}
+.authtab + .authtab{margin-left:var(--sp-3xl)}
 
 /* 显式给 display 的元素会盖掉浏览器对 [hidden] 的默认 display:none，
    于是 hidden 就失效了。凡是这里设过 display 的，都得自己把 [hidden] 补回来。 */
 [hidden]{display:none !important}
 
-.authform{display:flex;flex-direction:column;gap:14px}
-.authhint{font-size:var(--fs-xs);color:var(--muted);margin-top:5px;line-height:1.5}
+.authform{display:flex;flex-direction:column;gap:var(--sp-xl)}
+.authhint{font-size:var(--fs-xs);color:var(--muted);margin-top:var(--sp-xs);line-height:1.5}
 
-.authsubmit{width:100%;justify-content:center;height:40px;font-size:var(--fs-base);margin-top:2px}
+.authsubmit{width:100%;justify-content:center;height:40px;font-size:var(--fs-base);margin-top:var(--sp-2xs)}
 .authsubmit[disabled]{opacity:.6;cursor:progress}
 
 /* 错误就显示在按钮正上方 —— 填错的人视线正好在那儿，不用满屏找 */
 .autherr{display:none;background:var(--crit-bg);border:1px solid #f2c9c9;border-radius:var(--rd-base);
-  padding:9px 11px;font-size:var(--fs-sm);color:#8c2020;line-height:1.55}
+  padding:var(--sp-base) var(--sp-lg);font-size:var(--fs-sm);color:#8c2020;line-height:1.55}
 .autherr.on{display:block;animation:enter .22s}
 
 .authnote{background:var(--blue-100);border:1px solid var(--blue-200);border-radius:var(--rd-base);
-  padding:11px 13px;font-size:var(--fs-sm);color:#17457c;line-height:1.6;margin-bottom:16px}
+  padding:var(--sp-lg) var(--sp-xl);font-size:var(--fs-sm);color:#17457c;line-height:1.6;margin-bottom:var(--sp-2xl)}
 .authnote b{font-weight:700}
-.authnote > b:first-child{display:block;margin-bottom:3px}
+.authnote > b:first-child{display:block;margin-bottom:var(--sp-2xs)}
 
-.authfoot{text-align:center;color:var(--muted);font-size:var(--fs-xs);margin-top:18px}
+.authfoot{text-align:center;color:var(--muted);font-size:var(--fs-xs);margin-top:var(--sp-3xl)}
 
 @media (max-width:460px){
-  .authcard{padding:6px 18px 20px}
-  .authtabs{margin:0 -18px 18px;padding:0 18px}
+  .authcard{padding:var(--sp-sm) var(--sp-3xl) var(--sp-4xl)}
+  .authtabs{margin:0 -18px var(--sp-3xl);padding:0 var(--sp-3xl)}
   .row2{grid-template-columns:1fr}
 }
