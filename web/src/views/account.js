@@ -1,6 +1,7 @@
 /**
  * 账号相关：头像菜单、退出登录、修改密码、用户管理。
  */
+import { bindThemeMenu } from '../theme.js';
 import { api } from '../api.js';
 import { $, avatarColor, initial, esc } from '../util.js';
 import { toast } from '../toast.js';
@@ -47,6 +48,7 @@ export function bindMenu() {
   $('#miPassword').addEventListener('click', () => { setOpen(false); avatar.focus(); openPassword(); });
   $('#miUsers').addEventListener('click', () => { setOpen(false); avatar.focus(); openUsers(); });
   $('#miReportPrefs').addEventListener('click', () => { setOpen(false); avatar.focus(); openReportPrefs(); });
+  bindThemeMenu();   // 外观切换就地生效，不关菜单：点完能马上看到效果、不满意再换
 
   $('#btnVisSave').addEventListener('click', saveVisibilityDefault);
   $('#btnVisAllPublic').addEventListener('click', () => applyVisibilityToAll('public'));

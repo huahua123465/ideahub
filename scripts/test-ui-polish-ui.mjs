@@ -2,7 +2,7 @@
  * 界面细节专项验收：npm run test:ui-polish:ui
  *
  * 2026-09-23 按走查结论修的几处，锁住别再退回去。桌面和手机各走一遍：
- *   0. 样式表里不写死 px 字号 / 圆角 / 间距，一律用 --fs-* / --rd-* / --sp-* 阶梯（09-24）
+ *   0. 样式表里不写死 px 字号 / 圆角 / 间距，一律用 --fs-* / --rd-* / --sp-* 阶梯；颜色都写成 light-dark(浅, 深)（09-24）
  *   1. 可读性：主要页面上没有小于 12px 的文字；次要文字（var(--muted)）在页面底色上对比度 ≥ 4.5:1；
  *      卡片是细边框、零阴影（09-24）；阅读正文 17px 且卡片标题比它大（09-24）
  *   2. 首页日报表单的标签、输入框不贴卡片边（左右留出和标题一样的内边距）
@@ -36,6 +36,17 @@ import { createUiHarness, settleDom } from './lib/ui-harness.mjs';
       .filter(d => !d.includes('(') && (d.match(/(?<![\w.-])\d+(?:\.\d+)?px/g) || []).some(v => parseFloat(v) >= 2 && parseFloat(v) <= 48));
     assert.deepEqual(spacing, [], `web/${f} 里写死了间距，请改用 var(--sp-*)：${spacing.slice(0, 5).join('；')}`);
     viewAnims.push(...(css.match(/\.view\.on\{[^}]*animation[^}]*\}/g) || []).map(r => `${f}: ${r}`));
+    // 深色模式（09-24）：每个颜色都要写成 light-dark(浅, 深)。Word / PDF 纸面、遮罩、主按钮渐变除外
+    const bare = [];
+    for (const [, sel, body] of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+      if (/docx|pdf-page/.test(sel)) continue;
+      for (const [, prop, val] of body.matchAll(/([-\w]+)\s*:([^;]*)/g)) {
+        if (prop.includes('mask') || prop === '--grad-primary') continue;
+        const rest = val.replace(/light-dark\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)/g, '');
+        if (/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(rest)) bare.push(`${sel.trim().slice(-40)}{${prop}:${val.trim().slice(0, 40)}}`);
+      }
+    }
+    assert.deepEqual(bare, [], `web/${f} 有颜色没写深色值，请写成 light-dark(浅, 深)：${bare.slice(0, 4).join('；')}`);
   }
   // 切页动画全站只能有一份（09-24 前三份叠着，最慢的那份生效）
   assert.equal(viewAnims.length, 1, `切页动画定义了 ${viewAnims.length} 份：${viewAnims.join('；')}`);

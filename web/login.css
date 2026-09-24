@@ -22,8 +22,8 @@ body.authpage{
 
 .authbrand{display:flex;align-items:center;gap:var(--sp-base);margin-bottom:var(--sp-4xl);justify-content:center}
 .authbrand .bulb{width:36px;height:36px;border-radius:var(--rd-base);
-  background:var(--grad-primary);display:grid;place-items:center;color:#fff;
-  box-shadow:0 7px 18px rgba(73,81,183,.2)}
+  background:var(--grad-primary);display:grid;place-items:center;color:light-dark(#fff,#fff);
+  box-shadow:0 7px 18px light-dark(rgba(73,81,183,.2),rgba(6,3,43,0.36))}
 .authbrand .bulb svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.6;
   stroke-linecap:round;stroke-linejoin:round}
 .authbrand b{display:block;font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.015em;line-height:1.25}
@@ -52,12 +52,12 @@ body.authpage{
 .authsubmit[disabled]{opacity:.6;cursor:progress}
 
 /* 错误就显示在按钮正上方 —— 填错的人视线正好在那儿，不用满屏找 */
-.autherr{display:none;background:var(--crit-bg);border:1px solid #f2c9c9;border-radius:var(--rd-base);
-  padding:var(--sp-base) var(--sp-lg);font-size:var(--fs-sm);color:#8c2020;line-height:1.55}
+.autherr{display:none;background:var(--crit-bg);border:1px solid light-dark(#f2c9c9,#603c3d);border-radius:var(--rd-base);
+  padding:var(--sp-base) var(--sp-lg);font-size:var(--fs-sm);color:light-dark(#8c2020,#ffaba1);line-height:1.55}
 .autherr.on{display:block;animation:enter .22s}
 
 .authnote{background:var(--blue-100);border:1px solid var(--blue-200);border-radius:var(--rd-base);
-  padding:var(--sp-lg) var(--sp-xl);font-size:var(--fs-sm);color:#17457c;line-height:1.6;margin-bottom:var(--sp-2xl)}
+  padding:var(--sp-lg) var(--sp-xl);font-size:var(--fs-sm);color:light-dark(#17457c,#a3d6ff);line-height:1.6;margin-bottom:var(--sp-2xl)}
 .authnote b{font-weight:700}
 .authnote > b:first-child{display:block;margin-bottom:var(--sp-2xs)}
 
