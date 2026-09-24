@@ -271,6 +271,8 @@ html[data-ui="soft"] #v-home .dash-bento>.dragging{z-index:5;cursor:grabbing;ani
 html[data-ui="soft"] #v-home .dash-tile-tools{position:absolute;top:var(--sp-md);right:var(--sp-md);z-index:6;display:flex;gap:var(--sp-xs)}
 html[data-ui="soft"] #v-home .dash-tile-tools button{min-width:32px;height:32px;padding:0 var(--sp-md);border-radius:var(--rd-pill);background:var(--ink);color:var(--page);font-size:var(--fs-xs);font-weight:700;box-shadow:0 4px 12px light-dark(rgba(0,0,0,.18),rgba(0,0,0,.5))}
 html[data-ui="soft"] #v-home .dash-tile-tools button:hover{background:var(--blue)}
+/* 编辑时卡片顶部让出一条放工具，不压住卡片自己的标题和按钮（工具 32px 高 + 上下留白） */
+html[data-ui="soft"] #v-home .dash-bento.editing>*{padding-top:calc(32px + var(--sp-md) * 2)}
 
 /* 专注模式：只留「今天值得推进的事」，其余卡片退到后面 */
 html[data-ui="soft"] #v-home .dash-bento>*{transition:filter .4s,opacity .4s}
@@ -286,7 +288,10 @@ html[data-ui="soft"] .dash-focusbar .trk{stroke:light-dark(rgba(255,255,255,.22)
 html[data-ui="soft"] .dash-focusbar .bar{stroke:var(--good);stroke-linecap:round;stroke-dasharray:113.1;transition:stroke-dashoffset 1s linear}
 html[data-ui="soft"] .dash-focusbar span{font-size:var(--fs-sm)}
 html[data-ui="soft"] .dash-focusbar b{min-width:4.2em;font-size:var(--fs-3xl);font-variant-numeric:tabular-nums}
-html[data-ui="soft"] .dash-focusbar button{height:36px;padding:0 var(--sp-xl);border-radius:var(--rd-pill);background:light-dark(rgba(255,255,255,.16),rgba(0,0,0,.14));color:inherit;font-size:var(--fs-sm);font-weight:700}
+html[data-ui="soft"] .dash-focusbar button{flex:none;height:36px;padding:0 var(--sp-xl);border-radius:var(--rd-pill);background:light-dark(rgba(255,255,255,.16),rgba(0,0,0,.14));color:inherit;font-size:var(--fs-sm);font-weight:700;white-space:nowrap}
+html[data-ui="soft"] .dash-focusbar>*{flex:none;white-space:nowrap}
+/* 手机上放不下「专注中」，只留进度环、倒计时和两个按钮 */
+@media (max-width:560px){html[data-ui="soft"] .dash-focusbar{gap:var(--sp-md);max-width:calc(100vw - 24px)}html[data-ui="soft"] .dash-focusbar>span:not(.ring){display:none}}
 
 /* 动效：第一次打开依次滑入（dashboard.js 加一次 .dash-enter）、跟着光标的柔光、漏斗条长出来、按下时的水波纹 */
 html[data-ui="soft"] #v-home.dash-enter .dash-bento>*{animation:dash-in .6s var(--ease-smooth-out) backwards}
