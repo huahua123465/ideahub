@@ -1,6 +1,6 @@
 /** 灵感池：卡片墙 */
 import { api } from '../api.js';
-import { avatarColor, initial, fromNow, esc, PILL, catColor, $ } from '../util.js';
+import { avatarColor, initial, fromNow, esc, PILL, $ } from '../util.js';
 import { countTo, pulse, ring, skeletonCards, reduced } from '../anim.js';
 import { toast } from '../toast.js';
 import { openDrawer } from './drawer.js';
@@ -68,12 +68,11 @@ function once(el, cls, ms) {
 
 export function cardHTML(x, index = 0) {
   const [pc, pt] = PILL[x.status] || PILL.pending;
-  const cc = catColor(x.category);
   const ranked = filters.sort === 'hot' && filters.status === 'pool';
   const serial = String(index + 1).padStart(2, '0');
   const rankClass = ranked && index < 3 ? ' idea-card-top' : '';
   return `<article class="card idea-card${rankClass}" data-id="${x.id}"
-      style="--cat:${cc};--i:${Math.min(index, 8)}" tabindex="0">
+      style="--i:${Math.min(index, 8)}" tabindex="0">
     <header class="idea-card-head">
       <span class="idea-index">${ranked ? `${ICON.flame} 热榜` : 'IDEA'} <b>${serial}</b></span>
       <div class="idea-card-meta">
@@ -298,26 +297,6 @@ export function flyAway(id) {
 }
 
 export function bind(root) {
-  // Magic Card 式鼠标聚光：只更新当前卡片的两个 CSS 变量，不创建额外 DOM。
-  // 触屏和“减少动态效果”下完全不启用，卡片仍是普通静态内容。
-  if (matchMedia('(pointer:fine)').matches && !reduced()) {
-    let raf = 0, target = null, clientX = 0, clientY = 0;
-    root.addEventListener('pointermove', e => {
-      target = e.target.closest('.idea-card');
-      if (!target) return;
-      clientX = e.clientX; clientY = e.clientY;
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        const r = target?.getBoundingClientRect();
-        if (r) {
-          target.style.setProperty('--mx', `${clientX - r.left}px`);
-          target.style.setProperty('--my', `${clientY - r.top}px`);
-        }
-        raf = 0;
-      });
-    });
-  }
-
   root.addEventListener('click', async e => {
     if (e.target.closest('[data-first]')) return document.querySelector('#btnNew').click();
     if (e.target.closest('[data-clear]')) return clearFilters();

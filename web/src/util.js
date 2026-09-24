@@ -38,18 +38,6 @@ export function esc(s) {
 export const $  = sel => document.querySelector(sel);
 export const $$ = sel => [...document.querySelectorAll(sel)];
 
-/** 分类色。后端只认这五个分类（server/src/routes/ideas.mjs 的 CATEGORIES），
-    卡片左边的色条和分类前面的小圆点都取这里。
-    用 CSS 变量传进模板，而不是写 [data-cat="产品"] 这种中文属性选择器。 */
-export const CATEGORY_COLOR = {
-  产品: '#2563eb',
-  技术: '#7c5cff',
-  运营: '#e07a3f',
-  流程: '#0f9d58',
-  其他: '#8b8a84',
-};
-export const catColor = c => CATEGORY_COLOR[c] || CATEGORY_COLOR.其他;
-
 /** 状态徽章的 class 和文案。
     图标不再用 emoji —— 它出现在每一张卡片上，是全站最显眼的地方，
     而 emoji 恰恰是各系统画风差异最大的东西（Windows / mac / 安卓三套样子）。

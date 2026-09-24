@@ -12,7 +12,8 @@
  *   8. 首页顺序（手机：问候 → 待办 → 每日总结；桌面：问候 → 每日总结 → 数字 → 待办，待办在首屏内）；
  *      每日总结默认收成一行，点「写日报」展开并聚焦（09-24 起桌面也收）；
  *      四个快捷入口一行排满、字不折行；桌面上右下角聊天按钮不压首页卡片；
- *      数字卡片的数字紧贴在标签正下方（09-24 前数字被推到卡片最右端）
+ *      数字卡片的数字紧贴在标签正下方（09-24 前数字被推到卡片最右端）；
+ *      配色与交互：「评审中」不用主色、灵感卡无分类色条、侧栏圆点同色、卡片悬停底色变化、切页动画只有一份（09-24）
  *   9. 手机顶栏：新建按钮带短标签（「＋ 报销」），AI 按钮带「AI」，顶栏按钮互不重叠、不出屏（390 / 360 宽）
  *  10. 报销 / 采购卡片上的审批步骤名不被截断（360 宽时「部门负责人」放不下，卡片上叫「负责人」）
  * 截图和 report.json 写到 scripts/.uidiff/ui-polish/。
@@ -23,6 +24,7 @@ import { createUiHarness, settleDom } from './lib/ui-harness.mjs';
 // 0. 字号、圆角只走 styles.css :root 的 --fs-* / --rd-* 阶梯（09-24 收拢），样式表里不许再写死 px
 {
   const { readFile } = await import('node:fs/promises');
+  const viewAnims = [];
   for (const f of ['styles.css', 'soft.css', 'account.css', 'login.css', 'motion.css']) {
     const css = (await readFile(new URL(`../web/${f}`, import.meta.url), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
     const hard = css.match(/font(?:-size)?:\s*\d+(?:\.\d+)?px/g) || [];
@@ -33,7 +35,10 @@ import { createUiHarness, settleDom } from './lib/ui-harness.mjs';
     const spacing = (css.match(/(?<![\w-])(?:padding|margin)(?:-[a-z-]+)?:[^;}]*|(?<![\w-])(?:row-|column-)?gap:[^;}]*/g) || [])
       .filter(d => !d.includes('(') && (d.match(/(?<![\w.-])\d+(?:\.\d+)?px/g) || []).some(v => parseFloat(v) >= 2 && parseFloat(v) <= 48));
     assert.deepEqual(spacing, [], `web/${f} 里写死了间距，请改用 var(--sp-*)：${spacing.slice(0, 5).join('；')}`);
+    viewAnims.push(...(css.match(/\.view\.on\{[^}]*animation[^}]*\}/g) || []).map(r => `${f}: ${r}`));
   }
+  // 切页动画全站只能有一份（09-24 前三份叠着，最慢的那份生效）
+  assert.equal(viewAnims.length, 1, `切页动画定义了 ${viewAnims.length} 份：${viewAnims.join('；')}`);
 }
 
 const harness = await createUiHarness({ outputDir: 'scripts/.uidiff/ui-polish' });
@@ -224,6 +229,35 @@ try {
       return { rows: tops.size, overflow: box.scrollWidth - box.clientWidth, count: box.children.length, wrapped };
     });
     assert.deepEqual([quick.count, quick.rows, quick.overflow <= 1, quick.wrapped], [4, 1, true, []], `快捷入口没排成一行 ${JSON.stringify(quick)}`);
+    // 8d. 配色与交互（09-24）：「评审中」不用主色；灵感卡不再有分类色条 / 光晕；侧栏组名圆点同色；
+    //     可点卡片悬停底色有变化（切页动画只有一份在文件开头的静态检查里）
+    if (!mobile) {
+      await go(page, 'pool');
+      const look = await page.evaluate(() => {
+        const cs = el => getComputedStyle(el);
+        const pill = document.querySelector('#poolGrid .pill-reviewing');
+        const brand = cs(document.querySelector('#btnNew')).backgroundImage + cs(document.querySelector('#btnNew')).backgroundColor;
+        const cards = [...document.querySelectorAll('#poolGrid .idea-card')];
+        const dots = [...document.querySelectorAll('.navgrp:not(.active) .navtop')].map(t => getComputedStyle(t, '::before').backgroundColor);
+        return {
+          pill: pill && cs(pill).color, pillIsBrand: pill ? brand.includes(cs(pill).color) : false,
+          strips: cards.filter(c => !['none', 'normal'].includes(getComputedStyle(c, '::before').content) || !['none', 'normal'].includes(getComputedStyle(c, '::after').content)).length,
+          dotColors: [...new Set(dots)],
+        };
+      });
+      assert.ok(look.pill && look.pill !== 'rgb(95, 75, 91)' && !look.pillIsBrand, `「评审中」标签还在用主色 ${JSON.stringify(look)}`);
+      assert.equal(look.strips, 0, '灵感卡上还有分类色条或光晕');
+      assert.equal(look.dotColors.length, 1, `侧栏组名圆点颜色不一致 ${look.dotColors}`);
+      const card = await page.$('#poolGrid .idea-card:nth-child(2)');
+      const bg = () => card.evaluate(el => getComputedStyle(el).backgroundColor + getComputedStyle(el).backgroundImage);
+      await page.mouse.move(5, 5);
+      const before = await bg();
+      await card.hover(); await new Promise(r => setTimeout(r, 50));
+      assert.notEqual(await bg(), before, '灵感卡悬停时底色没有变化，看不出能点');
+      await page.mouse.move(5, 5);
+      await go(page, 'home');
+    }
+
     // 8c. 数字卡片：数字紧贴在标签正下方（左对齐），说明不压数字、不出卡片
     const cards = await page.evaluate(() => [...document.querySelectorAll('.dash-action-grid>button')].map(btn => {
       const r = sel => btn.querySelector(sel).getBoundingClientRect();
