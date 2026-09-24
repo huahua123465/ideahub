@@ -486,6 +486,10 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
 @media (max-width:560px){
   html[data-ui="soft"] .main{padding:var(--sp-4xl) var(--sp-xl) 126px}
   html[data-ui="soft"] .page-head{padding-bottom:var(--sp-2xs)}
+  /* 页面说明在手机上先收成一行，点一下展开（09-24，main.js 里绑的点击）：大标题下两三行说明在手机上要占掉近一屏的六分之一 */
+  html[data-ui="soft"] .page-head .sub{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
+  html[data-ui="soft"] .page-head .sub{cursor:pointer}
+  html[data-ui="soft"] .page-head .sub.open{display:block;-webkit-line-clamp:unset}
   html[data-ui="soft"] .topbar .brand{color:light-dark(#39343a,#ded7df)}
   html[data-ui="soft"] .topbar .avatar{border-radius:var(--rd-base)!important}
   html[data-ui="soft"] .dash-quick button{padding:var(--sp-lg) var(--sp-sm)}

@@ -13,6 +13,7 @@
  *      每日总结默认收成一行，点「写日报」展开并聚焦（09-24 起桌面也收）；
  *      四个快捷入口一行排满、字不折行；桌面上右下角聊天按钮不压首页卡片；
  *      数字卡片的数字紧贴在标签正下方（09-24 前数字被推到卡片最右端）；
+ *      搜索框快捷键提示、手机页面说明折叠成一行、作品卡数据格每行铺满（09-24）；
  *      弹窗按钮栏始终在屏幕内、统一标签不内滚、卡片来源标签靠右、手机三格统计一行、正式库手机版式（09-24）；
  *      配色与交互：「评审中」不用主色、灵感卡无分类色条、侧栏圆点同色、卡片悬停底色变化、切页动画只有一份（09-24）
  *   9. 手机顶栏：新建按钮带短标签（「＋ 报销」），AI 按钮带「AI」，顶栏按钮互不重叠、不出屏（390 / 360 宽）
@@ -312,6 +313,33 @@ try {
       await harness.screenshot(page, `formal-${scene}`);
     }
     await go(page, 'home');
+
+    // 8f. 09-24 第三轮：搜索框快捷键提示（电脑）、手机页面说明折叠、作品卡数据格每行铺满
+    if (!mobile) {
+      const kbd = await page.evaluate(() => { const k = document.querySelector('#searchKbd'); return { text: k.textContent, shown: getComputedStyle(k).display !== 'none' && k.getBoundingClientRect().width > 0 }; });
+      assert.ok(kbd.shown && /K$/.test(kbd.text), `搜索框里应显示快捷键提示 ${JSON.stringify(kbd)}`);
+      await page.focus('#q');
+      assert.equal(await page.$eval('#searchKbd', k => getComputedStyle(k).display), 'none', '点进搜索框后快捷键提示应藏起来');
+      await page.evaluate(() => document.activeElement.blur());
+    } else {
+      await go(page, 'pool');
+      const sub = () => page.evaluate(() => { const el = document.querySelector('#v-pool .page-head .sub'); const lh = parseFloat(getComputedStyle(el).lineHeight); return { lines: Math.round(el.getBoundingClientRect().height / lh), clamped: el.scrollHeight > el.clientHeight + 1 }; });
+      const folded = await sub();
+      assert.ok(folded.lines === 1 && folded.clamped, `手机上页面说明应先收成一行 ${JSON.stringify(folded)}`);
+      await tap(page, '#v-pool .page-head .sub');
+      const opened = await sub();
+      assert.ok(opened.lines >= 2 && !opened.clamped, `点一下应展开完整说明 ${JSON.stringify(opened)}`);
+      await tap(page, '#v-pool .page-head .sub');
+      assert.equal((await sub()).lines, 1, '再点一下应收回一行');
+    }
+    await go(page, 'persona');
+    const gaps = await page.evaluate(() => [...document.querySelectorAll('#v-persona .metric-grid')].map(g => {
+      const w = g.getBoundingClientRect().width, rows = {};
+      for (const c of g.children) { const r = c.getBoundingClientRect(); rows[Math.round(r.top)] = (rows[Math.round(r.top)] || 0) + r.width; }
+      const gap = parseFloat(getComputedStyle(g).columnGap);
+      return Object.values(rows).map(sum => Math.round(w - sum)).filter(left => left > gap * 3 + 2).length;
+    }));
+    assert.ok(gaps.length && gaps.every(n => n === 0), `作品卡数据格最后一行有空位 ${gaps}`);
 
     // 8c. 数字卡片：数字紧贴在标签正下方（左对齐），说明不压数字、不出卡片
     const cards = await page.evaluate(() => [...document.querySelectorAll('.dash-action-grid>button')].map(btn => {

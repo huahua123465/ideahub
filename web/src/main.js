@@ -633,6 +633,17 @@ function bind() {
     }
   });
 
+  // 搜索框里的快捷键提示：Mac 上是 ⌘K，其余是 Ctrl K（上面的 keydown 两个都认）
+  const isMac = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform || navigator.platform || '');
+  if (isMac) $('#searchKbd').textContent = '⌘K';
+
+  // 手机上页面说明先收成一行（soft.css），点一下展开 / 收起。只有真被截断了才响应，免得点一行字没反应也没意义
+  document.addEventListener('click', e => {
+    const sub = e.target.closest('.page-head .sub');
+    if (!sub || !matchMedia('(max-width:560px)').matches) return;
+    if (sub.classList.contains('open') || sub.scrollHeight > sub.clientHeight + 1) sub.classList.toggle('open');
+  });
+
   // 视图之间的联动
   modal.events.addEventListener('created', e => pool.render({ flashId: e.detail.id }));
   drawer.events.addEventListener('vote', e =>

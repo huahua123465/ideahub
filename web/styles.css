@@ -1462,6 +1462,10 @@ tr[data-id]:focus-visible{
   overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .searchempty{padding:var(--sp-2xl) var(--sp-lg);font-size:var(--fs-base)}
 .search input{flex:1;min-width:0;width:auto}
+/* 快捷键提示：⌘K / Ctrl K / 「/」都能随时打开搜索（main.js），原来界面上没有任何地方说。点进框里或已经输了字就藏起来 */
+.search-kbd{flex:none;padding:0 var(--sp-xs);border:1px solid var(--line);border-radius:var(--rd-xs);color:var(--muted);
+  font:500 var(--fs-xs)/18px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:nowrap;pointer-events:none}
+.search:focus-within .search-kbd,.search:has(input:not(:placeholder-shown)) .search-kbd{display:none}
 .search-ai{height:26px;flex:none;display:inline-flex;align-items:center;gap:var(--sp-2xs);padding:0 var(--sp-md);
   border:1px solid light-dark(#d9d9ee,#444359);border-radius:var(--rd-md);background:light-dark(#f5f4ff,#191823);color:light-dark(#6258a8,#bdb7ff);
   font-size:var(--fs-xs);font-weight:680;cursor:pointer;transition:.2s var(--ease)}
@@ -1535,7 +1539,8 @@ tr[data-id]:focus-visible{
   .topbar .brand{width:198px;font-size:var(--fs-lg)}
   .topbar .brand small{display:inline}
   .topbar > .spacer{flex:1 1 auto}
-  .topbar .search{display:flex !important;flex:0 1 330px;width:300px;max-width:330px;height:38px;
+  /* 09-24 从 330 放宽到 380：里面多了快捷键提示（⌘K / Ctrl K），提示语「搜索灵感、需求、客户、案例…」还要能完整显示 */
+  .topbar .search{display:flex !important;flex:0 1 380px;width:340px;max-width:380px;height:38px;
     background:light-dark(rgba(246,244,239,.72),rgba(26,24,19,0.72));transition:background var(--t-out) var(--ease),
     box-shadow var(--t-out) var(--ease),border-color var(--t-out) var(--ease)}
   .topbar .search:focus-within{background:var(--surface);border-color:var(--blue-200);
@@ -1870,7 +1875,13 @@ a.libcell:hover{border-color:var(--blue-200);background:var(--blue-100)}
 .content-cover h3{font-size:var(--fs-2xl);line-height:1.5;font-weight:690;letter-spacing:-.02em;text-wrap:balance}
 .cover-account{font-size:var(--fs-xs);color:light-dark(rgba(255,255,255,.75),rgba(255,255,255,.75))}
 .content-detail{display:flex;flex-direction:column;padding:var(--sp-3xl)}
-.metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-sm);margin:var(--sp-xl) 0 var(--sp-lg)}
+.metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--sp-sm);margin:var(--sp-xl) 0 var(--sp-lg)}
+/* 每行三格，但按数量补齐最后一行（09-24）：原来固定三列，5 项数据最后空一格、4 项剩一格落单。
+   六列网格、每格占两列；最后一行剩两格就各占一半，4 项排成 2×2，最后一行只剩一格就占满 */
+.metric-grid>*{grid-column:span 2}
+.metric-grid>:nth-child(3n+1):nth-last-child(2),.metric-grid>:nth-child(3n+2):last-child{grid-column:span 3}
+.metric-grid>:nth-child(3n+1):last-child{grid-column:1/-1}
+.metric-grid:has(>:nth-child(4):last-child)>*{grid-column:span 3}
 .metric-cell{padding:var(--sp-base) var(--sp-base);border-radius:var(--rd-lg);background:light-dark(#f7f8fa,#1b1c1e)}
 .metric-cell span{display:block;color:var(--muted);font-size:var(--fs-xs)}.metric-cell b{display:block;margin-top:var(--sp-2xs);font-size:var(--fs-md);font-weight:700;font-variant-numeric:tabular-nums}
 .content-note{margin-bottom:var(--sp-lg);color:light-dark(#697181,#b5bed0);font-size:var(--fs-sm);line-height:1.55}
@@ -2007,7 +2018,7 @@ th{height:46px;font-size:var(--fs-sm);color:var(--muted);background:light-dark(#
   .record-card{border-radius:var(--rd-2xl)}.card-delete{opacity:1;transform:none;background:transparent;padding-right:0}
   .insight-card,.playbook-card,.client-card,.case-card,.report-card{padding:var(--sp-3xl)}
   .content-card{grid-template-columns:1fr}.content-cover{min-height:190px}.content-cover h3{font-size:var(--fs-3xl)}.content-detail{padding:var(--sp-2xl)}
-  .metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.metric-cell{padding:var(--sp-md)}.metric-cell b{font-size:var(--fs-base)}
+  .metric-cell{padding:var(--sp-md)}.metric-cell b{font-size:var(--fs-base)}
   .client-next{grid-template-columns:74px 1fr}.client-next i{display:none}.client-card header .stagepill{margin-left:auto}
   .case-journey{grid-template-columns:1fr}.case-card{min-height:0}.case-client span{display:none}
   .board-sk-grid{grid-template-columns:1fr}
