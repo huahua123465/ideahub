@@ -21,7 +21,7 @@ body.authpage{
 .authstory h1,.authstory p,.authstory figure{margin:0}
 
 .authbrand{display:flex;align-items:center;gap:11px;margin-bottom:20px;justify-content:center}
-.authbrand .bulb{width:36px;height:36px;border-radius:10px;
+.authbrand .bulb{width:36px;height:36px;border-radius:var(--rd-base);
   background:var(--grad-primary);display:grid;place-items:center;color:#fff;
   box-shadow:0 7px 18px rgba(73,81,183,.2)}
 .authbrand .bulb svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.6;
@@ -29,7 +29,7 @@ body.authpage{
 .authbrand b{display:block;font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.015em;line-height:1.25}
 .authbrand small{color:var(--muted);font-size:var(--fs-sm)}
 
-.authcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+.authcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--rd-2xl);
   box-shadow:var(--shadow);padding:6px 24px 24px}
 
 /* ---------- 登录 / 注册切换 ---------- */
@@ -52,11 +52,11 @@ body.authpage{
 .authsubmit[disabled]{opacity:.6;cursor:progress}
 
 /* 错误就显示在按钮正上方 —— 填错的人视线正好在那儿，不用满屏找 */
-.autherr{display:none;background:var(--crit-bg);border:1px solid #f2c9c9;border-radius:9px;
+.autherr{display:none;background:var(--crit-bg);border:1px solid #f2c9c9;border-radius:var(--rd-base);
   padding:9px 11px;font-size:var(--fs-sm);color:#8c2020;line-height:1.55}
 .autherr.on{display:block;animation:enter .22s}
 
-.authnote{background:var(--blue-100);border:1px solid var(--blue-200);border-radius:10px;
+.authnote{background:var(--blue-100);border:1px solid var(--blue-200);border-radius:var(--rd-base);
   padding:11px 13px;font-size:var(--fs-sm);color:#17457c;line-height:1.6;margin-bottom:16px}
 .authnote b{font-weight:700}
 .authnote > b:first-child{display:block;margin-bottom:3px}

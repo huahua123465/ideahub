@@ -129,7 +129,7 @@
   align-items: center;
   gap: 3px;
   padding: 3px;
-  border-radius: 48px;
+  border-radius: var(--rd-pill);
   background: var(--tabs-bar-bg);
 }
 .t-tab {
@@ -141,7 +141,7 @@
   padding: 4px 12px;
   color: var(--tabs-text-muted);
   cursor: pointer;
-  border-radius: 48px;
+  border-radius: var(--rd-pill);
   z-index: 1;
   transition: color var(--tabs-dur) var(--tabs-ease);
 }
@@ -154,7 +154,7 @@
   height: 30px;
   width: 0;
   background: var(--tabs-pill-bg);
-  border-radius: 48px;
+  border-radius: var(--rd-pill);
   transform: translateX(0);
   transition:
     transform var(--tabs-dur) var(--tabs-ease),
@@ -163,13 +163,13 @@
   z-index: 0;
   pointer-events: none;
 }
-.bd-tabs.t-tabs { padding: 4px; border-radius: 13px; }
-.bd-tabs.t-tabs .t-tabs-pill { top: 4px; height: 34px; border-radius: 10px; box-shadow: 0 1px 3px rgba(27,32,46,.09),0 5px 14px rgba(42,48,68,.055); }
-.bd-tabs.t-tabs .bd-tab.t-tab { height: 34px; padding: 0 14px; border-radius: 10px; }
+.bd-tabs.t-tabs { padding: 4px; border-radius: var(--rd-xl); }
+.bd-tabs.t-tabs .t-tabs-pill { top: 4px; height: 34px; border-radius: var(--rd-base); box-shadow: 0 1px 3px rgba(27,32,46,.09),0 5px 14px rgba(42,48,68,.055); }
+.bd-tabs.t-tabs .bd-tab.t-tab { height: 34px; padding: 0 14px; border-radius: var(--rd-base); }
 .bd-tabs.t-tabs .bd-tab.on { background: transparent; box-shadow: none; }
-.learning-tabs.t-tabs { padding: 5px; border-radius: 14px; background: rgba(255,255,255,.7); }
-.learning-tabs.t-tabs .t-tabs-pill { top: 5px; height: 36px; border-radius: 10px; background: var(--violet-bg); }
-.learning-tabs.t-tabs .t-tab { height: 36px; padding: 0 14px; border-radius: 10px; }
+.learning-tabs.t-tabs { padding: 5px; border-radius: var(--rd-xl); background: rgba(255,255,255,.7); }
+.learning-tabs.t-tabs .t-tabs-pill { top: 5px; height: 36px; border-radius: var(--rd-base); background: var(--violet-bg); }
+.learning-tabs.t-tabs .t-tab { height: 36px; padding: 0 14px; border-radius: var(--rd-base); }
 .learning-tabs.t-tabs .t-tab.on { background: transparent; box-shadow: none; color: var(--violet); }
 
 /* transitions.dev: toast open / close */
