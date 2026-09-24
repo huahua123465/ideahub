@@ -9,7 +9,29 @@
  */
 
 export const reduced = () =>
-  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+  // 「配色与外观」里把动效调成「简洁」或「关闭」（09-24），数字滚动、彩纸这类装饰动画一样不放
+  || ['lite', 'off'].includes(document.documentElement.dataset.motion);
+
+/**
+ * 换外观时的圆形扩散：新配色从点击的位置一圈圈铺满屏幕（09-24）。
+ * 用浏览器自带的 View Transitions：先拍下旧画面，fn() 换完颜色后，新画面按圆形裁剪逐渐露出来。
+ * 不支持的浏览器、或者动效关了，就直接换，不做过渡。
+ */
+export function reveal(event, fn) {
+  if (reduced() || !document.startViewTransition) { fn(); return; }
+  const x = event?.clientX ?? innerWidth / 2;
+  const y = event?.clientY ?? innerHeight / 2;
+  const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  const html = document.documentElement;
+  html.classList.add('look-vt');
+  const vt = document.startViewTransition(fn);
+  vt.ready.then(() => html.animate(
+    { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+    { duration: 620, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', pseudoElement: '::view-transition-new(root)' },
+  )).catch(() => {});
+  vt.finished.finally(() => html.classList.remove('look-vt'));
+}
 
 /**
  * 数字滚动到 to。

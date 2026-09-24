@@ -5,7 +5,7 @@
  * 而是把需要处理、需要跟进和可以继续沉淀的事情放到登录后的第一屏。
  */
 import { api } from '../api.js';
-import { skeleton } from '../anim.js';
+import { skeleton, countTo, reduced } from '../anim.js';
 import { esc, $ } from '../util.js';
 import { ICON } from '../icons.js';
 import { toast } from '../toast.js';
@@ -34,6 +34,13 @@ let myByDate = new Map();
  * 开合状态放在模块里而不是 DOM 上 —— 首页会被推送整块重绘，放 DOM 上一重绘就又收回去了。
  */
 let todayOpen = false;
+/**
+ * 首页的动效（09-24）：模块依次滑入、数字滚动、漏斗条从零长出来。
+ * 只在「这次打开页面第一次画出来」或「数字真的变了」时放 —— 后台每 30 秒重绘一次，
+ * 要是每次都从 0 滚一遍，数字会一直闪，看起来像数据在跳。
+ */
+let entered = false;
+const shownNums = new Map();
 const todayStatus = (day, report) => report ? `已写：${report.title}` : `${dayLabel(day)}还没写`;
 const todayToggleLabel = report => todayOpen ? '收起' : (report ? '修改' : '写日报');
 
@@ -268,10 +275,10 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
     </section>
 
     <section class="dash-action-grid">
-      <button data-goto="reports"><span class="dash-action-icon amber">${ICON.check}</span><small>待我审核</small><b>${pendingReports.length}</b><em>${pendingReports.length ? '需要给出反馈' : '当前已清空'}</em></button>
-      <button data-goto="pool"><span class="dash-action-icon violet">${ICON.eye}</span><small>评审中的灵感</small><b>${reviewing.length}</b><em>${reviewing.length ? '正在形成共识' : '暂无评审中项目'}</em></button>
-      <button data-goto="clients"><span class="dash-action-icon green">${ICON.users}</span><small>服务中客户</small><b>${serviceClients.length}</b><em>${incompleteClients.length} 份档案待补完整</em></button>
-      <button data-goto="demands"><span class="dash-action-icon blue">${ICON.search}</span><small>用户需求</small><b>${demandItems.length}</b><em>${demandItems.filter(x => !x.quote).length} 条缺少原话证据</em></button>
+      <button data-goto="reports"><span class="dash-action-icon amber">${ICON.check}</span><small>待我审核</small><b data-num="review">${pendingReports.length}</b><em>${pendingReports.length ? '需要给出反馈' : '当前已清空'}</em></button>
+      <button data-goto="pool"><span class="dash-action-icon violet">${ICON.eye}</span><small>评审中的灵感</small><b data-num="reviewing">${reviewing.length}</b><em>${reviewing.length ? '正在形成共识' : '暂无评审中项目'}</em></button>
+      <button data-goto="clients"><span class="dash-action-icon green">${ICON.users}</span><small>服务中客户</small><b data-num="clients">${serviceClients.length}</b><em>${incompleteClients.length} 份档案待补完整</em></button>
+      <button data-goto="demands"><span class="dash-action-icon blue">${ICON.search}</span><small>用户需求</small><b data-num="demands">${demandItems.length}</b><em>${demandItems.filter(x => !x.quote).length} 条缺少原话证据</em></button>
     </section>
 
     <div class="dash-layout">
@@ -286,7 +293,7 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
           <button data-goto="clients" data-stages="${esc((step.stages || []).join(','))}"
               data-filter-label="销售漏斗 · ${esc(step.name)}">
             <span><i>${String(index + 1).padStart(2, '0')}</i><b>${esc(step.name)}</b></span>
-            <div><i style="width:${Math.max(8, Number(step.value || 0) / maxSales * 100)}%"></i></div>
+            <div><i data-w="${Math.max(8, Number(step.value || 0) / maxSales * 100)}%" style="width:${Math.max(8, Number(step.value || 0) / maxSales * 100)}%"></i></div>
             <strong>${Number(step.value || 0)}</strong>
             <em>${index ? `${step.conversion ?? '—'}%` : '起点'}</em>
           </button>`).join('')}</div>
@@ -299,6 +306,40 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
     </section>`;
 
   bindToday(root);
+  animateDashboard(root);
+}
+
+/** 鼠标划过卡片时跟着光标走的一圈柔光（样式在 soft.css）。事件挂在 #v-home 上，它不会被重绘，绑一次就够 */
+const SPOT = '.dash-panel, .dash-quick button, .dash-action-grid>button';
+let spotBound = false;
+
+/** 画完之后放动效。第一次进来：模块依次滑入、漏斗条长出来；之后只有数字变了才滚动 */
+function animateDashboard(root) {
+  const first = !entered;
+  entered = true;
+  if (first && !reduced()) {
+    root.classList.add('dash-enter');
+    setTimeout(() => root.classList.remove('dash-enter'), 1200);
+    const bars = [...root.querySelectorAll('.dash-pipeline-list i[data-w]')];
+    bars.forEach(i => { i.style.width = '0%'; });
+    requestAnimationFrame(() => requestAnimationFrame(() => bars.forEach(i => { i.style.width = i.dataset.w; })));
+  }
+  for (const el of root.querySelectorAll('[data-num]')) {
+    const to = Number(el.textContent) || 0;
+    const from = shownNums.has(el.dataset.num) ? shownNums.get(el.dataset.num) : 0;
+    shownNums.set(el.dataset.num, to);
+    if (from !== to) countTo(el, to, { from, ms: 700 });
+  }
+  if (!spotBound) {
+    spotBound = true;
+    root.addEventListener('pointermove', e => {
+      const el = e.target.closest?.(SPOT);
+      if (!el || !root.contains(el)) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      el.style.setProperty('--my', `${e.clientY - r.top}px`);
+    }, { passive: true });
+  }
 }
 
 /** 「每日总结」的交互。每次重绘都要重新绑一次 —— 上一批节点已经被 innerHTML 换掉了。 */

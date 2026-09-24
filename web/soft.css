@@ -169,6 +169,30 @@ html[data-ui="soft"] .dash-library{border-top-color:light-dark(rgba(94,121,108,.
 html[data-ui="soft"] .dash-library>div button{border-radius:var(--rd-lg)}
 html[data-ui="soft"] .dash-library>div button:hover{background:light-dark(#f7f4f1,#1b1815)}
 
+/* 首页动效（09-24）。第一次打开时模块依次滑入（dashboard.js 加一次 .dash-enter，放完就摘掉，后台重绘不会重放）；
+   鼠标划过卡片有一圈跟着光标走的柔光；漏斗条从零长出来；快捷入口、待办、数字卡片的图标有一点跟手的反馈。
+   「配色与外观」里动效调成简洁 / 关闭、或系统开了减弱动态效果时，JS 不加 .dash-enter，motion.css 也会把过渡压到 0 */
+html[data-ui="soft"] #v-home.dash-enter>*{animation:dash-in .6s var(--ease-smooth-out) backwards}
+html[data-ui="soft"] #v-home.dash-enter>:nth-child(2){animation-delay:60ms}
+html[data-ui="soft"] #v-home.dash-enter>:nth-child(3){animation-delay:120ms}
+html[data-ui="soft"] #v-home.dash-enter>:nth-child(4){animation-delay:180ms}
+html[data-ui="soft"] #v-home.dash-enter>:nth-child(5){animation-delay:240ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-focus-item{animation:dash-in .5s var(--ease-smooth-out) backwards;animation-delay:260ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-focus-item:nth-child(2){animation-delay:320ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-focus-item:nth-child(3){animation-delay:380ms}
+html[data-ui="soft"] #v-home.dash-enter .dash-focus-item:nth-child(4){animation-delay:440ms}
+@keyframes dash-in{from{opacity:0;transform:translateY(10px)}}
+html[data-ui="soft"] #v-home :is(.dash-panel,.dash-quick button,.dash-action-grid>button):hover{
+  background-image:radial-gradient(320px circle at var(--mx,50%) var(--my,50%),light-dark(rgba(121,99,117,.075),rgba(195,166,187,.09)),transparent 70%)}
+html[data-ui="soft"] .dash-pipeline-list button>div i{transition:width .9s var(--ease-smooth-out)}
+html[data-ui="soft"] #v-home .dash-quick .ic,
+html[data-ui="soft"] #v-home .dash-action-icon{transition:transform .45s var(--spring)}
+html[data-ui="soft"] #v-home .dash-quick button:hover .ic{transform:rotate(-10deg) scale(1.12)}
+html[data-ui="soft"] #v-home .dash-action-grid>button:hover .dash-action-icon{transform:translateY(-2px) scale(1.08)}
+html[data-ui="soft"] #v-home .dash-action-grid b{font-variant-numeric:tabular-nums}
+html[data-ui="soft"] #v-home .dash-focus-item strong span{display:inline-block;transition:transform .3s var(--ease-smooth-out)}
+html[data-ui="soft"] #v-home .dash-focus-item:hover strong span{transform:translateX(4px)}
+
 /* ---------- 摘要数字与资料卡 ---------- */
 html[data-ui="soft"] .board-overview{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--sp-md);margin-bottom:var(--sp-4xl);border:0;border-radius:0;background:transparent;box-shadow:none}
 html[data-ui="soft"] .overview-cell{min-height:82px;padding:var(--sp-2xl) var(--sp-3xl);border:1px solid var(--line-soft);border-radius:var(--rd-xl);background:light-dark(rgba(255,253,250,.72),rgba(34,32,29,0.72))}

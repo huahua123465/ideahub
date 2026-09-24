@@ -2,6 +2,7 @@
  * 账号相关：头像菜单、退出登录、修改密码、用户管理。
  */
 import { bindThemeMenu } from '../theme.js';
+import { openLook } from '../look.js';
 import { api } from '../api.js';
 import { $, avatarColor, initial, esc } from '../util.js';
 import { toast } from '../toast.js';
@@ -49,6 +50,8 @@ export function bindMenu() {
   $('#miUsers').addEventListener('click', () => { setOpen(false); avatar.focus(); openUsers(); });
   $('#miReportPrefs').addEventListener('click', () => { setOpen(false); avatar.focus(); openReportPrefs(); });
   bindThemeMenu();   // 外观切换就地生效，不关菜单：点完能马上看到效果、不满意再换
+  // 配色与外观是一整块面板，先关菜单再打开；面板关掉时焦点回到头像
+  $('#miLook').addEventListener('click', () => { setOpen(false); avatar.focus(); openLook(); });
 
   $('#btnVisSave').addEventListener('click', saveVisibilityDefault);
   $('#btnVisAllPublic').addEventListener('click', () => applyVisibilityToAll('public'));

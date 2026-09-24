@@ -11,6 +11,180 @@
 <link rel="stylesheet" href="./motion.css">
 <link rel="stylesheet" href="./account.css">
 <link rel="stylesheet" href="./soft.css">
+<!-- 外观引擎（配色 / 圆角 / 密度 / 动效）。必须是紧跟在样式表后面的普通内联脚本：
+     浏览器会等上面的样式表都加载完才执行它，所以能在首次绘制之前把颜色换好，不会先闪一下默认配色。
+     面板界面在 src/look.js，它只调用这里挂在 window.IdeaHubLook 上的方法。 -->
+<script>
+(function () {
+  var KEY = 'ideahub.look';
+  var root = document.documentElement;
+
+  /* ---- sRGB ⇄ OKLCH。用 OKLCH 是因为它的「亮度」接近人眼感受：只转色相、不动亮度，文字对比度就不会变 ---- */
+  function toLin(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  function toGam(c) { return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055); }
+  function rgbToLch(r, g, b) {
+    r = toLin(r); g = toLin(g); b = toLin(b);
+    var l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    var m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    var s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    var A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+    var B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+    var H = Math.atan2(B, A) * 180 / Math.PI;
+    return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, Math.sqrt(A * A + B * B), H < 0 ? H + 360 : H];
+  }
+  function lchToRgb(L, C, H) {
+    var a = C * Math.cos(H * Math.PI / 180), b = C * Math.sin(H * Math.PI / 180);
+    var l = L + 0.3963377774 * a + 0.2158037573 * b, m = L - 0.1055613458 * a - 0.0638541728 * b, s = L - 0.0894841775 * a - 1.2914855480 * b;
+    l = l * l * l; m = m * m * m; s = s * s * s;
+    return [toGam(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      toGam(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      toGam(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)];
+  }
+  function fits(rgb) { return rgb[0] > -0.5 && rgb[0] < 255.5 && rgb[1] > -0.5 && rgb[1] < 255.5 && rgb[2] > -0.5 && rgb[2] < 255.5; }
+  /* 超出屏幕色域时只降鲜艳度，亮度和色相都不动 */
+  function lchToSafeRgb(L, C, H) {
+    var rgb = lchToRgb(L, C, H);
+    if (!fits(rgb)) {
+      var lo = 0, hi = C;
+      for (var i = 0; i < 14; i++) { var mid = (lo + hi) / 2; if (fits(lchToRgb(L, mid, H))) lo = mid; else hi = mid; }
+      rgb = lchToRgb(L, lo, H);
+    }
+    return rgb.map(function (v) { return Math.max(0, Math.min(255, Math.round(v))); });
+  }
+
+  /* ---- 配色家族。A = 主色色相，B = 点缀色相，H = 底色/中性色偏向的色相；chroma = 鲜艳度倍数，tint = 底色染色倍数 ---- */
+  var FAMILIES = [
+    { id: 'default', name: '梅子', note: '现在的配色' },
+    { id: 'mist', name: '晨雾', A: 262, B: 35, H: 255, chroma: 2.4, tint: 1.3 },
+    { id: 'sea', name: '海盐', A: 222, B: 28, H: 220, chroma: 2, tint: 1.3 },
+    { id: 'ocean', name: '深海', A: 245, B: 190, H: 240, chroma: 1.8, tint: 1.6 },
+    { id: 'forest', name: '森屿', A: 158, B: 75, H: 150, chroma: 1.7, tint: 1.4 },
+    { id: 'lemon', name: '青柠', A: 128, B: 88, H: 115, chroma: 1.9, tint: 1.2 },
+    { id: 'latte', name: '奶茶', A: 58, B: 32, H: 70, chroma: 1.5, tint: 1.8 },
+    { id: 'amber', name: '琥珀', A: 70, B: 40, H: 75, chroma: 2.2, tint: 1.3 },
+    { id: 'cherry', name: '樱桃', A: 18, B: 60, H: 15, chroma: 2.4, tint: 1.3 },
+    { id: 'sakura', name: '樱花', A: 0, B: 55, H: 5, chroma: 2, tint: 1.5 },
+    { id: 'lavender', name: '薰衣草', A: 298, B: 350, H: 300, chroma: 2, tint: 1.5 },
+    { id: 'graphite', name: '石墨', A: 260, B: 30, H: 260, chroma: 0.12, tint: 0.2 }
+  ];
+  /* 现在这套梅子色的基准色相：主色 #796375 ≈ 332°，点缀玫瑰色 #b86d70 ≈ 20° */
+  var BASE_A = 332, BASE_B = 20;
+  var DEFAULTS = { family: 'default', A: 332, B: 20, H: 332, chroma: 1, tint: 1, radius: 1, density: 'cozy', motion: 'full' };
+
+  function sdiff(h, base) { var d = h - base; return d > 180 ? d - 360 : d < -180 ? d + 360 : d; }
+  /* 一个颜色要不要换、换成什么。返回 null = 保持原样（语义色：绿、琥珀、蓝、强红） */
+  function mapLch(L, C, H, t) {
+    // 接近纯灰的才算中性色（底色、边框、正文灰）：跟着底色染色。
+    // 再往上一点的浅色（比如琥珀色、绿色的浅底）虽然也很淡，但带着语义，不能当灰色染掉
+    if (C < 0.012) return [L, Math.min(C * t.tint, 0.04), t.H];
+    if (H >= 262 || H < 8) return [L, Math.min(C * t.chroma, 0.22), (t.A + sdiff(H, BASE_A) * 0.4 + 360) % 360];   // 梅子主色一族
+    // 玫瑰点缀一族（Logo、侧栏当前项的小竖条）：面积小、本来就亮，鲜艳度最多放大 1.4 倍，不然会很扎眼
+    if (H < 40 && C <= 0.12) return [L, C * Math.min(t.chroma, 1.4), (t.B + sdiff(H, BASE_B) * 0.4 + 360) % 360];
+    return null;
+  }
+  var COLOR = /#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)/gi;
+  function mapValue(value, t) {
+    return value.replace(COLOR, function (all, hex, r, g, b, a) {
+      var rgb, alpha = a;
+      if (hex) {
+        if (hex.length <= 4) hex = hex.split('').map(function (c) { return c + c; }).join('');
+        rgb = [0, 2, 4].map(function (i) { return parseInt(hex.slice(i, i + 2), 16); });
+        if (hex.length === 8) alpha = String(Math.round(parseInt(hex.slice(6), 16) / 2.55) / 100);
+      } else rgb = [+r, +g, +b];
+      var lch = rgbToLch(rgb[0], rgb[1], rgb[2]), out = mapLch(lch[0], lch[1], lch[2], t);
+      if (!out) return all;
+      var n = lchToSafeRgb(out[0], out[1], out[2]);
+      return alpha != null ? 'rgba(' + n.join(',') + ',' + alpha + ')' : '#' + n.map(function (v) { return (v < 16 ? '0' : '') + v.toString(16); }).join('');
+    });
+  }
+
+  /* ---- 就地改写样式表里的颜色。第一次运行时记下原值，切回「梅子」就原样还回去 ---- */
+  var SKIP_PROP = /^--(crit|warn|good|ok|review|danger|err)/;
+  var SKIP_SEL = /danger|crit|error|warn|reject|lost|\.bad|success|\.good|\.ok\b|del\b|delete/i;
+  var entries = null;
+  function collect() {
+    entries = [];
+    var sheets = document.styleSheets;
+    for (var i = 0; i < sheets.length; i++) {
+      var rules; try { rules = sheets[i].cssRules; } catch (e) { continue; }
+      walk(rules);
+    }
+    function walk(list) {
+      for (var j = 0; j < list.length; j++) {
+        var rule = list[j];
+        if (rule.style) {
+          var sel = rule.selectorText || '';
+          if (!SKIP_SEL.test(sel)) {
+            for (var k = 0; k < rule.style.length; k++) {
+              var p = rule.style[k];
+              if (SKIP_PROP.test(p)) continue;
+              var v = rule.style.getPropertyValue(p);
+              COLOR.lastIndex = 0;
+              if (COLOR.test(v)) entries.push([rule.style, p, v, rule.style.getPropertyPriority(p)]);
+            }
+          }
+        }
+        if (rule.cssRules) walk(rule.cssRules);
+      }
+    }
+  }
+
+  var RD = { '2xs': 2, xs: 4, sm: 6, md: 8, base: 10, lg: 12, xl: 14, '2xl': 16, '3xl': 18, '4xl': 20, '5xl': 24 };
+  var SP = { '2xs': 2, xs: 4, sm: 6, md: 8, base: 10, lg: 12, xl: 14, '2xl': 16, '3xl': 18, '4xl': 20, '5xl': 24, '6xl': 28, '7xl': 32, '8xl': 40, '9xl': 48 };
+  var DENSITY = { compact: 0.8, cozy: 1, roomy: 1.18 };
+
+  function norm(s) {
+    var o = {}, k;
+    for (k in DEFAULTS) o[k] = DEFAULTS[k];
+    if (s) for (k in s) if (k in DEFAULTS) o[k] = s[k];
+    return o;
+  }
+  function tone(s) {
+    if (s.family === 'default') return null;
+    if (s.family === 'custom') return s;
+    for (var i = 0; i < FAMILIES.length; i++) if (FAMILIES[i].id === s.family) return FAMILIES[i];
+    return null;
+  }
+
+  var current = norm(null);
+  function apply(settings) {
+    var s = norm(settings), t = tone(s);
+    if (!entries) {
+      if (!t && s.family === current.family) { applyShape(s); current = s; return s; }   // 默认配色不用碰样式表
+      collect();
+    }
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      e[0].setProperty(e[1], t ? mapValue(e[2], t) : e[2], e[3]);
+    }
+    applyShape(s);
+    current = s;
+    return s;
+  }
+  function applyShape(s) {
+    var k;
+    for (k in RD) root.style.setProperty('--rd-' + k, s.radius === 1 ? '' : Math.round(RD[k] * s.radius) + 'px');
+    var d = DENSITY[s.density] || 1;
+    for (k in SP) root.style.setProperty('--sp-' + k, d === 1 ? '' : Math.max(1, Math.round(SP[k] * d)) + 'px');
+    if (s.motion === 'full') delete root.dataset.motion; else root.dataset.motion = s.motion;
+  }
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+  function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* 存不下只是记不住，这一次仍然生效 */ } }
+
+  window.IdeaHubLook = {
+    FAMILIES: FAMILIES, DEFAULTS: DEFAULTS,
+    get: function () { return norm(current); },
+    set: function (patch) { var next = norm(current), k; for (k in patch) next[k] = patch[k]; next = apply(next); save(next); return next; },
+    reset: function () { var s = apply(null); try { localStorage.removeItem(KEY); } catch (e) {} return s; },
+    /* 给面板上的色板用：某个家族在当前明暗下，底色 / 主色 / 点缀色长什么样 */
+    swatch: function (family, dark) {
+      var t = family && family.id !== 'default' ? family : null, base = dark ? ['#1c1a1d', '#c3a6bb', '#b36e68'] : ['#f7f5f2', '#796375', '#c47e78'];
+      return base.map(function (c) { return t ? mapValue(c, t) : c; });
+    }
+  };
+  try { var saved = load(); if (saved) apply(saved); } catch (e) { /* 外观出错不能拦住整个应用 */ }
+})();
+</script>
 <!-- 提前并行拉取全部模块。
      ES 模块是逐层发现的：浏览器先下 main.js，解析完才知道后续依赖，
      那些再解析完才知道下一层 —— 在有延迟的网络上这就是好几个来回的等待。
@@ -28,6 +202,7 @@
 <link rel="modulepreload" href="./src/lightbox.js">
 <link rel="modulepreload" href="./src/live.js">
 <link rel="modulepreload" href="./src/login.js">
+<link rel="modulepreload" href="./src/look.js">
 <link rel="modulepreload" href="./src/main.js">
 <link rel="modulepreload" href="./src/motion.js">
 <link rel="modulepreload" href="./src/pdf-reader.js">
@@ -205,6 +380,7 @@
           <button type="button" data-theme-set="dark" aria-pressed="false">深色</button>
         </div>
       </div>
+      <button class="menuitem" id="miLook">配色与外观…</button>
       <div class="menusep"></div>
       <button class="menuitem danger" id="miLogout">退出登录</button>
     </div>

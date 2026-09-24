@@ -218,3 +218,20 @@
   .navitem.on .ic,
   .navmenu button.on .ic { animation: none !important; }
 }
+
+/* 配色与外观里把动效调成「关闭」（09-24）：和系统的「减弱动态效果」同样处理 */
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 换配色的圆形扩散（anim.js reveal）：只在过渡期间关掉默认的淡入淡出，让新画面按圆形露出来 */
+html.look-vt::view-transition-old(root),
+html.look-vt::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
