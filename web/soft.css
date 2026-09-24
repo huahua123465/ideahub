@@ -363,6 +363,7 @@ html[data-ui="soft"] .smart-provider,html[data-ui="soft"] .smart-suggestion{bord
 html[data-ui="soft"] .drawer .dfoot{background:#f8f4f1}
 html[data-ui="soft"] .chatbtn{border-radius:14px;background:linear-gradient(145deg,#806678,#684f62);box-shadow:0 12px 28px rgba(69,49,62,.2)}
 html[data-ui="soft"] .chatbtn:hover{transform:translateY(-2px) scale(1.02)}
+html[data-ui="soft"] .topbar .chatbtn.in-topbar{color:#494148}
 html[data-ui="soft"] .chatpanel{background:#fffdfa}
 html[data-ui="soft"] .chatside{background:#f3efec}
 html[data-ui="soft"] .peer.on{background:#eae0e5;color:#584452}

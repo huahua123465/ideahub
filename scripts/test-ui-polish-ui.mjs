@@ -4,7 +4,7 @@
  * 2026-09-23 按走查结论修的几处，锁住别再退回去。桌面和手机各走一遍：
  *   1. 可读性：主要页面上没有小于 12px 的文字；次要文字（var(--muted)）在页面底色上对比度 ≥ 4.5:1
  *   2. 首页日报表单的标签、输入框不贴卡片边（左右留出和标题一样的内边距）
- *   4. 聊天按钮往下滑收起、往上滑回来；有未读消息时不收
+ *   4. 聊天按钮：桌面往下滑收起、往上滑回来，有未读消息时不收；手机（≤560）搬进顶栏，滑动不收
  *   5. 客户档案（桌面）左栏的「S 级」、「城市 · 年龄 · 来源」各占一行，不被挤折
  *   7. 顶栏搜索框的提示语完整显示，不被截断（桌面）
  *   8. 首页顺序（手机：问候 → 待办 → 每日总结；桌面：问候 → 每日总结 → 数字 → 待办，待办在首屏内）；
@@ -101,6 +101,27 @@ try {
       }
     };
     const tucked = () => page.evaluate(() => document.querySelector('#chatBtn').classList.contains('tucked'));
+    if (mobile) {
+      const inBar = await page.evaluate(() => !!document.querySelector('#chatBtn').closest('.topbar')
+        && getComputedStyle(document.querySelector('#chatBtn')).position !== 'fixed');
+      assert.ok(inBar, '手机上聊天按钮应该在顶栏里');
+      await scrollBy(400);
+      await new Promise(r => setTimeout(r, 150));
+      assert.equal(await tucked(), false, '顶栏里的聊天按钮不该跟着滑动收起');
+      await tap(page, '#chatBtn');
+      await page.waitForFunction(() => document.querySelector('#chatPanel').classList.contains('on'));
+      await page.evaluate(() => document.querySelector('#chatSideClose').click());
+      await page.waitForFunction(() => !document.querySelector('#chatPanel').classList.contains('on'));
+      // 未读红点在顶栏里也要看得见
+      await page.evaluate(() => { document.scrollingElement.scrollTop = 0; const d = document.querySelector('#chatDot'); d.hidden = false; d.textContent = '3'; });
+      await harness.screenshot(page, `chat-unread-${scene}`, { clip: { x: 0, y: 0, width: viewport.width, height: 64 } });
+      await page.evaluate(() => { document.querySelector('#chatDot').hidden = true; });
+      // 窗口拉宽（平板横过来）要回到右下角悬浮，缩回来再进顶栏
+      await page.setViewport({ ...viewport, width: 1000 });
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('#chatBtn')).position === 'fixed' && !document.querySelector('#chatBtn').closest('.topbar'));
+      await page.setViewport(viewport);
+      await page.waitForFunction(() => !!document.querySelector('#chatBtn').closest('.topbar'));
+    } else {
     await scrollBy(400);
     await page.waitForFunction(() => document.querySelector('#chatBtn').classList.contains('tucked'));
     assert.equal(await page.$eval('#chatBtn', el => getComputedStyle(el).pointerEvents), 'none', '收起后不该还能点到');
@@ -114,6 +135,7 @@ try {
     await new Promise(r => setTimeout(r, 150));
     assert.equal(await tucked(), false, '有未读消息时聊天按钮不该收起');
     await page.evaluate(() => { document.querySelector('#chatDot').hidden = true; });
+    }
 
     // 5. 客户档案左栏（桌面三栏布局）
     if (!mobile) {
@@ -197,6 +219,7 @@ try {
             aria: document.querySelector('#btnNew').getAttribute('aria-label') };
         });
         assert.equal(bar.overlap, false, `${scene}/${view} 顶栏按钮重叠了 ${bar.items.join(' ')}`);
+        assert.ok(bar.items.some(i => i.startsWith('chatBtn:')), `${scene}/${view} 顶栏里没有聊天按钮 ${bar.items.join(' ')}`);
         assert.ok(bar.maxRight <= bar.vw, `${scene}/${view} 顶栏超出屏幕 ${bar.items.join(' ')}`);
         assert.deepEqual([bar.short, bar.shortVisible, bar.ai], [short, true, true], JSON.stringify(bar));
         assert.match(bar.aria, new RegExp(short));

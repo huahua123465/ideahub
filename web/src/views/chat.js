@@ -871,6 +871,8 @@ function bindChatBtnTuck() {
     const down = dy > 2;
     const up = dy < -2;
     const unread = !$('#chatDot').hidden;
+    // 手机上按钮在顶栏里，不压内容，不用收
+    if (btn.classList.contains('in-topbar')) return;
     if (down && y > 80 && !unread && !openPanel) btn.classList.add('tucked');
     else if (up) show();
     clearTimeout(idle);
@@ -878,8 +880,31 @@ function bindChatBtnTuck() {
   }, { capture: true, passive: true });
 }
 
+/**
+ * 手机宽度（≤560px，和顶栏藏掉消息铃铛是同一条线）把聊天按钮搬进顶栏，放在搜索和「AI」之间。
+ * 右下角悬浮时，停着不动也会压住卡片右侧的按钮（首页的「写日报」就被它盖着）；
+ * 窄屏上卡片按钮都靠右，这个碰撞躲不开，只能让按钮离开内容区。
+ * 搬的是同一个节点：点击、未读红点、测试里的 #chatBtn 全都不用分两套。
+ */
+function bindChatBtnPlacement() {
+  const btn = $('#chatBtn');
+  const home = { parent: btn.parentNode, next: btn.nextSibling };
+  const mq = matchMedia('(max-width:560px)');
+  const place = () => {
+    const inBar = mq.matches;
+    if (inBar === btn.classList.contains('in-topbar')) return;
+    btn.classList.toggle('in-topbar', inBar);
+    btn.classList.remove('tucked');
+    if (inBar) $('#smartImportBtn').before(btn);
+    else home.parent.insertBefore(btn, home.next);
+  };
+  place();
+  mq.addEventListener('change', place);
+}
+
 export function bind() {
   $('#chatBtn').addEventListener('click', () => toggle());
+  bindChatBtnPlacement();
   bindChatBtnTuck();
   $('#chatClose').addEventListener('click', () => close());
   $('#chatSideClose').addEventListener('click', () => close());
