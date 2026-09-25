@@ -32,7 +32,7 @@ import * as samples from './views/samples.js';
 import * as expenses from './views/expenses.js';
 import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
-import { openLook } from './look.js';
+import { openLook, savedLooks, useSaved } from './look.js';
 import { startTour } from './tour.js';
 import { reduced } from './anim.js';
 import { bindPalette, togglePalette } from './views/palette.js';
@@ -730,7 +730,10 @@ function bind() {
     const looks = (window.IdeaHubLook?.FAMILIES || []).map(f => ({ group: '外观',
       label: f.id === 'default' ? '配色恢复默认（跟随系统）' : `配色换成「${f.name}」${f.mode === 'dark' ? '（深色）' : ''}`,
       keywords: `配色 主题 ${f.name} ${f.mode === 'dark' ? '深色 暗色' : '浅色'}`,
-      icon: ICON.sparkle, run: () => { window.IdeaHubLook.set({ family: f.id }); setTheme(f.mode || 'auto'); } }));
+      icon: ICON.sparkle, run: () => { window.IdeaHubLook.set({ family: f.id, mine: '' }); setTheme(f.mode || 'auto'); } }));
+    // 自己存的「我的配色」也能一下切过去
+    looks.push(...savedLooks().map(m => ({ group: '外观', label: `配色换成「${m.name}」（我的配色）`, keywords: `配色 主题 我的 自定义 ${m.name}`,
+      icon: ICON.sparkle, run: () => useSaved(m.id) })));
     return [
       create('记一条灵感', 'pool', '新建 灵感 想法'), create('新增客户', 'clients', '新建 客户'),
       { group: '新建', label: '智能导入资料', keywords: '导入 上传', icon: ICON.download, run: () => importer.open() },

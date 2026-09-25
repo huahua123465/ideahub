@@ -4,6 +4,8 @@
  * 2026-09-24：头像菜单「配色与外观…」打开面板，配色 + 自己调色相、圆角、密度、动效，按设备记住。
  * 2026-09-25：配色按原型 1:1 —— 「跟随系统」+ 浅色主题 9 套 + 深色主题 7 套；选深色主题明暗跟着切到深色；
  *   页面底色光晕、首页名字渐变这类「简写里混了 var()」的颜色也要跟着换。
+ * 2026-09-25 晚：自己调能取色（取到的主色就是页面上的主色，太浅会被限制并提示），
+ *   调好的存成「我的配色」：起名 → 切走再切回来原样 → 改了显示「有改动」可保存 → Ctrl K 能切 → 改名 → 删除要点两次。
  * 引擎在 index.html <head>（window.IdeaHubLook），就地改写样式表里的品牌色和中性色，语义色不动。桌面和手机各走一遍：
  *   默认不碰样式表 → 打开面板、焦点进面板 → 换「晨雾」：主色变、红色语义色不变、次要文字对比度仍 ≥ 4.5（浅 / 深都查）
  *   → 刷新后第一时间就是晨雾（不闪默认色）→ 拖主色滑块变成「自定义」→ 圆角 / 密度 / 动效 → 恢复默认完全还原
@@ -62,7 +64,7 @@ try {
     const page = await harness.newPage(scene, viewport);
     // 圆形扩散走 View Transitions，是异步的；减弱动态效果下直接换，断言才是确定的
     await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }, { name: 'prefers-color-scheme', value: 'light' }]);
-    await page.evaluate(() => { localStorage.removeItem('ideahub.look'); localStorage.removeItem('ideahub.theme'); });
+    await page.evaluate(() => { localStorage.removeItem('ideahub.look'); localStorage.removeItem('ideahub.theme'); localStorage.removeItem('ideahub.look.mine.v1'); });
     await reload(page);
 
     // 默认：引擎在，但没有改动样式表
@@ -127,7 +129,72 @@ try {
     await page.waitForFunction(() => window.IdeaHubLook.get().family === 'custom');
     const custom = await page.evaluate(() => ({ s: window.IdeaHubLook.get(), shown: !document.querySelector('[data-look-family="custom"]').hidden,
       pressed: document.querySelector('[data-look-family="custom"]').getAttribute('aria-pressed') }));
-    assert.deepEqual([custom.s.A, custom.s.H, custom.shown, custom.pressed], [150, 150, true, 'true'], JSON.stringify(custom));
+    // 底色色相跟着主色转同样的角度：晨雾底色 255°、主色 268° → 主色拖到 150°，底色到 137°
+    assert.deepEqual([custom.s.A, custom.s.H, custom.shown, custom.pressed], [150, 137, true, 'true'], JSON.stringify(custom));
+
+    // 取色：浅色下取一个主色，页面上的主色就是这个颜色
+    const blueNow = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--blue').trim());
+    const pick = (id, hex) => page.$eval(id, (el, hex) => { el.value = hex; el.dispatchEvent(new Event('input', { bubbles: true })); }, hex);
+    await page.click('[data-look-mode="light"]');
+    await pick('#lookPickA', '#8e2a3b');
+    await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--blue').trim().startsWith('light-dark(#8e2a3b'));
+    assert.equal(await page.$eval('#lookPickAHex', el => el.textContent), '#8E2A3B');
+    // 太浅的主色：按钮白字会看不清，深浅被限制住并提示
+    await pick('#lookPickA', '#ffd6e0');
+    await page.waitForFunction(() => !document.querySelector('#lookPickNote').hidden);
+    assert.ok(await page.evaluate(() => window.IdeaHubLook.get().AL <= 0.56), '太浅的主色应被限制');
+    await pick('#lookPickA', '#8e2a3b');
+    await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--blue').trim().startsWith('light-dark(#8e2a3b'));
+    // 点缀色也照取的来（「待我审核」色块）
+    await pick('#lookPickB', '#f2b705');
+    await page.waitForFunction(() => /^light-dark\(#e[0-9a-f]b[0-9a-f]0[0-9a-f]/.test(getComputedStyle(document.documentElement).getPropertyValue('--hot').trim()));
+
+    // 存为我的配色：起名，出现在「我的配色」里并选中，记在这台设备上
+    await page.click('[data-look-mine-new]');
+    await page.waitForSelector('#lookMineName');
+    await page.$eval('#lookMineName', el => el.select());
+    await page.type('#lookMineName', '酒红');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('[data-look-mine][aria-pressed="true"]');
+    const mine = await page.evaluate(() => ({ list: JSON.parse(localStorage.getItem('ideahub.look.mine.v1')), s: window.IdeaHubLook.get(),
+      label: document.querySelector('[data-look-mine]').textContent.trim(), focus: document.activeElement?.dataset.lookMine }));
+    assert.deepEqual([mine.list.length, mine.list[0].name, mine.list[0].mode, mine.s.mine, mine.label, mine.focus],
+      [1, '酒红', 'light', mine.list[0].id, '酒红', mine.list[0].id], JSON.stringify(mine));
+    const savedBlue = await blueNow();
+    // 切到别的配色再点回来：原样回来
+    await page.click('[data-look-family="forest"]');
+    assert.notEqual(await blueNow(), savedBlue);
+    await page.click('[data-look-mine]');
+    await page.waitForFunction(b => getComputedStyle(document.documentElement).getPropertyValue('--blue').trim() === b, {}, savedBlue);
+    // 改一下：色板上标「有改动」，可以保存修改
+    await page.$eval('#lookTint', el => { el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.waitForSelector('[data-look-mine-update]');
+    assert.match(await page.$eval('[data-look-mine]', b => b.textContent), /有改动/);
+    await harness.screenshot(page, `mine-${scene}`);
+    await page.click('[data-look-mine-update]');
+    await page.waitForSelector('[data-look-mine-rename]');
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('ideahub.look.mine.v1'))[0].tint), 1, '保存修改应写回这一套');
+    // Ctrl K 里也能切到我的配色
+    await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
+    await page.waitForSelector('#cmdkInput');
+    await page.type('#cmdkInput', '酒红');
+    assert.equal(await page.$eval('.cmdk-item span', el => el.textContent), '配色换成「酒红」（我的配色）');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.cmdk'));
+    // 改名
+    await page.click('[data-look-mine-rename]');
+    await page.waitForSelector('#lookMineName');
+    await page.type('#lookMineName', '深酒红');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelector('[data-look-mine]')?.textContent.trim() === '深酒红');
+    // 删除要点两次；删掉后颜色留着，变回「未保存」的自定义
+    await page.click('[data-look-mine-del]');
+    assert.equal(await page.$eval('[data-look-mine-del]', b => b.textContent), '确认删除？');
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('ideahub.look.mine.v1')).length), 1, '点一次不该删');
+    await page.click('[data-look-mine-del]');
+    await page.waitForFunction(() => !document.querySelector('[data-look-mine]'));
+    assert.deepEqual(await page.evaluate(() => [JSON.parse(localStorage.getItem('ideahub.look.mine.v1')).length, window.IdeaHubLook.get().family,
+      document.querySelector('[data-look-family="custom"]')?.getAttribute('aria-pressed')]), [0, 'custom', 'true']);
 
     // 圆角、密度、动效
     await page.$eval('#lookRadius', el => { el.value = '1.5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
@@ -162,7 +229,7 @@ try {
     assert.equal((await probe(page)).family, 'default', '存储内容坏了应退回默认外观');
 
     harness.recordCheck(`${scene}-look`, 'interaction', { families: 17, remembered: true, semanticKept: true });
-    await page.evaluate(() => { localStorage.removeItem('ideahub.look'); localStorage.removeItem('ideahub.theme'); });
+    await page.evaluate(() => { localStorage.removeItem('ideahub.look'); localStorage.removeItem('ideahub.theme'); localStorage.removeItem('ideahub.look.mine.v1'); });
     await page.close();
   }
   assert.deepEqual(harness.report.browserErrors, [], JSON.stringify(harness.report.browserErrors));

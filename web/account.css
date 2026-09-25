@@ -120,6 +120,27 @@
 #lookFamilies{display:flex;flex-direction:column;gap:var(--sp-md)}
 .look-grp{font-size:var(--fs-xs);font-weight:650;color:var(--ink2)}
 .look-grp:not(:first-child){margin-top:var(--sp-sm)}
+.look-fam small.look-dirty{margin-top:calc(-1 * var(--sp-xs));color:var(--blue);font-size:var(--fs-xs);font-weight:600}
+/* 09-25 晚：自己调里的取色器（主色 / 点缀色 / 底色），色块显示的就是页面上正在用的颜色 */
+.look-picks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-md)}
+.look-pick{display:flex;align-items:center;gap:var(--sp-md);min-width:0;padding:var(--sp-sm) var(--sp-md);border:1px solid var(--line);border-radius:var(--rd-lg);background:var(--surface);cursor:pointer;transition:border-color .2s,transform .3s var(--spring)}
+.look-pick:hover{border-color:var(--card-line-hover);transform:translateY(-1px)}
+.look-pick:focus-within{border-color:var(--blue)}
+.look-pick input{flex:none;width:32px;height:32px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line)}
+.look-pick input::-webkit-color-swatch-wrapper{padding:0}
+.look-pick input::-webkit-color-swatch{border:0;border-radius:50%}
+.look-pick input::-moz-color-swatch{border:0;border-radius:50%}
+.look-pick>span{display:flex;flex-direction:column;min-width:0}
+.look-pick b{font-size:var(--fs-sm);font-weight:650;color:var(--ink)}
+.look-pick small{color:var(--muted);font-size:var(--fs-xs);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+/* 我的配色：存、改名、删 */
+.look-mine-bar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-sm);padding-top:var(--sp-sm);border-top:1px solid var(--line-soft)}
+.look-mine-bar .btn{white-space:nowrap}
+.look-mine-bar .look-note{flex-basis:100%}
+.look-del{color:var(--crit)}
+.look-name{display:flex;flex-wrap:wrap;gap:var(--sp-sm);width:100%}
+.look-name input{flex:1 1 160px;min-width:0;height:38px;padding:0 var(--sp-md);border:1px solid var(--line);border-radius:var(--rd-md);background:var(--surface);color:var(--ink);font-size:var(--fs-sm)}
+.look-name input:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 3px var(--blue-100)}
 .look-fam{display:flex;flex-direction:column;align-items:center;gap:var(--sp-sm);padding:var(--sp-md) var(--sp-xs);border:2px solid transparent;border-radius:var(--rd-lg);color:var(--ink2);font-size:var(--fs-xs);transition:transform .3s var(--ease-smooth-out),border-color .2s,background-color .2s}
 .look-fam:hover{background:var(--surface-2);transform:translateY(-2px)}
 .look-fam[aria-pressed="true"]{border-color:var(--blue);background:var(--surface-2);color:var(--ink);font-weight:650}
@@ -140,5 +161,6 @@
 .look-foot{display:flex;justify-content:space-between;gap:var(--sp-md);padding:var(--sp-xl) var(--sp-4xl)}
 @media (pointer:coarse){.look-seg button{min-height:44px}.look-range input{height:20px}}
 @media (max-width:560px){.look-drawer{width:100vw}.look-families{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .look-pick{flex-direction:column;align-items:flex-start;gap:var(--sp-xs)}
   /* 手机上面板占满全屏，抽屉通用的 top:66px 会压住标题下的说明（标题栏底边约 95px），提示条挪到标题栏下面 */
   body:has(.look-drawer.on) .toasts{top:104px}}

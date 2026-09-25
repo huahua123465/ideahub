@@ -54,7 +54,9 @@
 
   /* ---- 配色（09-25 按原型 1:1）：和原型「外观」面板同一组参数，分浅色主题、深色主题两组。
      A = 主色色相，C = 主色鲜艳度（OKLCH 的 C，绝对值），B = 点缀色相（首页「待我审核」色块、名字渐变），
-     H = 底色 / 中性色偏向的色相，tint = 底色染色（0–1）。mode = 这套配色本来是浅色还是深色，选它时明暗跟着切 ---- */
+     H = 底色 / 中性色偏向的色相，tint = 底色染色（0–1）。mode = 这套配色本来是浅色还是深色，选它时明暗跟着切。
+     AL = 浅色下主色的亮度（不写就用原来的 0.527）：「素白」「墨黑」的主色是近黑的墨色；自己取色时取到的深浅也记在这里。
+     BL / BC = 点缀色（「待我审核」色块）的亮度和鲜艳度，只有自己取点缀色时才有，不写就按原型的默认 ---- */
   var FAMILIES = [
     { id: 'default', name: '跟随系统', note: 'IdeaHub 原来的配色，明暗跟随系统' },
     { id: 'mist', name: '晨雾', mode: 'light', H: 255, tint: 0.5, A: 268, C: 0.21, B: 35 },
@@ -65,20 +67,22 @@
     { id: 'lav', name: '薰衣草', mode: 'light', H: 300, tint: 0.8, A: 295, C: 0.16, B: 345 },
     { id: 'lemon', name: '柠檬苏打', mode: 'light', H: 110, tint: 0.6, A: 150, C: 0.15, B: 95 },
     { id: 'sakura', name: '樱花', mode: 'light', H: 5, tint: 0.7, A: 5, C: 0.17, B: 60 },
-    { id: 'paper', name: '素白', mode: 'light', H: 80, tint: 0.15, A: 260, C: 0.03, B: 30 },
+    { id: 'paper', name: '素白', mode: 'light', H: 80, tint: 0.15, A: 260, C: 0.03, B: 30, AL: 0.28 },
     { id: 'night', name: '夜航', mode: 'dark', H: 265, tint: 0.6, A: 268, C: 0.15, B: 35 },
     { id: 'cherry', name: '樱桃', mode: 'dark', H: 10, tint: 0.8, A: 12, C: 0.19, B: 72 },
     { id: 'deep', name: '深林', mode: 'dark', H: 160, tint: 0.7, A: 155, C: 0.14, B: 82 },
     { id: 'violet', name: '午夜紫', mode: 'dark', H: 295, tint: 0.8, A: 300, C: 0.17, B: 340 },
     { id: 'amber', name: '琥珀夜', mode: 'dark', H: 60, tint: 0.6, A: 72, C: 0.15, B: 25 },
     { id: 'ocean', name: '深海', mode: 'dark', H: 225, tint: 0.9, A: 200, C: 0.13, B: 170 },
-    { id: 'ink', name: '墨黑', mode: 'dark', H: 0, tint: 0, A: 250, C: 0.02, B: 30 }
+    { id: 'ink', name: '墨黑', mode: 'dark', H: 0, tint: 0, A: 250, C: 0.02, B: 30, AL: 0.28 }
   ];
   /* 09-25 以前的配色 id 改了名或并掉了：老设置按最接近的一套接上 */
   var RENAMED = { lavender: 'lav', graphite: 'paper' };
   /* 原来这套梅子色的基准：主色 #796375 ≈ 332°、C 0.039，点缀玫瑰色 #b86d70 ≈ 20° */
-  var BASE_A = 332, BASE_B = 20, BASE_C = 0.039;
-  var DEFAULTS = { family: 'default', A: 332, B: 20, H: 332, C: 0.04, tint: 0.15, radius: 1, density: 'cozy', motion: 'auto' };
+  var BASE_A = 332, BASE_B = 20, BASE_C = 0.039, BASE_L = 0.527;
+  /* mine = 当前这套自定义是从「我的配色」里哪一套来的（look.js 管那份清单），用来标选中、判断有没有改动 */
+  var BASE_HOT_L = 0.697, BASE_HOT_C = 0.13;
+  var DEFAULTS = { family: 'default', A: 332, B: 20, H: 332, C: 0.04, tint: 0.15, AL: null, BL: null, BC: null, mine: '', radius: 1, density: 'cozy', motion: 'auto' };
 
   function sdiff(h, base) { var d = h - base; return d > 180 ? d - 360 : d < -180 ? d + 360 : d; }
   function rot(target, h, base) { return (target + sdiff(h, base) * 0.3 + 360) % 360; }
@@ -96,11 +100,12 @@
       return [L, Math.min(c, 0.05), t.H];
     }
     // --hot 一组（首页「待我审核」的实色块和它上面的字）：跟点缀色走，鲜艳度和原型一样到 0.16 左右
+    // 自己取了点缀色的：色块本身（亮的那几个）照取的深浅和鲜艳度来，压在上面的深色字不动
+    if (hot && L > 0.5 && t.BL != null) return [Math.max(0.62, Math.min(0.92, L + t.BL - BASE_HOT_L)), Math.min(C / BASE_HOT_C * t.BC, 0.25), rot(t.B, H, BASE_B)];
     if (hot) return [L, Math.min(C * 1.25, 0.2), rot(t.B, H, BASE_B)];
     if (inA) {   // 梅子主色一族 → 主色：鲜艳度直接对齐到这套配色的 C（深色里按原型收 15%）
-      var l = L;
-      // 「素白」这类几乎不带颜色的配色：原型里浅色主色是近黑的墨色，不是发灰的中灰
-      if (t.C < 0.05 && dark !== true && L < 0.7) l = Math.max(0.2, L - 0.25);
+      // 浅色下主色整族一起挪到 AL 那个深浅（深色里主色要亮，保持原样）
+      var l = t.AL != null && dark !== true ? Math.max(0.15, Math.min(0.92, L + t.AL - BASE_L)) : L;
       return [l, Math.min(C * t.C / BASE_C * (dark ? 0.85 : 1), 0.26), rot(t.A, H, BASE_A)];
     }
     // 玫瑰点缀一族（Logo、名字渐变、侧栏小竖条）：跟点缀色走
@@ -253,7 +258,13 @@
       if (dark == null) dark = !!(family && family.mode === 'dark');
       var base = dark ? ['#1c1a1d', '#c3a6bb', '#dd806b'] : ['#f7f5f2', '#796375', '#e27d67'];
       return base.map(function (c, i) { return t ? mapColors(c, t, i === 2, dark) : c; });
-    }
+    },
+    /* 取色器用：#rrggbb ⇄ [L, C, H] */
+    toLch: function (hex) {
+      var h = hex.replace('#', '');
+      return rgbToLch(parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16));
+    },
+    BASE: { L: BASE_L, C: BASE_C }
   };
   try { var saved = load(); if (saved) apply(saved); } catch (e) { /* 外观出错不能拦住整个应用 */ }
   /* 侧栏收成窄栏的状态也在首次绘制前恢复，不会先宽后窄（开关在 main.js 的 decorateNav） */
