@@ -26,6 +26,8 @@ let commandSource = () => [];
 let shownCommands = [];
 let activeIndex = -1;
 export function setCommands(fn) { commandSource = fn; }
+/** 命令面板（palette.js）和这里用同一份命令清单 */
+export const commands = () => commandSource();
 
 function matchCommands(keyword) {
   const all = commandSource();

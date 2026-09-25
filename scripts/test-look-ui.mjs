@@ -31,7 +31,7 @@ const probe = page => page.evaluate(() => {
     crit: cs.getPropertyValue('--crit').trim(),
     rdLg: cs.getPropertyValue('--rd-lg').trim(),
     sp2xl: cs.getPropertyValue('--sp-2xl').trim(),
-    motion: document.documentElement.dataset.motion || 'full',
+    motion: document.documentElement.dataset.motion || 'auto',
     stored: localStorage.getItem('ideahub.look'),
     contrast: (a + 0.05) / (b + 0.05),
   };
@@ -117,6 +117,13 @@ try {
     await page.$eval('#lookRadius', el => { el.value = '1.5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
     await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--rd-lg').trim() === '21px');
     await page.click('[data-look-density="compact"]');
+    // 系统开着「减弱动态效果」（本测试就是这样模拟的）：跟随系统时动效收起，明确选「完整」就照样播
+    const motionNote = () => document.querySelector('#lookMotionNote').textContent;
+    assert.match(await page.evaluate(motionNote), /系统现在关着动画/, '跟随系统且系统关了动画时，应提示可以选「完整」');
+    assert.equal(await page.evaluate(async () => (await import('./src/anim.js')).reduced()), true);
+    await page.click('[data-look-motion="always"]');
+    assert.deepEqual(await page.evaluate(async () => [document.documentElement.dataset.motion, (await import('./src/anim.js')).reduced()]), ['always', false],
+      '明确选了「完整」，系统关了动画也要照样播放');
     await page.click('[data-look-motion="off"]');
     st = await probe(page);
     assert.deepEqual([st.rdLg, st.sp2xl, st.motion], ['21px', '13px', 'off'], JSON.stringify(st));
@@ -125,7 +132,7 @@ try {
     // 恢复默认：样式表原样还回去，圆角 / 间距不再被覆盖，存储清掉，明暗回到跟随系统
     await page.click('[data-look-reset]');
     st = await probe(page);
-    assert.deepEqual([st.family, st.blue, st.rdLg, st.sp2xl, st.motion, st.stored], ['default', ORIGINAL_BLUE, '14px', '16px', 'full', null], JSON.stringify(st));
+    assert.deepEqual([st.family, st.blue, st.rdLg, st.sp2xl, st.motion, st.stored], ['default', ORIGINAL_BLUE, '14px', '16px', 'auto', null], JSON.stringify(st));
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'auto');
 
     // Esc 关面板，焦点回到头像

@@ -69,21 +69,23 @@
   ];
   /* 现在这套梅子色的基准色相：主色 #796375 ≈ 332°，点缀玫瑰色 #b86d70 ≈ 20° */
   var BASE_A = 332, BASE_B = 20;
-  var DEFAULTS = { family: 'default', A: 332, B: 20, H: 332, chroma: 1, tint: 1, radius: 1, density: 'cozy', motion: 'full' };
+  var DEFAULTS = { family: 'default', A: 332, B: 20, H: 332, chroma: 1, tint: 1, radius: 1, density: 'cozy', motion: 'auto' };
 
   function sdiff(h, base) { var d = h - base; return d > 180 ? d - 360 : d < -180 ? d + 360 : d; }
   /* 一个颜色要不要换、换成什么。返回 null = 保持原样（语义色：绿、琥珀、蓝、强红） */
-  function mapLch(L, C, H, t) {
+  function mapLch(L, C, H, t, hot) {
     // 接近纯灰的才算中性色（底色、边框、正文灰）：跟着底色染色。
     // 再往上一点的浅色（比如琥珀色、绿色的浅底）虽然也很淡，但带着语义，不能当灰色染掉
     if (C < 0.012) return [L, Math.min(C * t.tint, 0.04), t.H];
+    // --hot 一组（首页「待我审核」的实色块和它上面的字）：跟点缀色走，允许更鲜艳，不受下面 0.12 的上限
+    if (hot) return [L, Math.min(C * Math.min(t.chroma, 1.3), 0.2), (t.B + sdiff(H, BASE_B) * 0.4 + 360) % 360];
     if (H >= 262 || H < 8) return [L, Math.min(C * t.chroma, 0.22), (t.A + sdiff(H, BASE_A) * 0.4 + 360) % 360];   // 梅子主色一族
     // 玫瑰点缀一族（Logo、侧栏当前项的小竖条）：面积小、本来就亮，鲜艳度最多放大 1.4 倍，不然会很扎眼
     if (H < 40 && C <= 0.12) return [L, C * Math.min(t.chroma, 1.4), (t.B + sdiff(H, BASE_B) * 0.4 + 360) % 360];
     return null;
   }
   var COLOR = /#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)/gi;
-  function mapValue(value, t) {
+  function mapValue(value, t, hot) {
     return value.replace(COLOR, function (all, hex, r, g, b, a) {
       var rgb, alpha = a;
       if (hex) {
@@ -91,7 +93,7 @@
         rgb = [0, 2, 4].map(function (i) { return parseInt(hex.slice(i, i + 2), 16); });
         if (hex.length === 8) alpha = String(Math.round(parseInt(hex.slice(6), 16) / 2.55) / 100);
       } else rgb = [+r, +g, +b];
-      var lch = rgbToLch(rgb[0], rgb[1], rgb[2]), out = mapLch(lch[0], lch[1], lch[2], t);
+      var lch = rgbToLch(rgb[0], rgb[1], rgb[2]), out = mapLch(lch[0], lch[1], lch[2], t, hot);
       if (!out) return all;
       var n = lchToSafeRgb(out[0], out[1], out[2]);
       return alpha != null ? 'rgba(' + n.join(',') + ',' + alpha + ')' : '#' + n.map(function (v) { return (v < 16 ? '0' : '') + v.toString(16); }).join('');
@@ -138,6 +140,8 @@
     var o = {}, k;
     for (k in DEFAULTS) o[k] = DEFAULTS[k];
     if (s) for (k in s) if (k in DEFAULTS) o[k] = s[k];
+    // 09-25 以前「完整」就是默认值（存的是 full），那时并不代表用户主动要求盖过系统设置，一律当「跟随系统」
+    if (o.motion === 'full') o.motion = 'auto';
     return o;
   }
   function tone(s) {
@@ -156,7 +160,7 @@
     }
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
-      e[0].setProperty(e[1], t ? mapValue(e[2], t) : e[2], e[3]);
+      e[0].setProperty(e[1], t ? mapValue(e[2], t, /^--hot/.test(e[1])) : e[2], e[3]);
     }
     applyShape(s);
     current = s;
@@ -167,7 +171,8 @@
     for (k in RD) root.style.setProperty('--rd-' + k, s.radius === 1 ? '' : Math.round(RD[k] * s.radius) + 'px');
     var d = DENSITY[s.density] || 1;
     for (k in SP) root.style.setProperty('--sp-' + k, d === 1 ? '' : Math.max(1, Math.round(SP[k] * d)) + 'px');
-    if (s.motion === 'full') delete root.dataset.motion; else root.dataset.motion = s.motion;
+    // auto = 跟随系统「减弱动态效果」；always = 用户明确要完整动效，盖过系统设置（Windows 关了「显示动画」也照样播）
+    if (s.motion === 'auto') delete root.dataset.motion; else root.dataset.motion = s.motion;
   }
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
   function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* 存不下只是记不住，这一次仍然生效 */ } }
@@ -237,6 +242,7 @@
 <link rel="modulepreload" href="./src/views/links.js">
 <link rel="modulepreload" href="./src/views/modal.js">
 <link rel="modulepreload" href="./src/views/notify.js">
+<link rel="modulepreload" href="./src/views/palette.js">
 <link rel="modulepreload" href="./src/views/pool.js">
 <link rel="modulepreload" href="./src/views/purchases.js">
 <link rel="modulepreload" href="./src/views/review.js">
@@ -340,7 +346,7 @@
     <input id="q" type="search" name="ideahub_global_search"
       aria-label="全局搜索"
       placeholder="搜索灵感、需求、客户、案例…"
-      autocomplete="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" aria-keyshortcuts="Meta+K Control+K /">
+      autocomplete="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" aria-keyshortcuts="/">
     <kbd class="search-kbd" id="searchKbd" aria-hidden="true">Ctrl K</kbd>
     <button class="search-ai" id="smartSearchBtn" type="button" title="按意思智能搜索">
       <span class="ico" data-ico="sparkle"></span><span>语义</span>
@@ -349,6 +355,9 @@
          找资料是「在当前工作里顺手查一下」，跳走再跳回来会打断手上的事。 -->
     <div class="searchpop" id="searchPop" hidden></div>
   </div>
+  <!-- 顶栏右侧的圆形图标按钮（09-25 按原型）：编辑首页布局只在桌面首页出现；配色与外观全站都在 -->
+  <button class="top-icon" id="dashEditBtn" type="button" aria-label="编辑首页布局" aria-pressed="false" title="编辑布局（E）"><span class="ico" data-ico="grid"></span></button>
+  <button class="top-icon" id="lookBtn" type="button" aria-label="配色与外观" title="配色与外观"><span class="ico" data-ico="palette"></span></button>
   <button class="smart-import-trigger" id="smartImportBtn" title="AI 整理导入" aria-label="打开 AI 整理导入">
     <span class="ico" data-ico="sparkle"></span><span class="smart-import-label">AI 整理</span><span class="smart-import-short" aria-hidden="true">AI</span>
   </button>

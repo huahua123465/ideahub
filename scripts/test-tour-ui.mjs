@@ -2,7 +2,7 @@
  * 新功能引导专项验收：npm run test:tour:ui
  *
  * 2026-09-24：第一次打开首页时一步步指出新功能（src/tour.js）。桌面和手机各走一遍：
- *   自动化浏览器默认不弹（其余 UI 测试不受打扰）→ 放开后第一次打开首页出现，桌面 7 步、手机只留看得见的
+ *   自动化浏览器默认不弹（其余 UI 测试不受打扰）→ 放开后第一次打开首页出现，桌面 8 步、手机只留看得见的
  *   → 每一步聚光框圈住目标、说明卡在屏幕内 → 走完「开始使用」关掉并记住，刷新不再出现
  *   → 头像菜单「新功能介绍」可以再看，Esc 关掉；点页面别处也会关掉
  */
@@ -50,8 +50,8 @@ try {
     await page.waitForSelector('.tour-card', { timeout: 5000 });
     let st = await stepState(page);
     const total = Number(st.step.match(/\/ (\d+)/)[1]);
-    if (mobile) assert.ok(total >= 2 && total < 7, `手机上只该留看得见的步骤：${st.step}`);
-    else assert.equal(total, 7, `桌面应有 7 步：${st.step}`);
+    if (mobile) assert.ok(total >= 2 && total < 8, `手机上只该留看得见的步骤：${st.step}`);
+    else assert.equal(total, 8, `桌面应有 8 步：${st.step}`);
     assert.deepEqual([st.title, st.spotOk, st.cardIn, st.focusInCard], ['首页改版了', true, true, true], JSON.stringify(st));
     assert.equal(await page.$eval('[data-tour="prev"]', b => b.hidden), true, '第一步没有「上一步」');
     await harness.screenshot(page, `step1-${scene}`);

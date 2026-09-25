@@ -71,7 +71,7 @@ function markup() {
       </section>
       <section class="look-sec" aria-labelledby="lookMotionH">
         <h3 id="lookMotionH">动效</h3>
-        ${seg('motion', [['full', '完整'], ['lite', '简洁'], ['off', '关闭']], s.motion, '动效')}
+        ${seg('motion', [['auto', '跟随系统'], ['always', '完整'], ['lite', '简洁'], ['off', '关闭']], s.motion, '动效')}
         <small class="look-note" id="lookMotionNote"></small>
       </section>
     </div>
@@ -82,7 +82,8 @@ function markup() {
 }
 
 const MOTION_NOTE = {
-  full: '切换、数字滚动、庆祝动画都开着',
+  auto: '按系统设置来：系统开了「减弱动态效果」（Windows 关了「显示动画」）就自动收起动画',
+  always: '切换、数字滚动、倾斜、庆祝动画都开着，系统关了动画也照样播放',
   lite: '保留必要的过渡，去掉数字滚动和庆祝动画',
   off: '所有动画都关掉，适合容易晕动的人',
 };
@@ -121,7 +122,10 @@ function paint() {
   drawer.querySelectorAll('[data-look-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lookMode === currentTheme())));
   drawer.querySelectorAll('[data-look-density]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lookDensity === s.density)));
   drawer.querySelectorAll('[data-look-motion]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lookMotion === s.motion)));
-  q('#lookMotionNote').textContent = MOTION_NOTE[s.motion];
+  const sysReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  q('#lookMotionNote').textContent = s.motion === 'auto' && sysReduced
+    ? '你的系统现在关着动画（Windows「显示动画」没开），所以页面动效是收起的。想看完整效果，选「完整」'
+    : MOTION_NOTE[s.motion];
 }
 
 /** 拖色相时从当前家族「接手」成自定义：起点就是眼前这套颜色，不会一拖就跳 */

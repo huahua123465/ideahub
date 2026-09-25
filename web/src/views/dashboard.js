@@ -460,18 +460,16 @@ function bindHome(root) {
   if (bound) return;
   bound = true;
   bindDrag(root);
-  // 按下按钮时从手指 / 光标的位置荡开一圈水波纹
-  root.addEventListener('pointerdown', e => {
-    const b = e.target.closest('.rip');
-    if (!b || reduced() || editing) return;
-    const r = b.getBoundingClientRect();
-    const size = Math.max(r.width, r.height) * 2.2;
-    const w = document.createElement('span');
-    w.className = 'dash-ripple';
-    w.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
-    b.appendChild(w);
-    setTimeout(() => w.remove(), 650);
-  });
+  // 编辑布局按钮在顶栏（09-25 按原型挪上去），不在 #v-home 里，单独挂一次
+  document.getElementById('dashEditBtn')?.addEventListener('click', () => setEditing(!editing));
+  // 问候区的两团光跟着鼠标轻轻反向移动（视差），样式在 soft.css 用 --px / --py
+  root.addEventListener('pointermove', e => {
+    const hero = e.target.closest?.('.dash-hero');
+    if (!hero || reduced()) return;
+    const r = hero.getBoundingClientRect();
+    hero.style.setProperty('--px', ((e.clientX - r.left) / r.width - 0.5).toFixed(3));
+    hero.style.setProperty('--py', ((e.clientY - r.top) / r.height - 0.5).toFixed(3));
+  }, { passive: true });
   root.addEventListener('click', e => {
     const check = e.target.closest('.dash-check');
     if (check) { toggleDone(check.closest('.dash-focus-item').dataset.fid, check); return; }
@@ -491,7 +489,6 @@ function bindHome(root) {
       return;
     }
     if (e.target.closest('#dashFocusBtn')) { setFocusing(!focusing); return; }
-    if (e.target.closest('#dashEditBtn')) { setEditing(!editing); return; }
     const lay = e.target.closest('[data-dash-layout]');
     if (lay) {
       if (lay.dataset.dashLayout === 'done') setEditing(false);
@@ -648,8 +645,6 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
         <button type="button" class="dash-tool" data-dash-layout="reset">恢复默认</button>
         <button type="button" class="dash-tool is-primary" data-dash-layout="done">完成</button>
       </div>
-      <button type="button" class="dash-tool" id="dashFocusBtn" aria-pressed="false" title="专注模式（F）">${ICON.clock}<span>专注模式</span></button>
-      <button type="button" class="dash-tool dash-edit-btn" id="dashEditBtn" aria-pressed="false" title="编辑布局（E）">${ICON.layers}<span>编辑布局</span></button>
     </div>
 
     <div class="dash-bento" id="dashBento">
@@ -724,6 +719,7 @@ function paintDashboard(root, { stats, ideas, clients, reports, demands, mine })
         <div class="dash-seg" id="dashFocusSeg" role="group" aria-label="筛选待办"><i class="dash-seg-pill" aria-hidden="true"></i>${[
           ['all', '全部'], ['review', '审核'], ['idea', '评审'], ['client', '客户'], ['done', '已推进'],
         ].map(([k, t]) => `<button type="button" data-filter="${k}" aria-pressed="${focusFilter === k}">${t}</button>`).join('')}</div>
+        <button type="button" class="dash-mini" id="dashFocusBtn" aria-pressed="false" aria-label="专注模式（F）" title="专注模式（F）">${ICON.clock}</button>
       </header>
       <div class="dash-focus-list" id="dashFocusList"></div>
     </section>

@@ -206,17 +206,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-modal,
-  .t-panel-slide,
-  .t-tabs-pill,
-  .t-tab,
-  .t-toast { transition: none !important; }
-  .modal.t-modal.is-open > header,
-  .modal.t-modal.is-open > .form,
-  .modal.t-modal.is-open > footer,
-  .view.t-view-motion.on,
-  .navitem.on .ic,
-  .navmenu button.on .ic { animation: none !important; }
+  :where(html:not([data-motion="always"])) .t-modal,
+  :where(html:not([data-motion="always"])) .t-panel-slide,
+  :where(html:not([data-motion="always"])) .t-tabs-pill,
+  :where(html:not([data-motion="always"])) .t-tab,
+  :where(html:not([data-motion="always"])) .t-toast { transition: none !important; }
+  :where(html:not([data-motion="always"])) .modal.t-modal.is-open > header,
+  :where(html:not([data-motion="always"])) .modal.t-modal.is-open > .form,
+  :where(html:not([data-motion="always"])) .modal.t-modal.is-open > footer,
+  :where(html:not([data-motion="always"])) .view.t-view-motion.on,
+  :where(html:not([data-motion="always"])) .navitem.on .ic,
+  :where(html:not([data-motion="always"])) .navmenu button.on .ic { animation: none !important; }
 }
 
 /* 配色与外观里把动效调成「关闭」（09-24）：和系统的「减弱动态效果」同样处理 */

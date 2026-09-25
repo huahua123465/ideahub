@@ -8,10 +8,14 @@
  *   有前庭功能障碍的人会被弹跳和彩纸弄到眩晕，这不是可选项。
  */
 
-export const reduced = () =>
-  (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
-  // 「配色与外观」里把动效调成「简洁」或「关闭」（09-24），数字滚动、彩纸这类装饰动画一样不放
-  || ['lite', 'off'].includes(document.documentElement.dataset.motion);
+export const reduced = () => {
+  const m = document.documentElement.dataset.motion;
+  // 「配色与外观」里明确选了「完整」（09-25）：用户自己要的，系统关了动画也照样放
+  if (m === 'always') return false;
+  // 选了「简洁」或「关闭」（09-24）：数字滚动、彩纸这类装饰动画一样不放
+  if (m === 'lite' || m === 'off') return true;
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+};
 
 /**
  * 换外观时的圆形扩散：新配色从点击的位置一圈圈铺满屏幕（09-24）。

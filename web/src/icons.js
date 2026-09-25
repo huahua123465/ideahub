@@ -29,6 +29,7 @@ export const ICON = {
   funnel:  svg('<path d="M3.5 4.5h13l-5 6v4.5l-3 1.5v-6z"/>'),
   chart:   svg('<path d="M4 16V9M8.5 16V5M13 16v-5M16.5 16H3.5"/>'),
   database: svg('<ellipse cx="10" cy="5.5" rx="5.5" ry="2"/><path d="M4.5 5.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M4.5 10c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/>'),
+  palette: svg('<path d="M10 3a7 7 0 1 0 0 14c.9 0 1.3-.6 1.3-1.3 0-1-.8-1.3-.8-2.3 0-.8.6-1.2 1.4-1.2H14a3 3 0 0 0 3-3C17 5.8 13.9 3 10 3Z"/><circle cx="6.6" cy="9" r=".9"/><circle cx="8.8" cy="6.2" r=".9"/><circle cx="12.3" cy="6.5" r=".9"/>'),
   sidebar: svg('<rect x="3" y="3.5" width="14" height="13" rx="2"/><path d="M8 3.5v13"/>'),
   chat:    svg('<path d="M3.2 15.2V5.6a2 2 0 0 1 2-2h9.6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6.6z"/>'),
   bell:    svg('<path d="M10 3a4.2 4.2 0 0 0-4.2 4.2c0 3.6-1.3 4.7-1.3 4.7h11c0 0-1.3-1.1-1.3-4.7A4.2 4.2 0 0 0 10 3Z"/><path d="M8.6 15a1.6 1.6 0 0 0 2.8 0"/>'),

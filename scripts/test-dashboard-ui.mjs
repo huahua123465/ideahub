@@ -78,14 +78,18 @@ try {
       await aligned();
       assert.equal(await page.$$eval('.navmenu button[data-go] .nav-ic svg', els => els.length), await page.$$eval('.navmenu button[data-go]', els => els.length), '每一项都该有图标');
       await page.click('#navRailBtn');
-      await page.waitForFunction(() => document.querySelector('#appNav').getBoundingClientRect().width === 76 && parseFloat(getComputedStyle(document.querySelector('.main')).marginLeft) === 76, { timeout: 4000 });
+      // 09-25 侧栏浮起来成了圆角卡片：窄栏 76px，正文让出「卡片宽 + 左右各一圈留白」
+      await page.waitForFunction(() => {
+        const nav = document.querySelector('#appNav').getBoundingClientRect();
+        return nav.width === 76 && Math.abs(parseFloat(getComputedStyle(document.querySelector('.main')).marginLeft) - (nav.left * 2 + nav.width)) < 1;
+      }, { timeout: 4000 });
       assert.equal(await page.$eval('.navmenu button.on .nav-label', el => getComputedStyle(el).display), 'none', '窄栏只显示图标');
       await aligned();
       await harness.screenshot(page, `rail-${scene}`);
       await reload(page);
       assert.equal(await page.evaluate(() => document.documentElement.classList.contains('nav-rail')), true, '刷新后窄栏要记住');
       await page.click('#navRailBtn');
-      await page.waitForFunction(() => document.querySelector('#appNav').getBoundingClientRect().width === 230, { timeout: 4000 });
+      await page.waitForFunction(() => document.querySelector('#appNav').getBoundingClientRect().width === 236, { timeout: 4000 });
       assert.equal(await page.evaluate(() => localStorage.getItem('ideahub.navRail.v1')), '0');
 
       // 布局编辑：藏起「团队资产」、把「待办」改宽、把「待我审核」挪到最前面

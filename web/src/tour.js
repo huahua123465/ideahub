@@ -14,10 +14,11 @@ const KEY = 'ideahub.tour.v1';
 const STEPS = [
   { sel: '#dashBento .dash-hero', title: '首页改版了', text: '今天要推进的事、待审核、客户和数据都在一屏里。右边的进度环会跟着你勾掉的待办走。' },
   { sel: '#dashFocusList .dash-check', title: '勾掉推进过的事', text: '点左边的圆圈，这一条就划线沉到下面。只记在这台设备的今天，不改后台的状态。' },
-  { sel: '#dashFocusBtn', title: '专注模式', key: 'F', text: '只留「今天值得推进的事」，其余的退到后面，顶部给你一个 25 分钟计时。按 Esc 退出。' },
-  { sel: '#dashEditBtn', title: '自己排首页', key: 'E', text: '拖动卡片换位置、改宽度，把用不上的先藏起来。只改你这台设备上的首页。' },
-  { sel: '.topbar .search', title: '搜索和命令', key: 'Ctrl K', text: '框里还没打字时会列出常用操作：跳到某个页面、新建、专注模式、换配色，用 ↑↓ 选、Enter 执行。' },
-  { sel: '#meAvatar', title: '配色与外观', text: '点头像 →「配色与外观…」：12 套配色，也能自己调颜色、圆角、密度和动效。' },
+  { sel: '#dashFocusBtn', title: '专注模式', key: 'F', text: '点这个时钟或按 F：只留「今天值得推进的事」，其余的退到后面，顶部给你一个 25 分钟计时。按 Esc 退出。' },
+  { sel: '#dashEditBtn', title: '自己排首页', key: 'E', text: '点顶栏这个按钮或按 E：拖动卡片换位置、改宽度，把用不上的先藏起来。只改你这台设备上的首页。' },
+  { sel: '#lookBtn', title: '配色与外观', text: '12 套配色，也能自己调颜色、圆角、密度和动效。换配色时新颜色会从你点的位置扩散开。' },
+  { sel: '.topbar .search', title: '命令面板', key: 'Ctrl K', text: '按 Ctrl K 在屏幕中间打开命令面板：跳页面、新建、专注模式、换配色，也能直接搜全站资料。↑↓ 选、Enter 执行。' },
+  { sel: '#meAvatar', title: '头像菜单', text: '明暗切换、配色与外观、再看一次这份介绍，都在头像菜单里。' },
   { sel: '#navRailBtn', title: '收起侧栏', text: '侧栏可以收成只剩图标的窄栏，给内容腾出地方。再点一次展开。' },
 ];
 

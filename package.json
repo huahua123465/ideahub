@@ -32,6 +32,7 @@
     "test:look:ui": "node scripts/test-look-ui.mjs",
     "test:dashboard:ui": "node scripts/test-dashboard-ui.mjs",
     "test:tour:ui": "node scripts/test-tour-ui.mjs",
+    "test:palette:ui": "node scripts/test-palette-ui.mjs",
     "test:samples": "node scripts/build-web.mjs && node --test scripts/test-samples-stage1.mjs scripts/test-sample-research-stage2.mjs scripts/test-sample-library-stage3.mjs scripts/test-sample-library-stage4.mjs && node scripts/test-sample-research-ui.mjs && node scripts/test-sample-library-stage3-ui.mjs && node scripts/test-sample-library-stage4-ui.mjs",
     "test:samples:stage3": "node scripts/build-web.mjs && node --test scripts/test-sample-library-stage3.mjs && node scripts/test-sample-library-stage3-ui.mjs",
     "test:samples:db": "node scripts/test-sample-library-stage3-db.mjs",

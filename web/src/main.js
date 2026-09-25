@@ -34,6 +34,8 @@ import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
 import { openLook } from './look.js';
 import { startTour } from './tour.js';
+import { reduced } from './anim.js';
+import { bindPalette, togglePalette } from './views/palette.js';
 import { setTheme } from './theme.js';
 import { bindSheetPreview } from './sheet-preview.js';
 import { bindDocPreview } from './doc-preview.js';
@@ -73,6 +75,7 @@ const CHROME = {
 
 function paintChrome(next = view) {
   const c = CHROME[next] || { group: 'IdeaHub', title: '团队业务工作台' };
+  document.documentElement.dataset.view = next;   // 顶栏「编辑布局」只在首页出现（soft.css）
   $('#pageGroup').textContent = c.group;
   $('#pageContext').textContent = c.title;
   document.title = `${c.title} · IdeaHub`;
@@ -120,6 +123,37 @@ function initNavCollapse() {
  * 侧栏（09-24 晚改成原型的样式）：每一项前面加图标、文字包进 .nav-label；当前项底下垫一块跟着滑动的实心色块；
  * 桌面上可以收成只剩图标的窄栏（记在这台设备上，<head> 里的外观引擎会在首次绘制前把 .nav-rail 加上，不会先宽后窄）。
  */
+/**
+ * 跟手的动效（09-25 按原型）：鼠标划过卡片时卡片朝光标方向微微倾斜（3D）；顶栏的圆形按钮被光标轻轻吸过去。
+ * 只对鼠标生效（触屏没有悬停）；「配色与外观」里动效调成简洁 / 关闭、或系统开了减弱动态效果时不做。
+ * 大卡片倾斜角度按宽度缩小，宽卡片不会翘得太夸张；首页排版编辑、拖动时不倾斜。
+ */
+const TILT = '.dash-hot, .dash-client, .dash-quick button, .dash-action-grid>button, .record-card, #poolGrid .idea-card, .overview-cell';
+const MAGNET = '.topbar :is(.top-icon, .notifbtn, .smart-import-trigger, #btnNew, .avatar)';
+const RIPPLE = '.btn, .rip, .top-icon, .smart-import-trigger, .dash-quick button, .dash-hot-go, .dash-focus-open, .dash-client, .cmdk-item';
+let tiltEl = null;
+let magnetEl = null;
+function pointerFx(e) {
+  const mouse = e && e.pointerType === 'mouse' && !reduced();
+  const tilt = mouse ? e.target.closest?.(TILT) : null;
+  if (tiltEl && tiltEl !== tilt) { tiltEl.style.transform = ''; tiltEl = null; }
+  if (tilt && !tilt.closest('.editing') && !tilt.classList.contains('dragging')) {
+    const r = tilt.getBoundingClientRect();
+    const k = Math.min(1, 420 / r.width);
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    tilt.style.transform = `perspective(900px) rotateX(${(-py * 7 * k).toFixed(2)}deg) rotateY(${(px * 8 * k).toFixed(2)}deg) translateY(-3px)`;
+    tiltEl = tilt;
+  }
+  const mag = mouse ? e.target.closest?.(MAGNET) : null;
+  if (magnetEl && magnetEl !== mag) { magnetEl.style.translate = ''; magnetEl = null; }
+  if (mag) {
+    const r = mag.getBoundingClientRect();
+    mag.style.translate = `${((e.clientX - r.left - r.width / 2) * 0.25).toFixed(1)}px ${((e.clientY - r.top - r.height / 2) * 0.3).toFixed(1)}px`;
+    magnetEl = mag;
+  }
+}
+
 const NAV_ICON = {
   home: 'home', functionTree: 'tree', pool: 'bulb', demands: 'comment', formal: 'archive',
   persona: 'film', matrix: 'grid', live: 'live', sales: 'trend', clients: 'users',
@@ -142,16 +176,24 @@ function decorateNav() {
     b.title = label.textContent;
   }
 
+  // 桌面侧栏卡片里只有菜单这一段滚动（09-25）：「收起侧栏」按钮排在滚动区外面，
+  // 不会盖住最底下那一项，菜单项也不会从顶上的 Logo 底下穿过去。窄屏上这层是 display:contents，布局和原来一样
+  const scroller = document.createElement('div');
+  scroller.className = 'nav-scroll';
+  const groups = nav.querySelectorAll(':scope > .navgrp');
+  groups[0].before(scroller);
+  scroller.append(...groups);
+
   const ind = document.createElement('i');
   ind.className = 'nav-ind';
   ind.setAttribute('aria-hidden', 'true');
-  nav.appendChild(ind);
+  scroller.appendChild(ind);
   let first = true;
   const place = () => {
     const on = nav.querySelector('.navmenu button.on');
     if (!desktopNav.matches || !on || !on.getClientRects().length) { ind.style.opacity = '0'; return; }
     let top = 0;
-    for (let el = on; el && el !== nav; el = el.offsetParent) top += el.offsetTop;
+    for (let el = on; el && el !== scroller; el = el.offsetParent) top += el.offsetTop;
     if (first) { ind.style.transition = 'none'; requestAnimationFrame(() => { ind.style.transition = ''; }); first = false; }
     ind.style.opacity = '1';
     ind.style.height = `${on.offsetHeight}px`;
@@ -184,8 +226,8 @@ function decorateNav() {
       const on = nav.querySelector('.navmenu button.on');
       if (!on) return;
       let top = 0;
-      for (let el = on; el && el !== nav; el = el.offsetParent) top += el.offsetTop;
-      nav.scrollTo({ top: Math.max(0, top - nav.clientHeight / 3), behavior: 'smooth' });
+      for (let el = on; el && el !== scroller; el = el.offsetParent) top += el.offsetTop;
+      scroller.scrollTo({ top: Math.max(0, top - scroller.clientHeight / 3), behavior: 'smooth' });
     }, 460);
   });
   setRail(document.documentElement.classList.contains('nav-rail'));
@@ -653,11 +695,28 @@ function bind() {
   // 列表卡片跟着光标走的一圈柔光（09-24，样式在 soft.css）：全站一个监听，只记位置，不重绘
   document.addEventListener('pointermove', e => {
     const card = e.target.closest?.('.record-card, .exp-card, .cdcard, #poolGrid .idea-card');
-    if (!card) return;
-    const r = card.getBoundingClientRect();
-    card.style.setProperty('--mx', `${e.clientX - r.left}px`);
-    card.style.setProperty('--my', `${e.clientY - r.top}px`);
+    if (card) {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      card.style.setProperty('--my', `${e.clientY - r.top}px`);
+    }
+    pointerFx(e);
   }, { passive: true });
+  document.addEventListener('mouseleave', () => pointerFx(null));
+  // 按下时从指针位置荡开一圈水波纹（全站主要按钮）
+  document.addEventListener('pointerdown', e => {
+    const b = e.target.closest?.(RIPPLE);
+    if (!b || reduced() || b.disabled) return;
+    const r = b.getBoundingClientRect();
+    const size = Math.max(r.width, r.height) * 2.2;
+    const w = document.createElement('span');
+    w.className = 'fx-ripple';
+    w.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
+    b.appendChild(w);
+    setTimeout(() => w.remove(), 650);
+  });
+  $('#lookBtn').addEventListener('click', openLook);
+  bindPalette(openAnywhere);
   search.bind();
   search.events.addEventListener('goto', e => openAnywhere(e.detail));
   // 搜索框里的命令（09-24）：没字时列出常用的，打字时名字对得上的排在搜索结果上面
@@ -737,9 +796,10 @@ function bind() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Tab' && trapModalFocus(e)) return;
     if (e.key === 'Escape') closeAll();
+    // Ctrl K / ⌘K 打开屏幕中间的命令面板（09-25 按原型）；「/」仍是直接聚焦顶栏搜索框
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
-      focusGlobalSearch();
+      togglePalette();
     }
     if (e.key === '/' && !e.metaKey && !e.ctrlKey &&
         !e.target.closest('input,textarea,select,[contenteditable]')) {
