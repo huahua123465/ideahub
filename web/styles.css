@@ -2401,6 +2401,8 @@ textarea.smart-import-text{height:178px;resize:vertical;min-height:120px;max-hei
 .dash-hero::after{content:"";position:absolute;right:250px;top:-90px;width:210px;height:210px;border-radius:50%;background:light-dark(rgba(91,97,214,.045),rgba(80,83,199,0.045))}
 .dash-hero>div:first-child{position:relative;z-index:1;min-width:260px}
 .dash-hero h1{font-size:var(--fs-7xl);line-height:1.25;letter-spacing:-.035em}
+/* 中文名不在字之间断开，放不下就整个名字换到下一行；超长英文名仍可在必要时折行，不撑出卡片 */
+.dash-name{word-break:keep-all;overflow-wrap:anywhere}
 .dash-hero p{margin-top:var(--sp-sm);color:var(--muted);font-size:var(--fs-base)}
 .dash-quick{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(100px,1fr));gap:var(--sp-md)}
 .dash-quick button{min-width:0;display:flex;align-items:center;gap:var(--sp-md);padding:var(--sp-base) var(--sp-base);border:1px solid var(--card-line);border-radius:var(--rd-xl);background:light-dark(rgba(255,255,255,.86),rgba(34,34,34,0.86));text-align:left;box-shadow:var(--card-shadow);transition:.18s var(--ease)}
