@@ -1,7 +1,9 @@
 /**
  * 配色与外观专项验收：npm run test:look:ui
  *
- * 2026-09-24：头像菜单「配色与外观…」打开面板，12 套配色 + 自己调色相、圆角、密度、动效，按设备记住。
+ * 2026-09-24：头像菜单「配色与外观…」打开面板，配色 + 自己调色相、圆角、密度、动效，按设备记住。
+ * 2026-09-25：配色按原型 1:1 —— 「跟随系统」+ 浅色主题 9 套 + 深色主题 7 套；选深色主题明暗跟着切到深色；
+ *   页面底色光晕、首页名字渐变这类「简写里混了 var()」的颜色也要跟着换。
  * 引擎在 index.html <head>（window.IdeaHubLook），就地改写样式表里的品牌色和中性色，语义色不动。桌面和手机各走一遍：
  *   默认不碰样式表 → 打开面板、焦点进面板 → 换「晨雾」：主色变、红色语义色不变、次要文字对比度仍 ≥ 4.5（浅 / 深都查）
  *   → 刷新后第一时间就是晨雾（不闪默认色）→ 拖主色滑块变成「自定义」→ 圆角 / 密度 / 动效 → 恢复默认完全还原
@@ -77,7 +79,8 @@ try {
       overflow: document.documentElement.scrollWidth - innerWidth,
       drawerFits: document.querySelector('#lookDrawer').getBoundingClientRect().width <= innerWidth + 0.5,
     }));
-    assert.deepEqual(panel, { focusInside: true, families: 12, pressed: 'default', menuClosed: true, overflow: 0, drawerFits: true }, `${scene} 面板状态 ${JSON.stringify(panel)}`);
+    assert.deepEqual(panel, { focusInside: true, families: 17, pressed: 'default', menuClosed: true, overflow: 0, drawerFits: true }, `${scene} 面板状态 ${JSON.stringify(panel)}`);
+    const paint0 = await page.evaluate(() => [getComputedStyle(document.body).backgroundImage, getComputedStyle(document.querySelector('#v-home .dash-name')).backgroundImage]);
 
     // 换成「晨雾」：主色变了，红色语义色不动，次要文字对比度仍达标
     await page.click('[data-look-family="mist"]');
@@ -88,7 +91,20 @@ try {
     assert.ok(st.contrast >= 4.5, `${scene} 晨雾浅色下次要文字对比度 ${st.contrast.toFixed(2)} < 4.5`);
     assert.equal(JSON.parse(st.stored).family, 'mist', '应记在这台设备上');
     assert.equal(await page.$eval('[data-look-family="mist"]', b => b.getAttribute('aria-pressed')), 'true');
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light', '选浅色主题，明暗切到浅色');
+    // 简写里混了 var() 的颜色（页面底色光晕、首页名字渐变中段）也换了
+    const paint1 = await page.evaluate(() => [getComputedStyle(document.body).backgroundImage, getComputedStyle(document.querySelector('#v-home .dash-name')).backgroundImage]);
+    assert.notEqual(paint1[0], paint0[0], '页面底色光晕应跟着配色变');
+    assert.notEqual(paint1[1], paint0[1], '首页名字渐变应跟着配色变');
     await harness.screenshot(page, `mist-${scene}`);
+
+    // 深色主题：选「深海」，明暗跟着切到深色，对比度照样达标
+    await page.click('[data-look-family="ocean"]');
+    st = await probe(page);
+    assert.deepEqual([st.family, await page.evaluate(() => document.documentElement.dataset.theme)], ['ocean', 'dark'], '选深色主题，明暗切到深色');
+    assert.ok(st.contrast >= 4.5, `${scene} 深海次要文字对比度 ${st.contrast.toFixed(2)} < 4.5`);
+    await harness.screenshot(page, `ocean-${scene}`);
+    await page.click('[data-look-family="mist"]');
 
     // 面板里切深色：头像菜单里的三选一同步，对比度照样达标
     await page.click('[data-look-mode="dark"]');
@@ -145,7 +161,7 @@ try {
     await reload(page);
     assert.equal((await probe(page)).family, 'default', '存储内容坏了应退回默认外观');
 
-    harness.recordCheck(`${scene}-look`, 'interaction', { families: 12, remembered: true, semanticKept: true });
+    harness.recordCheck(`${scene}-look`, 'interaction', { families: 17, remembered: true, semanticKept: true });
     await page.evaluate(() => { localStorage.removeItem('ideahub.look'); localStorage.removeItem('ideahub.theme'); });
     await page.close();
   }

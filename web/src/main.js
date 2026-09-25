@@ -727,8 +727,10 @@ function bind() {
     });
     const create = (label, target, keywords) => ({ group: '新建', label, keywords, icon: ICON.plus, featured: true,
       run: () => { go(target); setTimeout(createForCurrentView, 0); } });
-    const looks = (window.IdeaHubLook?.FAMILIES || []).map(f => ({ group: '外观', label: `配色换成「${f.name}」`, keywords: `配色 主题 ${f.name}`,
-      icon: ICON.sparkle, run: () => window.IdeaHubLook.set({ family: f.id }) }));
+    const looks = (window.IdeaHubLook?.FAMILIES || []).map(f => ({ group: '外观',
+      label: f.id === 'default' ? '配色恢复默认（跟随系统）' : `配色换成「${f.name}」${f.mode === 'dark' ? '（深色）' : ''}`,
+      keywords: `配色 主题 ${f.name} ${f.mode === 'dark' ? '深色 暗色' : '浅色'}`,
+      icon: ICON.sparkle, run: () => { window.IdeaHubLook.set({ family: f.id }); setTheme(f.mode || 'auto'); } }));
     return [
       create('记一条灵感', 'pool', '新建 灵感 想法'), create('新增客户', 'clients', '新建 客户'),
       { group: '新建', label: '智能导入资料', keywords: '导入 上传', icon: ICON.download, run: () => importer.open() },

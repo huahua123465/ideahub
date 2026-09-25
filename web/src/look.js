@@ -2,7 +2,8 @@
  * 「配色与外观」面板（2026-09-24）。
  *
  * 真正换颜色的引擎在 index.html <head> 里（window.IdeaHubLook）：它必须在首次绘制前跑，
- * 所以不能放进模块。这里只负责面板：选配色家族、自己调色相、圆角、密度、动效。
+ * 所以不能放进模块。这里只负责面板：选配色、自己调色相、圆角、密度、动效。
+ * 09-25 配色按原型 1:1：分「浅色主题」「深色主题」两组，选哪套明暗就跟着切到那一边。
  * 设置记在这台设备的 localStorage（ideahub.look），和「跟随系统 / 浅色 / 深色」一样按设备走。
  *
  * 面板不遮挡页面（没有遮罩）：改外观就是要边改边看后面的页面。
@@ -55,14 +56,14 @@ function markup() {
       </section>
       <section class="look-sec" aria-labelledby="lookFamH">
         <h3 id="lookFamH">配色</h3>
-        <div class="look-families" id="lookFamilies"></div>
+        <div id="lookFamilies"></div>
       </section>
       <section class="look-sec" aria-labelledby="lookTuneH">
         <h3 id="lookTuneH">自己调</h3>
         ${range('lookA', '主色', 0, 359, 1, s.A)}
         ${range('lookB', '点缀色', 0, 359, 1, s.B)}
-        ${range('lookChroma', '鲜艳度', 0.1, 3, 0.05, s.chroma)}
-        ${range('lookTint', '底色染色', 0, 3, 0.05, s.tint, '越往右，页面底色和边框越带主色的色调')}
+        ${range('lookChroma', '鲜艳度', 0, 0.25, 0.005, s.C)}
+        ${range('lookTint', '底色染色', 0, 1, 0.05, s.tint, '越往右，页面底色和边框越带主色的色调')}
       </section>
       <section class="look-sec" aria-labelledby="lookShapeH">
         <h3 id="lookShapeH">形状与密度</h3>
@@ -95,21 +96,27 @@ function paint() {
   const dark = isDark();
   const fams = engine().FAMILIES;
   const active = s.family;
-  q('#lookFamilies').innerHTML = [...fams, { id: 'custom', name: '自定义' }].map(f => {
-    const [bg, a, b] = f.id === 'custom'
-      ? engine().swatch({ A: s.A, B: s.B, H: s.H, chroma: s.chroma, tint: s.tint }, dark)
-      : engine().swatch(f, dark);
-    return `<button type="button" class="look-fam" data-look-family="${f.id}" aria-pressed="${active === f.id}"
-        ${f.id === 'custom' && active !== 'custom' ? 'hidden' : ''}>
-      <span class="look-dot" style="background:${bg}"><i style="background:${a}"></i><i style="background:${b}"></i></span>
-      <span>${esc(f.name)}</span></button>`;
-  }).join('');
+  const card = (f, dot) => `<button type="button" class="look-fam" data-look-family="${f.id}" aria-pressed="${active === f.id}"
+      ${f.id === 'custom' && active !== 'custom' ? 'hidden' : ''}>${dot}<span>${esc(f.name)}</span></button>`;
+  const dot = colors => {
+    const [bg, a, b] = colors;
+    return `<span class="look-dot" style="background:${bg}"><i style="background:${a}"></i><i style="background:${b}"></i></span>`;
+  };
+  // 「跟随系统」的色板和原型一样：一半浅底一半深底
+  const [light] = engine().swatch(fams[0], false);
+  const [darkBg] = engine().swatch(fams[0], true);
+  const auto = card(fams[0], `<span class="look-dot" style="background:linear-gradient(135deg,${light} 50%,${darkBg} 50%)"></span>`);
+  const group = mode => fams.filter(f => f.mode === mode).map(f => card(f, dot(engine().swatch(f)))).join('');
+  const custom = card({ id: 'custom', name: '自定义' }, dot(engine().swatch({ A: s.A, B: s.B, H: s.H, C: s.C, tint: s.tint }, dark)));
+  q('#lookFamilies').innerHTML = `
+    <h4 class="look-grp">浅色主题</h4><div class="look-families">${auto}${group('light')}</div>
+    <h4 class="look-grp">深色主题</h4><div class="look-families">${group('dark')}${custom}</div>`;
   // 滑块显示的是眼前这套配色的真实数值：选了「晨雾」，主色滑块就停在晨雾的蓝上
   const fam = fams.find(f => f.id === active);
-  const v = active === 'custom' ? s : fam?.A != null ? fam : { A: 332, B: 20, chroma: 1, tint: 1 };
+  const v = active === 'custom' ? s : fam?.A != null ? fam : engine().DEFAULTS;
   const out = {
     lookA: [v.A, `${Math.round(v.A)}°`], lookB: [v.B, `${Math.round(v.B)}°`],
-    lookChroma: [v.chroma, `${Math.round(v.chroma * 100)}%`], lookTint: [v.tint, `${Math.round(v.tint * 100)}%`],
+    lookChroma: [v.C, `${Math.round(v.C / 0.25 * 100)}%`], lookTint: [v.tint, `${Math.round(v.tint * 100)}%`],
     lookRadius: [s.radius, s.radius < 0.85 ? '偏方' : s.radius > 1.15 ? '偏圆' : '标准'],
   };
   for (const [id, [value, text]] of Object.entries(out)) {
@@ -132,9 +139,9 @@ function paint() {
 function tune(patch) {
   const s = engine().get();
   const fam = engine().FAMILIES.find(f => f.id === s.family);
-  const base = s.family === 'custom' ? s : fam?.A != null ? fam : { A: 332, B: 20, H: 332, chroma: 1, tint: 1 };
-  const next = { family: 'custom', A: base.A, B: base.B, H: base.H, chroma: base.chroma, tint: base.tint, ...patch };
-  if ('A' in patch) next.H = patch.A;   // 底色跟着主色走，拖一个滑块整页一起变
+  const base = s.family === 'custom' ? s : fam?.A != null ? fam : engine().DEFAULTS;
+  const next = { family: 'custom', A: base.A, B: base.B, H: base.H, C: base.C, tint: base.tint, ...patch };
+  if ('A' in patch || 'tint' in patch) next.H = next.A;   // 底色跟着主色走，拖一个滑块整页一起变
   cancelAnimationFrame(frame);
   frame = requestAnimationFrame(() => { engine().set(next); paint(); });
 }
@@ -159,7 +166,9 @@ function build() {
     const fam = e.target.closest('[data-look-family]');
     if (fam) {
       const id = fam.dataset.lookFamily;
-      if (id !== 'custom') reveal(e, () => { engine().set({ family: id }); paint(); });
+      // 选哪套，明暗就切到那套本来的一边（「跟随系统」回到跟随系统），和原型一样
+      const f = engine().FAMILIES.find(x => x.id === id);
+      if (f) reveal(e, () => { engine().set({ family: id }); setTheme(f.mode || 'auto'); paint(); });
       return;
     }
     const mode = e.target.closest('[data-look-mode]');
@@ -173,7 +182,7 @@ function build() {
     const v = Number(e.target.value);
     if (e.target.id === 'lookA') tune({ A: v });
     else if (e.target.id === 'lookB') tune({ B: v });
-    else if (e.target.id === 'lookChroma') tune({ chroma: v });
+    else if (e.target.id === 'lookChroma') tune({ C: v });
     else if (e.target.id === 'lookTint') tune({ tint: v });
     else if (e.target.id === 'lookRadius') { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { engine().set({ radius: v }); paint(); }); }
   });

@@ -756,7 +756,9 @@ html[data-ui="soft"] .btn-primary:active{transform:scale(.96)}
 html[data-ui="soft"] :is(.dash-action-grid b,.dash-ring b,.dash-hot-num,.dash-library button b,.dash-clock,.dash-pipeline-list strong,.overview-cell b,.dash-focusbar b){font-family:var(--num-font);font-feature-settings:"tnum"}
 /* 问候里的名字：品牌主色到点缀色的渐变，慢慢流动 */
 /* 文字本身保留主色（读屏、对比度检查、不支持 background-clip 的浏览器都按它来），渐变只盖在显示层上 */
-html[data-ui="soft"] #v-home .dash-name{font-style:normal;color:var(--blue);background:linear-gradient(100deg,var(--blue),light-dark(#c47e78,#e0a39b),var(--blue));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:dash-shine 7s linear infinite}
+/* 渐变中间那一段的颜色放进变量里：简写里 var() 和颜色字面量混写、后面又单独设 background-size，
+   浏览器读不出这条声明，配色引擎就换不到它（09-25 名字渐变在别的配色里还是玫瑰色） */
+html[data-ui="soft"] #v-home .dash-name{--name-mid:light-dark(#c47e78,#e0a39b);font-style:normal;color:var(--blue);background:linear-gradient(100deg,var(--blue),var(--name-mid),var(--blue));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:dash-shine 7s linear infinite}
 @keyframes dash-shine{to{background-position:-200% 0}}
 
 /* 3. 侧栏（桌面）：图标 + 文字，当前项底下的色块跟着滑；收起时只剩图标 */

@@ -116,6 +116,10 @@
 .look-seg button:hover{color:var(--ink)}
 .look-seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:650;box-shadow:0 1px 2px light-dark(rgba(48,41,47,.12),rgba(0,0,0,.4))}
 .look-families{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-md)}
+/* 09-25 按原型分两组：浅色主题（含「跟随系统」）、深色主题 */
+#lookFamilies{display:flex;flex-direction:column;gap:var(--sp-md)}
+.look-grp{font-size:var(--fs-xs);font-weight:650;color:var(--ink2)}
+.look-grp:not(:first-child){margin-top:var(--sp-sm)}
 .look-fam{display:flex;flex-direction:column;align-items:center;gap:var(--sp-sm);padding:var(--sp-md) var(--sp-xs);border:2px solid transparent;border-radius:var(--rd-lg);color:var(--ink2);font-size:var(--fs-xs);transition:transform .3s var(--ease-smooth-out),border-color .2s,background-color .2s}
 .look-fam:hover{background:var(--surface-2);transform:translateY(-2px)}
 .look-fam[aria-pressed="true"]{border-color:var(--blue);background:var(--surface-2);color:var(--ink);font-weight:650}

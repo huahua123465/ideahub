@@ -52,40 +52,63 @@
     return rgb.map(function (v) { return Math.max(0, Math.min(255, Math.round(v))); });
   }
 
-  /* ---- 配色家族。A = 主色色相，B = 点缀色相，H = 底色/中性色偏向的色相；chroma = 鲜艳度倍数，tint = 底色染色倍数 ---- */
+  /* ---- 配色（09-25 按原型 1:1）：和原型「外观」面板同一组参数，分浅色主题、深色主题两组。
+     A = 主色色相，C = 主色鲜艳度（OKLCH 的 C，绝对值），B = 点缀色相（首页「待我审核」色块、名字渐变），
+     H = 底色 / 中性色偏向的色相，tint = 底色染色（0–1）。mode = 这套配色本来是浅色还是深色，选它时明暗跟着切 ---- */
   var FAMILIES = [
-    { id: 'default', name: '梅子', note: '现在的配色' },
-    { id: 'mist', name: '晨雾', A: 262, B: 35, H: 255, chroma: 2.4, tint: 1.3 },
-    { id: 'sea', name: '海盐', A: 222, B: 28, H: 220, chroma: 2, tint: 1.3 },
-    { id: 'ocean', name: '深海', A: 245, B: 190, H: 240, chroma: 1.8, tint: 1.6 },
-    { id: 'forest', name: '森屿', A: 158, B: 75, H: 150, chroma: 1.7, tint: 1.4 },
-    { id: 'lemon', name: '青柠', A: 128, B: 88, H: 115, chroma: 1.9, tint: 1.2 },
-    { id: 'latte', name: '奶茶', A: 58, B: 32, H: 70, chroma: 1.5, tint: 1.8 },
-    { id: 'amber', name: '琥珀', A: 70, B: 40, H: 75, chroma: 2.2, tint: 1.3 },
-    { id: 'cherry', name: '樱桃', A: 18, B: 60, H: 15, chroma: 2.4, tint: 1.3 },
-    { id: 'sakura', name: '樱花', A: 0, B: 55, H: 5, chroma: 2, tint: 1.5 },
-    { id: 'lavender', name: '薰衣草', A: 298, B: 350, H: 300, chroma: 2, tint: 1.5 },
-    { id: 'graphite', name: '石墨', A: 260, B: 30, H: 260, chroma: 0.12, tint: 0.2 }
+    { id: 'default', name: '跟随系统', note: 'IdeaHub 原来的配色，明暗跟随系统' },
+    { id: 'mist', name: '晨雾', mode: 'light', H: 255, tint: 0.5, A: 268, C: 0.21, B: 35 },
+    { id: 'plum', name: '梅子', mode: 'light', H: 350, tint: 0.5, A: 350, C: 0.10, B: 45 },
+    { id: 'forest', name: '森屿', mode: 'light', H: 150, tint: 0.7, A: 162, C: 0.11, B: 72 },
+    { id: 'latte', name: '奶茶', mode: 'light', H: 70, tint: 0.8, A: 50, C: 0.10, B: 28 },
+    { id: 'sea', name: '海盐', mode: 'light', H: 215, tint: 0.8, A: 225, C: 0.14, B: 15 },
+    { id: 'lav', name: '薰衣草', mode: 'light', H: 300, tint: 0.8, A: 295, C: 0.16, B: 345 },
+    { id: 'lemon', name: '柠檬苏打', mode: 'light', H: 110, tint: 0.6, A: 150, C: 0.15, B: 95 },
+    { id: 'sakura', name: '樱花', mode: 'light', H: 5, tint: 0.7, A: 5, C: 0.17, B: 60 },
+    { id: 'paper', name: '素白', mode: 'light', H: 80, tint: 0.15, A: 260, C: 0.03, B: 30 },
+    { id: 'night', name: '夜航', mode: 'dark', H: 265, tint: 0.6, A: 268, C: 0.15, B: 35 },
+    { id: 'cherry', name: '樱桃', mode: 'dark', H: 10, tint: 0.8, A: 12, C: 0.19, B: 72 },
+    { id: 'deep', name: '深林', mode: 'dark', H: 160, tint: 0.7, A: 155, C: 0.14, B: 82 },
+    { id: 'violet', name: '午夜紫', mode: 'dark', H: 295, tint: 0.8, A: 300, C: 0.17, B: 340 },
+    { id: 'amber', name: '琥珀夜', mode: 'dark', H: 60, tint: 0.6, A: 72, C: 0.15, B: 25 },
+    { id: 'ocean', name: '深海', mode: 'dark', H: 225, tint: 0.9, A: 200, C: 0.13, B: 170 },
+    { id: 'ink', name: '墨黑', mode: 'dark', H: 0, tint: 0, A: 250, C: 0.02, B: 30 }
   ];
-  /* 现在这套梅子色的基准色相：主色 #796375 ≈ 332°，点缀玫瑰色 #b86d70 ≈ 20° */
-  var BASE_A = 332, BASE_B = 20;
-  var DEFAULTS = { family: 'default', A: 332, B: 20, H: 332, chroma: 1, tint: 1, radius: 1, density: 'cozy', motion: 'auto' };
+  /* 09-25 以前的配色 id 改了名或并掉了：老设置按最接近的一套接上 */
+  var RENAMED = { lavender: 'lav', graphite: 'paper' };
+  /* 原来这套梅子色的基准：主色 #796375 ≈ 332°、C 0.039，点缀玫瑰色 #b86d70 ≈ 20° */
+  var BASE_A = 332, BASE_B = 20, BASE_C = 0.039;
+  var DEFAULTS = { family: 'default', A: 332, B: 20, H: 332, C: 0.04, tint: 0.15, radius: 1, density: 'cozy', motion: 'auto' };
 
   function sdiff(h, base) { var d = h - base; return d > 180 ? d - 360 : d < -180 ? d + 360 : d; }
-  /* 一个颜色要不要换、换成什么。返回 null = 保持原样（语义色：绿、琥珀、蓝、强红） */
-  function mapLch(L, C, H, t, hot) {
-    // 接近纯灰的才算中性色（底色、边框、正文灰）：跟着底色染色。
-    // 再往上一点的浅色（比如琥珀色、绿色的浅底）虽然也很淡，但带着语义，不能当灰色染掉
-    if (C < 0.012) return [L, Math.min(C * t.tint, 0.04), t.H];
-    // --hot 一组（首页「待我审核」的实色块和它上面的字）：跟点缀色走，允许更鲜艳，不受下面 0.12 的上限
-    if (hot) return [L, Math.min(C * Math.min(t.chroma, 1.3), 0.2), (t.B + sdiff(H, BASE_B) * 0.4 + 360) % 360];
-    if (H >= 262 || H < 8) return [L, Math.min(C * t.chroma, 0.22), (t.A + sdiff(H, BASE_A) * 0.4 + 360) % 360];   // 梅子主色一族
-    // 玫瑰点缀一族（Logo、侧栏当前项的小竖条）：面积小、本来就亮，鲜艳度最多放大 1.4 倍，不然会很扎眼
-    if (H < 40 && C <= 0.12) return [L, C * Math.min(t.chroma, 1.4), (t.B + sdiff(H, BASE_B) * 0.4 + 360) % 360];
+  function rot(target, h, base) { return (target + sdiff(h, base) * 0.3 + 360) % 360; }
+  /* 一个颜色要不要换、换成什么。返回 null = 保持原样（语义色：绿、琥珀、蓝、强红）。
+     亮度 L 一律不动（文字对比度就不会变），只换色相和鲜艳度 —— 鲜艳度按原型的绝对值给，
+     不再是「原来的灰调梅子色 × 倍数」，那样换出来的颜色都发灰（09-25 线上和原型色差的根源）。
+     dark：这个颜色是 light-dark() 里深色那一半（true）、浅色那一半（false），还是不在 light-dark() 里（undefined，按浅色算） */
+  function mapLch(L, C, H, t, hot, dark) {
+    var n = 0.035 * t.tint, inA = H >= 262 || H < 8, c;
+    // 中性色：纯灰，以及梅子色一族里本来就很淡的（次要文字、浅紫底、分隔线）。按原型的做法跟着底色染色：
+    // 浅色里越接近页面底色的染得越多、纯白卡片几乎不染；深色里底色、卡片染得多，文字染得少
+    if (!hot && (C < 0.012 || (inA && C < 0.025))) {
+      if (dark) c = L < 0.35 ? n * 0.9 : L < 0.6 ? n * 0.6 : n * 0.4;
+      else c = L >= 0.9 ? n * Math.max(0.15, Math.min(1, (1 - L) / 0.04)) : L >= 0.6 ? 0.006 + n * 0.5 : Math.min(C, 0.01) + n * 0.45;
+      return [L, Math.min(c, 0.05), t.H];
+    }
+    // --hot 一组（首页「待我审核」的实色块和它上面的字）：跟点缀色走，鲜艳度和原型一样到 0.16 左右
+    if (hot) return [L, Math.min(C * 1.25, 0.2), rot(t.B, H, BASE_B)];
+    if (inA) {   // 梅子主色一族 → 主色：鲜艳度直接对齐到这套配色的 C（深色里按原型收 15%）
+      var l = L;
+      // 「素白」这类几乎不带颜色的配色：原型里浅色主色是近黑的墨色，不是发灰的中灰
+      if (t.C < 0.05 && dark !== true && L < 0.7) l = Math.max(0.2, L - 0.25);
+      return [l, Math.min(C * t.C / BASE_C * (dark ? 0.85 : 1), 0.26), rot(t.A, H, BASE_A)];
+    }
+    // 玫瑰点缀一族（Logo、名字渐变、侧栏小竖条）：跟点缀色走
+    if (H < 40 && C <= 0.12) return [L, Math.min(C * 1.6, 0.2), rot(t.B, H, BASE_B)];
     return null;
   }
   var COLOR = /#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)/gi;
-  function mapValue(value, t, hot) {
+  function mapColors(value, t, hot, dark) {
     return value.replace(COLOR, function (all, hex, r, g, b, a) {
       var rgb, alpha = a;
       if (hex) {
@@ -93,17 +116,48 @@
         rgb = [0, 2, 4].map(function (i) { return parseInt(hex.slice(i, i + 2), 16); });
         if (hex.length === 8) alpha = String(Math.round(parseInt(hex.slice(6), 16) / 2.55) / 100);
       } else rgb = [+r, +g, +b];
-      var lch = rgbToLch(rgb[0], rgb[1], rgb[2]), out = mapLch(lch[0], lch[1], lch[2], t, hot);
+      var lch = rgbToLch(rgb[0], rgb[1], rgb[2]), out = mapLch(lch[0], lch[1], lch[2], t, hot, dark);
       if (!out) return all;
       var n = lchToSafeRgb(out[0], out[1], out[2]);
       return alpha != null ? 'rgba(' + n.join(',') + ',' + alpha + ')' : '#' + n.map(function (v) { return (v < 16 ? '0' : '') + v.toString(16); }).join('');
     });
+  }
+  /* light-dark(浅, 深) 两半分开换：深色那一半按深色的规则（主色收一点、底色染得更多） */
+  function mapValue(value, t, hot) {
+    var out = '', i = 0, at;
+    while ((at = value.indexOf('light-dark(', i)) !== -1) {
+      out += mapColors(value.slice(i, at), t, hot);
+      var j = at + 11, depth = 1, comma = -1;
+      for (; j < value.length && depth; j++) {
+        var ch = value.charAt(j);
+        if (ch === '(') depth++; else if (ch === ')') depth--; else if (ch === ',' && depth === 1 && comma < 0) comma = j;
+      }
+      out += comma < 0 ? value.slice(at, j)
+        : 'light-dark(' + mapColors(value.slice(at + 11, comma), t, hot, false) + ',' + mapColors(value.slice(comma + 1, j - 1), t, hot, true) + ')';
+      i = j;
+    }
+    return out + mapColors(value.slice(i), t, hot);
   }
 
   /* ---- 就地改写样式表里的颜色。第一次运行时记下原值，切回「梅子」就原样还回去 ---- */
   var SKIP_PROP = /^--(crit|warn|good|ok|review|danger|err)/;
   var SKIP_SEL = /danger|crit|error|warn|reject|lost|\.bad|success|\.good|\.ok\b|del\b|delete/i;
   var entries = null;
+  function count(v) { return (v.match(COLOR) || []).length; }
+  /* 整条规则按 cssText 换：一条条声明分开换，语义色的变量照样跳过，--hot 照样按点缀色走 */
+  function mapDecls(text, t) {
+    var out = [], depth = 0, from = 0, i, ch;
+    for (i = 0; i <= text.length; i++) {
+      ch = text.charAt(i);
+      if (ch === '(') depth++; else if (ch === ')') depth--;
+      else if ((ch === ';' && depth === 0) || i === text.length) {
+        var d = text.slice(from, i), colon = d.indexOf(':'), prop = d.slice(0, colon).trim();
+        if (colon > 0) out.push(SKIP_PROP.test(prop) ? d : d.slice(0, colon + 1) + mapValue(d.slice(colon + 1), t, /^--hot/.test(prop)));
+        from = i + 1;
+      }
+    }
+    return out.join(';');
+  }
   function collect() {
     entries = [];
     var sheets = document.styleSheets;
@@ -117,13 +171,20 @@
         if (rule.style) {
           var sel = rule.selectorText || '';
           if (!SKIP_SEL.test(sel)) {
+            var own = [], seen = 0;
             for (var k = 0; k < rule.style.length; k++) {
               var p = rule.style[k];
-              if (SKIP_PROP.test(p)) continue;
               var v = rule.style.getPropertyValue(p);
+              seen += count(v);
+              if (SKIP_PROP.test(p)) continue;
               COLOR.lastIndex = 0;
-              if (COLOR.test(v)) entries.push([rule.style, p, v, rule.style.getPropertyPriority(p)]);
+              if (COLOR.test(v)) own.push([rule.style, p, v, rule.style.getPropertyPriority(p)]);
             }
+            // 简写里 var() 和颜色字面量混着写（比如页面底色的光晕 radial-gradient(… rgba(…) …)，再叠一个 var()），
+            // Chrome 逐项读出来是空的，颜色只留在 cssText 里：这种规则整条按 cssText 换（09-25）
+            var text = rule.style.cssText;
+            if (count(text) > seen) entries.push([rule.style, null, text, '']);
+            else entries.push.apply(entries, own);
           }
         }
         if (rule.cssRules) walk(rule.cssRules);
@@ -140,6 +201,9 @@
     var o = {}, k;
     for (k in DEFAULTS) o[k] = DEFAULTS[k];
     if (s) for (k in s) if (k in DEFAULTS) o[k] = s[k];
+    // 09-25 以前的「自己调」存的是鲜艳度倍数（chroma）和 0–3 的底色染色：换算成原型的绝对值
+    if (s && s.C == null && s.chroma != null) { o.C = Math.min(0.25, BASE_C * s.chroma); o.tint = Math.min(1, (s.tint || 0) * 0.3); }
+    if (RENAMED[o.family]) o.family = RENAMED[o.family];
     // 09-25 以前「完整」就是默认值（存的是 full），那时并不代表用户主动要求盖过系统设置，一律当「跟随系统」
     if (o.motion === 'full') o.motion = 'auto';
     return o;
@@ -160,7 +224,8 @@
     }
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
-      e[0].setProperty(e[1], t ? mapValue(e[2], t, /^--hot/.test(e[1])) : e[2], e[3]);
+      if (e[1] === null) e[0].cssText = t ? mapDecls(e[2], t) : e[2];
+      else e[0].setProperty(e[1], t ? mapValue(e[2], t, /^--hot/.test(e[1])) : e[2], e[3]);
     }
     applyShape(s);
     current = s;
@@ -182,10 +247,12 @@
     get: function () { return norm(current); },
     set: function (patch) { var next = norm(current), k; for (k in patch) next[k] = patch[k]; next = apply(next); save(next); return next; },
     reset: function () { var s = apply(null); try { localStorage.removeItem(KEY); } catch (e) {} return s; },
-    /* 给面板上的色板用：某个家族在当前明暗下，底色 / 主色 / 点缀色长什么样 */
+    /* 给面板上的色板用：某套配色的底色 / 主色 / 点缀色（--hot）长什么样。dark 不传就按这套配色自己的明暗 */
     swatch: function (family, dark) {
-      var t = family && family.id !== 'default' ? family : null, base = dark ? ['#1c1a1d', '#c3a6bb', '#b36e68'] : ['#f7f5f2', '#796375', '#c47e78'];
-      return base.map(function (c) { return t ? mapValue(c, t) : c; });
+      var t = family && family.id !== 'default' ? family : null;
+      if (dark == null) dark = !!(family && family.mode === 'dark');
+      var base = dark ? ['#1c1a1d', '#c3a6bb', '#dd806b'] : ['#f7f5f2', '#796375', '#e27d67'];
+      return base.map(function (c, i) { return t ? mapColors(c, t, i === 2, dark) : c; });
     }
   };
   try { var saved = load(); if (saved) apply(saved); } catch (e) { /* 外观出错不能拦住整个应用 */ }
