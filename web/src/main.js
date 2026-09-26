@@ -18,7 +18,7 @@ import * as notify from './views/notify.js';
 import * as chat from './views/chat.js';
 import { ICON } from './icons.js';
 import * as alertBox from './views/alert.js';
-import { BOARD_ORDER } from './boards.js';
+import { BOARD_ORDER, BOARD_CREATE } from './boards.js';
 import * as search from './views/search.js';
 import * as clientDetail from './views/client.js';
 import * as tagadmin from './views/tagadmin.js';
@@ -116,17 +116,17 @@ const CHROME = {
   home:         { group: '总览', title: '今日工作台' },
   functionTree: { group: '总览', title: '项目功能树' },
   pool:         { group: '市场与内容', title: '灵感池',   create: '提交灵感' },
-  demands:      { group: '市场与内容', title: '用户需求', create: '新增需求' },
+  demands:      { group: '市场与内容', title: '用户需求', create: BOARD_CREATE.demands },
   formal:       { group: '市场与内容', title: '正式库',   create: '提交灵感' },
-  persona:      { group: '内容运营', title: '真人作品', create: '新增作品' },
-  matrix:       { group: '内容运营', title: '矩阵作品', create: '新增作品' },
-  live:         { group: '内容运营', title: '真人直播', create: '新增直播' },
-  sales:        { group: '销售与客户', title: '销售转化', create: '新增规则' },
-  clients:      { group: '销售与客户', title: '客户档案', create: '新增客户' },
+  persona:      { group: '内容运营', title: '真人作品', create: BOARD_CREATE.persona },
+  matrix:       { group: '内容运营', title: '矩阵作品', create: BOARD_CREATE.matrix },
+  live:         { group: '内容运营', title: '真人直播', create: BOARD_CREATE.live },
+  sales:        { group: '销售与客户', title: '销售转化', create: BOARD_CREATE.sales },
+  clients:      { group: '销售与客户', title: '客户档案', create: BOARD_CREATE.clients },
   clientDetail: { group: '销售与客户', title: '客户详情' },
-  delivery:     { group: '交付与案例', title: '后端交付', create: '新增交付项' },
-  cases:        { group: '交付与案例', title: '案例库', create: '新增案例' },
-  reports:      { group: '团队', title: '工作提交', create: '提交工作' },
+  delivery:     { group: '交付与案例', title: '后端交付', create: BOARD_CREATE.delivery },
+  cases:        { group: '交付与案例', title: '案例库', create: BOARD_CREATE.cases },
+  reports:      { group: '团队', title: '工作提交', create: BOARD_CREATE.reports },
   expenses:     { group: '团队', title: '报销审批', create: '发起报销' },
   purchases:    { group: '团队', title: '采购', create: '发起采购' },
   tagadmin:     { group: '团队', title: '标签与对接' },

@@ -430,6 +430,12 @@ export const STAGE = {
     灵感池 / 正式库 / 数据漏斗 / 统计不在这个数组里 —— 它们不是通用渲染器画的板块。 */
 export const BOARD_ORDER = ['demands', 'persona', 'matrix', 'live', 'sales', 'clients', 'delivery', 'cases', 'reports'];
 
+/** 各板块「新增」动作的叫法：顶栏主按钮（main.js CHROME）和看板末尾的虚线新增卡共用，两处说法一致 */
+export const BOARD_CREATE = {
+  demands: '新增需求', persona: '新增作品', matrix: '新增作品', live: '新增直播',
+  sales: '新增规则', clients: '新增客户', delivery: '新增交付项', cases: '新增案例', reports: '提交工作',
+};
+
 /**
  * 六组导航（任务 1）。
  *

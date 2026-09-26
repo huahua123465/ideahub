@@ -61,6 +61,9 @@ try {
   const sales = await page.evaluate(() => ({ cards: document.querySelectorAll('#v-delivery .bd-body>.record-card').length, tile: !!document.querySelector('#v-delivery .board-add-tile') }));
   assert.ok(sales.cards < 3, `演示数据里后端交付应只有一两条，才能验到「新增」卡（实际 ${sales.cards}）`);
   assert.equal(sales.tile, true, '只有一两条时末尾应有「新增」卡');
+  // 新增卡和顶栏主按钮同一个叫法
+  assert.deepEqual(await page.evaluate(() => [document.querySelector('#v-delivery .board-add-tile b').textContent, document.querySelector('#btnNewLabel').textContent]),
+    ['新增交付项', '新增交付项'], '新增卡应和顶栏主按钮叫法一致');
   await harness.screenshot(page, 'board-add-tile');
   await page.click('#v-delivery .board-add-tile');
   await page.waitForFunction(() => [...document.querySelectorAll('.modal.on, .drawer.on, dialog[open]')].length > 0, { timeout: 5000 });
@@ -71,7 +74,31 @@ try {
   await settleDom(page);
   const clients = await page.evaluate(() => ({ cards: document.querySelectorAll('#v-clients .bd-body>.record-card').length, tile: !!document.querySelector('#v-clients .board-add-tile') }));
   assert.equal(clients.tile, clients.cards < 3, JSON.stringify(clients));
-  harness.recordCheck('board-add-tile', 'layout', { sales, clients });
+  // 空的小板块（演示数据里案例库「复合」一条都没有）：直接给新增卡，而不是只写「点顶部主按钮」
+  const tab = async (board, key) => {
+    await page.click(`#v-${board} .bd-tab[data-tab="${key}"]`);
+    await page.waitForFunction((b, k) => document.querySelector(`#v-${b} .bd-tab.on[data-tab="${k}"], #v-${b} .bd-tab[aria-selected="true"][data-tab="${k}"]`)
+      && !document.querySelector(`#v-${b} .bd-body[aria-busy]`), { timeout: 5000 }, board, key);
+    await settleDom(page);
+    return page.evaluate(b => ({ cards: document.querySelectorAll(`#v-${b} .bd-body>.record-card`).length,
+      tile: document.querySelector(`#v-${b} .board-add-tile`)?.textContent.replace(/\s+/g, ' ').trim() || '',
+      empty: !!document.querySelector(`#v-${b} .board-empty`) }), board);
+  };
+  await go(page, 'cases');
+  await page.waitForSelector('#v-cases .bd-body>.record-card');
+  const emptyCases = await tab('cases', '复合');
+  assert.deepEqual(emptyCases, { cards: 0, tile: '新增案例还没有记录，添加第一条到「案例库」', empty: false }, JSON.stringify(emptyCases));
+  await harness.screenshot(page, 'board-add-tile-empty');
+  await tab('cases', '');
+  // 工作提交：「我的日报」里有新增卡，「待我审核」里没有
+  await go(page, 'reports');
+  await page.waitForSelector('#v-reports .bd-body>.record-card');
+  const mine = await tab('reports', 'mine');
+  const review = await tab('reports', 'review');
+  assert.ok(mine.tile.startsWith('提交工作'), `我的日报应有新增卡 ${JSON.stringify(mine)}`);
+  assert.equal(review.tile, '', `待我审核里不该有新增卡 ${JSON.stringify(review)}`);
+  await tab('reports', 'mine');
+  harness.recordCheck('board-add-tile', 'layout', { sales, clients, emptyCases, mine, review });
 
   // 按需加载的学习页：从首页「框架学习」进去
   await go(page, 'home');

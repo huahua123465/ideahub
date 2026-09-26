@@ -9,7 +9,7 @@ import { api, state } from '../api.js';
 import { uploadProgress } from '../upload-progress.js';
 import { esc, $ } from '../util.js';
 import { toast } from '../toast.js';
-import { BOARDS, STAGE } from '../boards.js';
+import { BOARDS, BOARD_CREATE, STAGE } from '../boards.js';
 import { ICON } from '../icons.js';
 import { tagDict, KIND_ORDER, KIND_LABEL, SOURCE_LABEL } from '../tagstore.js';
 import * as links from './links.js';
@@ -430,13 +430,21 @@ function paintRows(key, root) {
   const body = root.querySelector('.bd-body');
   body.className = `bd-body board-grid board-${key} mode-${s.tab || 'all'}`;
 
+  // 虚线新增卡（09-26）：只有零到两条时补在末尾，和顶栏主按钮同一个动作、同一个叫法。
+  // 筛出来的少不算（那是筛选的结果，不是板块空）；工作提交只在「我的日报」里给，待我审核 / 公开墙里新增是跑题
+  const filtered = s.tagIds.length > 0 || !!s.sourceType || Object.keys(s.contextQuery).length > 0;
+  const canAdd = !filtered && !(key === 'reports' && s.tab !== 'mine');
+  const addTile = canAdd && s.items.length < 3
+    ? `<button type="button" class="board-add-tile" data-board-add><span class="ic">${ICON.plus}</span>
+        <b>${esc(BOARD_CREATE[key] || '新增一条')}</b><small>${s.items.length ? '添加' : '还没有记录，添加第一条'}到「${esc(BOARDS[key]?.title || '')}」</small></button>` : '';
+
   if (!s.items.length) {
-    body.innerHTML = `<div class="board-empty"><div class="empty sm">
+    body.innerHTML = addTile || `<div class="board-empty"><div class="empty sm">
         <svg viewBox="0 0 120 96" aria-hidden="true">
           <path d="M26 30h68v46H26zM26 30l8-12h52l8 12"/><path d="M52 52h16" class="ray"/>
         </svg>
-        <b>这个视图还是空的</b>
-        <span>点顶部主按钮添加第一条记录。</span>
+        <b>${filtered ? '没有符合筛选的记录' : '这个视图还是空的'}</b>
+        ${filtered ? '<span>换几个标签或来源试试。</span>' : ''}
       </div></div>`;
     return;
   }
@@ -448,10 +456,6 @@ function paintRows(key, root) {
   };
   const renderer = renderers[key] || genericCard;
   renderKey = key;
-  // 只有一两条时，网格右边空一大片（09-26）：末尾补一块虚线「新增」卡，和顶部「＋ 新增」同一个动作
-  const addTile = s.items.length < 3
-    ? `<button type="button" class="board-add-tile" data-board-add><span class="ic">${ICON.plus}</span>
-        <b>新增一条</b><small>添加到「${esc(BOARDS[key]?.title || '')}」</small></button>` : '';
   body.innerHTML = s.items.map((row, i) => renderer(row, i, key, s.tab)).join('') + addTile;
 }
 
