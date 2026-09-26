@@ -505,6 +505,16 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS sessions_user_idx    ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions (expires_at);
 
+-- ---------- 界面偏好（2026-09-26） ----------
+-- 配色与外观、我的配色、明暗，原来只存在浏览器里，换电脑就没了；现在跟着账号走。
+-- 一人一行，内容是前端自己的结构（routes/auth.mjs cleanUiPrefs 只把关形状和大小）。
+-- 已有库的迁移：scripts/migrations/20260926-user-ui-prefs.sql
+CREATE TABLE IF NOT EXISTS user_ui_prefs (
+  user_id     BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  prefs       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ============================================================
 --  第一版团队资料库（《技术3｜IdeaHub团队资料库｜第一版任务表》）
 --

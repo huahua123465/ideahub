@@ -42,6 +42,7 @@ import * as sampleResearch from './routes/sample-research.mjs';
 import * as sampleComparison from './routes/sample-comparison.mjs';
 import * as sampleInsights from './routes/sample-insights.mjs';
 import * as accountResearch from './routes/account-research.mjs';
+import * as clientErrors from './routes/client-errors.mjs';
 import { archiveStaleIdeas } from './routes/status.mjs';
 import { publish, closeAll, clientCount } from './lib/bus.mjs';
 
@@ -123,6 +124,7 @@ sampleResearch.mount(router);
 sampleComparison.mount(router);
 sampleInsights.mount(router);
 accountResearch.mount(router);
+clientErrors.mount(router);
 
 // 必须在开始监听前完成旧任务恢复，避免新请求与启动恢复同时改写同一个 attempt。
 await sampleResearch.recoverAnalysisJobs();
@@ -163,6 +165,7 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg':  'image/svg+xml',
   '.png':  'image/png',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.jpg':  'image/jpeg',
   '.jpeg': 'image/jpeg',
   // 登录页那张插图就是 webp。不在这张表里的话会以
@@ -243,6 +246,20 @@ function isAllowedOrigin(origin) {
 /* ---------- 服务器 ---------- */
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+  // 安全响应头（2026-09-26）。原来一个都没有：别的网站能把 IdeaHub 套进 iframe 骗人点按钮（点击劫持）。
+  //   · frame-ancestors / X-Frame-Options：只允许自己嵌自己（学习中心的 PDF 是同源 iframe）
+  //   · nosniff：浏览器按 content-type 走，不自己猜（MIME 表已覆盖所有静态文件类型）
+  //   · Referrer-Policy：跳到外部网站时只带域名，不带页面路径和查询串
+  //   · Permissions-Policy：站里用不到摄像头、麦克风、定位、支付，直接关掉
+  // 不发 HSTS：它对整个域名生效，而 http://xm.xingxingqule.com（80 端口）和 IP 直连都还要用，
+  // 一旦发了，浏览器会把它们强制改成 https://xm.xingxingqule.com —— 那是 443，归 xray，页面就打不开了。
+  // 也不发完整 CSP：页面里有必须先跑的内联脚本（配色引擎、明暗），收紧要单独评估。
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('x-frame-options', 'SAMEORIGIN');
+  res.setHeader('content-security-policy', "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+  res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
+  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
 
   // CORS。
   // 生产环境前后端同源（后端自己托管 web/），根本用不到这几个头。

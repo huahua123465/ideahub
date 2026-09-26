@@ -15,6 +15,23 @@ const INVITE_CODE = (process.env.INVITE_CODE || '').trim();
 
 const ROLES = ['member', 'reviewer', 'admin'];
 
+/** 界面偏好只收这三样：look（配色设置）、mine（我的配色，最多 12 套）、theme（明暗） */
+const UI_PREFS_MAX = 32 * 1024;
+function cleanUiPrefs(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) throw badRequest('偏好的格式不对');
+  const out = {};
+  if (p.look && typeof p.look === 'object' && !Array.isArray(p.look)) out.look = p.look;
+  if (Array.isArray(p.mine)) out.mine = p.mine.filter(m => m && typeof m === 'object' && !Array.isArray(m)).slice(0, 12);
+  if (['auto', 'light', 'dark'].includes(p.theme)) out.theme = p.theme;
+  if (JSON.stringify(out).length > UI_PREFS_MAX) throw badRequest('偏好内容太大了');
+  return out;
+}
+/** pg 驱动直接给对象；psql 备用驱动给的是 JSON 字符串 */
+const parsePrefs = v => {
+  if (v && typeof v === 'object') return v;
+  try { return JSON.parse(v || '{}'); } catch { return {}; }
+};
+
 /**
  * 用户名规则：字母开头，字母数字下划线点，3-24 位。
  * 不允许中文和空格 —— 用户名是要手敲进登录框的，
@@ -178,6 +195,33 @@ export function mount(router) {
                  report_visibility_default, created_at, last_login_at`,
       [v, me.id]);
     sendJson(res, 200, publicUser(rows[0]));
+  });
+
+  /* ---------- 界面偏好：配色与外观、我的配色、明暗（09-26） ----------
+     原来只存在浏览器里，换电脑、换浏览器就没了。现在跟着账号走：前端 prefs-sync.js 登录后拉一次，
+     本地改了过一会儿推上来，两边谁新用谁。只能读写自己的；表里一人一行（user_ui_prefs）。
+     内容是前端自己的数据结构，这里只做形状和大小的把关，不解释里面的颜色参数。 */
+  router.get('/api/auth/me/ui-prefs', async (req, res) => {
+    const me = await currentUser(req);
+    const { rows } = await query('SELECT prefs, updated_at FROM user_ui_prefs WHERE user_id = $1', [me.id]);
+    const row = rows[0];
+    sendJson(res, 200, {
+      prefs: row ? parsePrefs(row.prefs) : {},
+      updatedAt: row ? new Date(row.updated_at).toISOString() : null,
+    });
+  });
+
+  // 整份覆盖（不是逐项合并）：前端每次推的都是完整的一份。沿用 PATCH，是因为路由和 CORS 都没开 PUT
+  router.patch('/api/auth/me/ui-prefs', async (req, res) => {
+    const me = await currentUser(req);
+    const b = await readJson(req, 64 * 1024);
+    const prefs = cleanUiPrefs(b.prefs);
+    const { rows } = await query(
+      `INSERT INTO user_ui_prefs (user_id, prefs, updated_at) VALUES ($1, $2::jsonb, now())
+       ON CONFLICT (user_id) DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = now()
+       RETURNING updated_at`,
+      [me.id, JSON.stringify(prefs)]);
+    sendJson(res, 200, { prefs, updatedAt: new Date(rows[0].updated_at).toISOString() });
   });
 
   /* ---------- 注册是否开放 / 是否首个账号（登录页要用，不需要登录） ---------- */
