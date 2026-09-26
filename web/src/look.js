@@ -7,6 +7,8 @@
  * 09-25 配色按原型 1:1：分「浅色主题」「深色主题」两组，选哪套明暗就跟着切到那一边。
  * 09-25 晚「自己调」能直接取色（主色 / 点缀色 / 底色），调好的可以存成「我的配色」，
  * 起名、改名、删除，随时切回来；清单也记在这台设备上（ideahub.look.mine.v1）。
+ * 09-26 改成自动保存：从哪套配色出发一动手，就自动在「我的配色」里建一套（「我的森屿」这样起名），
+ * 之后每一下都直接写回这一套。原来要手动点「存为我的配色」，没点就去点别的色板，改的颜色就丢了。
  *
  * 面板不遮挡页面（没有遮罩）：改外观就是要边改边看后面的页面。
  */
@@ -19,7 +21,8 @@ const engine = () => window.IdeaHubLook;
 let drawer = null;
 let returnFocus = null;
 let frame = 0;
-let naming = null;        // 正在起名：{ kind: 'new' | 'rename', value }
+let draft = null;         // 这一帧里还没交给引擎的最新设置：连着几下取色 / 拖动都在它上面叠
+let naming = null;        // 正在起名：{ kind: 'copy' | 'rename', value }
 let confirmDel = 0;       // 点过一次「删除」的时间，3 秒内再点才真删
 const q = sel => drawer.querySelector(sel);
 
@@ -57,16 +60,21 @@ export function useSaved(id) {
   engine().set({ family: 'custom', ...valsOf(m), mine: id });
   setTheme(m.mode === 'dark' ? 'dark' : 'light');
 }
-const sameVals = (a, b) => VALS.every(k => {
-  const x = a[k] ?? null, y = b[k] ?? null;
-  return x === y || (x != null && y != null && Math.abs(x - y) < 1e-4);
-});
-/** 当前这套是不是从「我的配色」来的、有没有改动 */
+/** 当前用的是「我的配色」里的哪一套（没有就是 null） */
 function mineState() {
-  const s = engine().get();
-  const cur = s.family === 'custom' && s.mine ? savedLooks().find(m => m.id === s.mine) : null;
-  const dirty = !!cur && (!sameVals(s, cur) || (cur.mode === 'dark') !== isDark());
-  return { s, cur, dirty };
+  const s = draft || engine().get();
+  const cur = s.family === 'custom' && s.mine ? savedLooks().find(m => m.id === s.mine) || null : null;
+  return { s, cur };
+}
+const newId = () => `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+/** 自动起名：从「森屿」改出来的叫「我的森屿」，重名了往后加数字 */
+function autoName(from) {
+  const names = new Set(savedLooks().map(m => m.name));
+  const base = from ? `我的${from}` : '我的配色';
+  if (from && !names.has(base)) return base;
+  let n = from ? 2 : 1;
+  while (names.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
 }
 /** 眼前这套配色的数值：自定义就是自己，预设就是预设的参数，默认用引擎的默认值 */
 function effective(s = engine().get()) {
@@ -157,7 +165,7 @@ const dot = ([bg, a, b]) =>
 
 function paintFamilies(s, dark) {
   const fams = engine().FAMILIES;
-  const { cur, dirty } = mineState();
+  const { cur } = mineState();
   const card = (attr, id, pressed, colors, name, extra = '') =>
     `<button type="button" class="look-fam" ${attr}="${id}" aria-pressed="${pressed}">${colors}<span>${esc(name)}</span>${extra}</button>`;
   // 「跟随系统」的色板和原型一样：一半浅底一半深底
@@ -168,9 +176,8 @@ function paintFamilies(s, dark) {
   const group = mode => fams.filter(f => f.mode === mode)
     .map(f => card('data-look-family', f.id, s.family === f.id, dot(engine().swatch(f)), f.name)).join('');
   const mine = savedLooks().map(m => card('data-look-mine', esc(m.id), cur?.id === m.id,
-    dot(engine().swatch({ ...valsOf(m), mode: m.mode })), m.name,
-    cur?.id === m.id && dirty ? '<small class="look-dirty">有改动</small>' : '')).join('');
-  // 调出来还没存的那一套
+    dot(engine().swatch({ ...valsOf(m), mode: m.mode })), m.name)).join('');
+  // 没存上的那一套（「我的配色」存满了，或者刚把正在用的那套删了）
   const loose = s.family === 'custom' && !cur
     ? card('data-look-family', 'custom', true, dot(engine().swatch(valsOf(s), dark)), '自定义', '<small class="look-dirty">未保存</small>') : '';
   q('#lookFamilies').innerHTML = `
@@ -178,11 +185,11 @@ function paintFamilies(s, dark) {
     <h4 class="look-grp">深色主题</h4><div class="look-families">${group('dark')}</div>
     <h4 class="look-grp">我的配色</h4>
     ${mine || loose ? `<div class="look-families" id="lookMine">${mine}${loose}</div>`
-      : '<p class="look-note">还没有。在下面「自己调」里取色、拖滑块，满意了点「存为我的配色」</p>'}`;
+      : '<p class="look-note">还没有。在下面「自己调」里取色、拖滑块，会自动存到这里</p>'}`;
 }
 
 function paintMineBar() {
-  const { cur, dirty } = mineState();
+  const { s, cur } = mineState();
   const bar = q('#lookMineBar');
   if (naming) {
     bar.innerHTML = `<form class="look-name" data-look-name-form>
@@ -193,15 +200,21 @@ function paintMineBar() {
     return;
   }
   const full = savedLooks().length >= MINE_MAX;
-  const saveNew = `<button type="button" class="btn ${cur ? 'btn-ghost' : 'btn-primary'}" data-look-mine-new ${full ? 'disabled' : ''}>${cur ? '另存为新配色' : '存为我的配色'}</button>`;
   const del = Date.now() - confirmDel < 3000;
-  bar.innerHTML = cur
-    ? dirty
-      ? `<button type="button" class="btn btn-primary" data-look-mine-update>保存修改到「${esc(cur.name)}」</button>${saveNew}`
-      : `<button type="button" class="btn btn-ghost" data-look-mine-rename>重命名</button>
-         <button type="button" class="btn btn-ghost look-del" data-look-mine-del>${del ? '确认删除？' : `删除「${esc(cur.name)}」`}</button>${saveNew}`
-    : saveNew;
-  if (full) bar.insertAdjacentHTML('beforeend', `<small class="look-note">我的配色最多存 ${MINE_MAX} 套，删掉一套再存</small>`);
+  if (cur) {
+    bar.innerHTML = `<small class="look-note look-saved">已自动保存到「${esc(cur.name)}」，改动马上生效，刷新也还在</small>
+      <button type="button" class="btn btn-ghost" data-look-mine-rename>重命名</button>
+      <button type="button" class="btn btn-ghost" data-look-mine-copy ${full ? 'disabled' : ''}>另存一份</button>
+      <button type="button" class="btn btn-ghost look-del" data-look-mine-del>${del ? '确认删除？' : '删除'}</button>`;
+    if (full) bar.insertAdjacentHTML('beforeend', `<small class="look-note">我的配色最多存 ${MINE_MAX} 套，删掉一套才能再另存</small>`);
+  } else if (s.family === 'custom') {
+    bar.innerHTML = full
+      ? `<small class="look-note">我的配色已经存满 ${MINE_MAX} 套，这套没能自动保存：删掉一套后点下面的按钮</small>
+         <button type="button" class="btn btn-primary" data-look-mine-copy disabled>存为我的配色</button>`
+      : '<button type="button" class="btn btn-primary" data-look-mine-copy>存为我的配色</button>';
+  } else {
+    bar.innerHTML = `<small class="look-note">在上面取色或拖滑块，会在当前配色的基础上自动存一套到「我的配色」${full ? `（已存满 ${MINE_MAX} 套，先删掉一套）` : ''}</small>`;
+  }
 }
 
 /** 把面板上的每个控件对齐到当前设置。拖滑块、取色时跳过正在用的那个，不然会和手指打架 */
@@ -245,16 +258,33 @@ function paint() {
 }
 
 /** 取色、拖滑块时从当前配色「接手」成自定义：起点就是眼前这套颜色，不会一拖就跳。
- *  从「我的配色」接手的记住来源（mine），好判断「有改动」、能「保存修改」 */
+ *  自动保存（09-26）：从预设 / 默认出发的第一下，自动在「我的配色」里建一套；之后每一下都写回这一套 */
 function tune(patch) {
-  const s = engine().get();
+  const s = draft || engine().get();
   const base = effective(s);
-  const next = { family: 'custom', ...base, ...patch, mine: s.family === 'custom' ? s.mine : '' };
-  // 拖点缀色色相滑块：只换色相，深浅和鲜艳度沿用取色器取的（没取过就是原型的默认）
+  const next = { ...s, family: 'custom', ...base, ...patch };
   // 拖主色色相时，底色色相跟着转同样的角度（底色和主色的搭配关系不变）；直接取了底色的就按取的来
   if ('A' in patch && !('H' in patch)) next.H = ((base.H ?? base.A) + (patch.A - base.A) + 360) % 360;
+  const list = savedLooks();
+  const mode = isDark() ? 'dark' : 'light';
+  let created = '';
+  if (s.family === 'custom' && s.mine && list.some(m => m.id === s.mine)) {
+    next.mine = s.mine;
+    storeMine(list.map(m => m.id === s.mine ? { ...m, ...valsOf(next), mode } : m));
+  } else if (s.family !== 'custom' && list.length < MINE_MAX) {
+    const from = engine().FAMILIES.find(f => f.id === s.family && f.id !== 'default')?.name || '';
+    const item = { id: newId(), name: autoName(from), ...valsOf(next), mode };
+    if (storeMine([...list, item])) { next.mine = item.id; created = item.name; }
+  } else next.mine = '';   // 存满了，或者正在用的那套刚被删：先改着，下面有「存为我的配色」
+  draft = next;
   cancelAnimationFrame(frame);
-  frame = requestAnimationFrame(() => { engine().set(next); paint(); });
+  frame = requestAnimationFrame(() => {
+    const n = draft;
+    draft = null;
+    if (n) engine().set(n);
+    paint();
+  });
+  if (created) toast('ok', `已自动存到「我的配色」：${created}`);
 }
 
 /** 取色器取到的颜色 → 配色参数。浅色下主色的深浅照取的来（限制在白字看得清的范围内） */
@@ -277,18 +307,12 @@ function fromPick(key, hex) {
   // 点缀色：色相、深浅、鲜艳度都照取的来；深浅最低到「待我审核」色块上的深色字还看得清
   if (key === 'B') {
     if (L < 0.62) { note.hidden = false; note.textContent = '这个点缀色太深了，色块上的字会看不清，最深只能到这里'; }
-    return { ...(C >= 0.01 ? { B: hue } : {}), BL: clamp(L, 0.62, 0.92), BC: clamp(C, 0, 0.25) };
+    // 色块用的底色本身带 4° 左右的色相偏移（原来的珊瑚色 33°、点缀基准 20°），减掉它，取的颜色才正好落在色块上
+    return { ...(C >= 0.01 ? { B: (hue - 4 + 360) % 360 } : {}), BL: clamp(L, 0.62, 0.92), BC: clamp(C, 0, 0.25) };
   }
   // 底色：取色相和染色浓淡；亮度跟着明暗走（浅色下底色不会变暗，文字对比度才有保证）
   const k = dark ? 0.035 * 0.9 : 0.035 * 0.725;
   return C >= 0.004 ? { H: hue, tint: clamp(Math.round(C / k * 20) / 20, 0, 1) } : { tint: 0 };
-}
-
-function nextName() {
-  const names = new Set(savedLooks().map(m => m.name));
-  let n = 1;
-  while (names.has(`我的配色 ${n}`)) n++;
-  return `我的配色 ${n}`;
 }
 
 function startNaming(kind, value) {
@@ -315,7 +339,7 @@ function submitName() {
     return;
   }
   if (list.length >= MINE_MAX) { toast('info', `我的配色最多存 ${MINE_MAX} 套，删掉一套再存`); return; }
-  const item = { id: `m${Date.now().toString(36)}`, name, ...effective(s), mode: isDark() ? 'dark' : 'light' };
+  const item = { id: newId(), name, ...effective(s), mode: isDark() ? 'dark' : 'light' };
   if (!storeMine([...list, item])) return;
   engine().set({ family: 'custom', ...valsOf(item), mine: item.id });
   naming = null;
@@ -325,21 +349,20 @@ function submitName() {
 }
 
 function onMineAction(e) {
-  if (e.target.closest('[data-look-mine-new]')) { startNaming('new', nextName()); return true; }
+  if (e.target.closest('[data-look-mine-copy]')) {
+    const { cur } = mineState();
+    startNaming('copy', autoName(cur ? cur.name.replace(/^我的/, '').replace(/ \d+$/, '') : ''));
+    return true;
+  }
   if (e.target.closest('[data-look-name-cancel]')) {
     naming = null;
     paintMineBar();
-    q('[data-look-mine-new], [data-look-mine-rename]')?.focus();
+    q('[data-look-mine-copy], [data-look-mine-rename]')?.focus();
     return true;
   }
-  const { s, cur } = mineState();
+  const { cur } = mineState();
   if (!cur) return false;
   if (e.target.closest('[data-look-mine-rename]')) { startNaming('rename', cur.name); return true; }
-  if (e.target.closest('[data-look-mine-update]')) {
-    const next = { ...cur, ...effective(s), mode: isDark() ? 'dark' : 'light' };
-    if (storeMine(savedLooks().map(m => m.id === cur.id ? next : m))) { paint(); toast('ok', `「${cur.name}」已更新`); focusMine(cur.id); }
-    return true;
-  }
   if (e.target.closest('[data-look-mine-del]')) {
     if (Date.now() - confirmDel >= 3000) {   // 第一次点：按钮变成「确认删除？」，3 秒内再点才删
       confirmDel = Date.now();
@@ -350,10 +373,10 @@ function onMineAction(e) {
     }
     confirmDel = 0;
     if (storeMine(savedLooks().filter(m => m.id !== cur.id))) {
-      engine().set({ mine: '' });   // 颜色先留着，变回「未保存的自定义」，想要可以再存
+      engine().set({ mine: '' });   // 颜色先留着，想要可以再点「存为我的配色」
       paint();
       toast('ok', `已删除「${cur.name}」`);
-      q('[data-look-mine-new]')?.focus();
+      q('[data-look-mine-copy]')?.focus();
     }
     return true;
   }
@@ -371,6 +394,8 @@ function build() {
   document.body.appendChild(drawer);
 
   drawer.addEventListener('click', e => {
+    // 还有一帧没交给引擎的取色 / 拖动：先落地，再处理这次点击，免得这一帧晚到把刚选的色板盖掉
+    if (draft) { cancelAnimationFrame(frame); engine().set(draft); draft = null; }
     if (e.target.closest('[data-look-close]')) return closeLook();
     if (e.target.closest('[data-look-reset]')) {
       naming = null;
@@ -389,7 +414,16 @@ function build() {
       return;
     }
     const mode = e.target.closest('[data-look-mode]');
-    if (mode) { reveal(e, () => { setTheme(mode.dataset.lookMode); paint(); }); return; }
+    if (mode) {
+      reveal(e, () => {
+        setTheme(mode.dataset.lookMode);
+        // 正在用「我的配色」：它记住的明暗跟着改，下次切回来还是这一边
+        const { cur } = mineState();
+        if (cur) storeMine(savedLooks().map(m => m.id === cur.id ? { ...m, mode: isDark() ? 'dark' : 'light' } : m));
+        paint();
+      });
+      return;
+    }
     const density = e.target.closest('[data-look-density]');
     if (density) { engine().set({ density: density.dataset.lookDensity }); paint(); return; }
     const motion = e.target.closest('[data-look-motion]');
@@ -411,7 +445,7 @@ function build() {
   drawer.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    if (naming) { naming = null; paintMineBar(); q('[data-look-mine-new], [data-look-mine-rename]')?.focus(); return; }
+    if (naming) { naming = null; paintMineBar(); q('[data-look-mine-copy], [data-look-mine-rename]')?.focus(); return; }
     closeLook();
   });
   // 系统明暗变了，色板预览跟着换

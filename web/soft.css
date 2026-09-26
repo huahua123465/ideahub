@@ -952,7 +952,7 @@ html[data-ui="soft"] #v-home .dash-hot-card b,
 html[data-ui="soft"] #v-home .dash-hot-card span,
 html[data-ui="soft"] #v-home .dash-hot-empty{color:var(--hot-ink)}
 /* 按钮字用浅色：换成柠檬苏打、深海这类配色时，同色字压在深底上会发暗 */
-html[data-ui="soft"] #v-home .dash-hot-go{background:var(--hot-ink);color:#fff}
+html[data-ui="soft"] #v-home .dash-hot-go{background:var(--hot-ink);color:light-dark(#fff,#fff)}
 html[data-ui="soft"] #v-home .dash-hot.is-clear{border-color:var(--good-line);background:var(--good-bg);color:var(--ink)}
 html[data-ui="soft"] #v-home .dash-hot.is-clear :is(.dash-hot-card small,.dash-hot-card b,.dash-hot-card span,.dash-hot-empty){color:var(--ink2)}
 html[data-ui="soft"] #v-home .dash-hot.is-clear .dash-hot-go{background:var(--good);color:light-dark(#fff,#132019)}
