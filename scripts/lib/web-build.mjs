@@ -1,5 +1,5 @@
-import { build } from 'esbuild';
-import { access, readFile } from 'node:fs/promises';
+import { build, transform } from 'esbuild';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,8 @@ export const PDF_JS_INPUTS = Object.freeze([
 
 const ENTRY_SCRIPT = /<script type="module" src="\.\/(?:src\/main\.js|dist\/app\.js[^"]*)"><\/script>/;
 const MODULE_PRELOADS = /<!-- modulepreload:start -->[\s\S]*?<!-- modulepreload:end -->/;
-const STYLESHEET = /<link rel="stylesheet" href="\.\/([\w.-]+\.css)(?:\?v=h[0-9a-f]{10})?">/g;
+// 源码里是 ./styles.css；生产构建换成压缩版 ./dist/css/styles.css?v=h…（见 buildStylesheets），两种都要认得
+const STYLESHEET = /<link rel="stylesheet" href="\.\/(?:dist\/css\/)?([\w.-]+\.css)(?:\?v=h[0-9a-f]{10})?">/g;
 
 const SHARED_BUILD_OPTIONS = Object.freeze({
   bundle: true,
@@ -75,11 +76,20 @@ export function readBundleOutput(buildResult, outfile = WEB_BUNDLE) {
   return Buffer.from(output.contents);
 }
 
-export function makeProductionHtml(source, stamp) {
+export function makeProductionHtml(source, stamp, preloads = []) {
+  // app.js 静态引用的公共拆分块（按需加载的页面和首屏共用的代码）：和 app.js 一起提前下载，
+  // 不然要等 app.js 下完、解析了才知道还要它们，白白多一个来回（09-26）
+  const links = preloads.map(path => `<link rel="modulepreload" href="${path}">`).join('\n');
   return replaceModulePreloads(
     replaceEntry(source, `./dist/app.js?v=${stamp}`),
-    '<!-- 已打包成 dist/app.js，不需要逐个模块预加载 -->',
+    links ? `<!-- 已打包成 dist/app.js；下面是它首屏就要用的公共拆分块 -->\n${links}` : '<!-- 已打包成 dist/app.js，不需要逐个模块预加载 -->',
   );
+}
+
+/** app.js 开头静态 import 的拆分块（./chunks/…），换成相对 index.html 的地址 ./dist/chunks/… */
+export function staticChunkImports(appCode) {
+  const code = Buffer.isBuffer(appCode) ? appCode.toString('utf8') : String(appCode);
+  return [...new Set([...code.matchAll(/(?:from|import)\s*"\.\/(chunks\/[\w.-]+\.js)"/g)].map(m => `./dist/${m[1]}`))];
 }
 
 export function makeQaHtml(source) {
@@ -106,6 +116,45 @@ export async function versionStylesheets(source, webRoot = WEB_ROOT) {
     out = out.replace(tag, `<link rel="stylesheet" href="./${name}?v=h${hash}">`);
   }
   return out;
+}
+
+/**
+ * 压缩一份样式表（2026-09-26）：去掉注释和空白，规则顺序、选择器和取值都不变。
+ * 样式表里中文注释很多，gzip 之后四份一共从约 122KB 降到约 82KB。
+ * 生产构建和 UI 验收都用这一份结果，保证测的就是线上发出去的样式。
+ */
+export async function minifyStylesheet(name, webRoot = WEB_ROOT) {
+  const source = await readFile(join(webRoot, name), 'utf8');
+  const { code } = await transform(source, { loader: 'css', minify: true, sourcefile: name, logLevel: 'error' });
+  return code;
+}
+
+/**
+ * 生产：把 index.html 引用的样式表压缩到 web/dist/css/，链接换成压缩版并带内容指纹。
+ * web/ 下的源文件不动（本地直接改、直接刷新）；--dev 模式会把链接换回 ./styles.css。
+ */
+export async function buildStylesheets(source, { webRoot = WEB_ROOT, outdir = join(WEB_DIST, 'css'), write = true } = {}) {
+  let html = source;
+  const files = {};
+  for (const [tag, name] of [...source.matchAll(STYLESHEET)]) {
+    const code = rebaseUrls(await minifyStylesheet(name, webRoot));
+    const hash = createHash('sha1').update(code).digest('hex').slice(0, 10);
+    files[name] = code;
+    html = html.replace(tag, `<link rel="stylesheet" href="./dist/css/${name}?v=h${hash}">`);
+  }
+  if (write) {
+    await mkdir(outdir, { recursive: true });
+    await Promise.all(Object.entries(files).map(([name, code]) => writeFile(join(outdir, name), code)));
+  }
+  return { html, files };
+}
+
+/**
+ * 样式表从 web/ 挪到 web/dist/css/ 之后，里面的相对地址（字体 ./assets/fonts/…）要往上退两级，
+ * 不然会去找 dist/css/assets/…（09-26 生产构建冒烟时发现字体 404）。data:、http(s):、/ 开头和 # 开头的不动。
+ */
+export function rebaseUrls(code) {
+  return code.replace(/url\((['"]?)(?![a-z][\w+.-]*:|\/|#)(?:\.\/)?([^'")]+)\1\)/gi, (_, q, path) => `url(${q}../../${path}${q})`);
 }
 
 function stripStylesheetVersions(source) {

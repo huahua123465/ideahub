@@ -25,23 +25,82 @@ import * as tagadmin from './views/tagadmin.js';
 import * as tagfilter from './views/tagfilter.js';
 import * as importer from './views/importer.js';
 import * as dashboard from './views/dashboard.js';
-import * as functionTree from './views/function-tree.js';
-import * as learning from './views/learning.js';
-import * as collector from './views/collector.js';
-import * as samples from './views/samples.js';
 import * as expenses from './views/expenses.js';
 import * as purchases from './views/purchases.js';
 import { initMotion } from './motion.js';
 import { openLook, savedLooks, useSaved } from './look.js';
 import { startTour } from './tour.js';
-import { reduced } from './anim.js';
+import { reduced, skeleton } from './anim.js';
 import { bindPalette, togglePalette } from './views/palette.js';
+import { openShortcuts } from './views/shortcuts.js';
+import { initPrefsSync } from './prefs-sync.js';
+import { initErrorReporting } from './errlog.js';
 import { setTheme } from './theme.js';
 import { bindSheetPreview } from './sheet-preview.js';
 import { bindDocPreview } from './doc-preview.js';
 import { bindImagePreview } from './lightbox.js';
 
 let view = 'home';
+let currentMe = null;
+
+/**
+ * 按需加载的页面（2026-09-26）：样本库那一组（对比 / 研究 / 洞察 / 组件 / 账号研究）、内容采集、学习、项目功能树
+ * 只有少数人、少数时候用，代码不进首屏的 app.js（约占一半体积），第一次打开时才下载。
+ * 下载期间页面上先放骨架；下载失败（比如断网）给出「重试」。首屏空闲后在后台悄悄预取，真点进去时基本不用等。
+ */
+const LAZY = {
+  samples: () => import('./views/samples.js'),
+  collector: () => import('./views/collector.js'),
+  learning: () => import('./views/learning.js'),
+  functionTree: () => import('./views/function-tree.js'),
+};
+const lazyMods = {};
+const lazyWait = {};
+function page(name) {
+  return lazyWait[name] ||= LAZY[name]().then(m => {
+    lazyMods[name] = m;
+    wireLazy(name, m);
+    return m;
+  }, err => {
+    delete lazyWait[name];   // 下次再试
+    throw err;
+  });
+}
+/** 模块第一次到手时要接的线：原来在启动时一次接好，现在挪到这里 */
+function wireLazy(name, m) {
+  if (name === 'collector') {
+    if (currentMe) m.setMe(currentMe);
+    m.events.addEventListener('open-sample', event => {
+      page('samples').then(s => { s.openSample(event.detail.sampleId); go('samples'); });
+    });
+  }
+  if (name === 'learning') m.events.addEventListener('back', () => go('home'));
+  if (name === 'functionTree') {
+    m.events.addEventListener('navigate', event => {
+      const { action, target, section } = event.detail;
+      if (action === 'search') { focusGlobalSearch(); return; }
+      if (action === 'import') { importer.open(); return; }
+      if (target === 'learning') { openLearning(section || 'framework'); return; }
+      if (target) go(target);
+    });
+  }
+}
+/** 打开学习页的某一栏：先把栏目交给学习模块，再切页（切页时才渲染） */
+function openLearning(section) {
+  page('learning').then(l => { l.setSection(section); go('learning'); }, () => go('learning'));
+}
+/** 切到按需加载的页面：没下载过先放骨架，到手后再渲染（期间又切走了就不渲染） */
+function showLazy(name) {
+  const host = $('#v-' + name);
+  if (!lazyMods[name] && !host.childElementCount) {
+    host.innerHTML = `<div class="lazy-wait">${skeleton('task', { n: 4, label: '正在打开…' })}</div>`;
+  }
+  page(name).then(m => { if (view === name) m.render(); }, () => {
+    if (view !== name) return;
+    host.innerHTML = `<div class="lazy-fail" role="alert"><b>这个页面没打开</b><span>网络可能断了一下，点「重试」再打开一次</span>
+      <button type="button" class="btn btn-primary" data-lazy-retry="${name}">重试</button></div>`;
+  });
+}
 
 /**
  * 顶部只显示「我现在在哪」和「此页最常用的动作」。
@@ -302,6 +361,8 @@ function createForCurrentView() {
   if (view === 'pool' || view === 'formal') modal.open();
 }
 
+initErrorReporting();   // 越早越好：启动过程里的错也要能收到
+
 async function boot() {
   initMotion();
   // HTML 里只放了 data-ico 占位，图标本体在 icons.js（模块，HTML 直接取不到）
@@ -319,7 +380,9 @@ async function boot() {
   chat.setMe(me);
   tagadmin.setMe(me);
   dashboard.setMe(me);
-  collector.setMe(me);
+  currentMe = me;
+  lazyMods.collector?.setMe(me);
+  initPrefsSync(me);   // 配色与外观跟着账号走：不等它，页面照常往下画
   expenses.setMe(me);
   purchases.setMe(me);
   const av = $('#meAvatar');
@@ -357,6 +420,9 @@ async function boot() {
 
   bindLive();
   live.start();
+  // 首屏稳定之后，在浏览器空闲时把按需加载的页面预取下来：不跟首屏抢带宽，真点进去时基本不用等
+  const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
+  setTimeout(() => idle(() => Object.keys(LAZY).forEach(name => page(name).catch(() => {}))), 5000);
 }
 
 /**
@@ -440,9 +506,9 @@ function go(next) {
   // 全局搜索只服务当前操作，不把上一页关键词带进下一个业务页面。
   search.reset();
   if (next === view) return;
-  if (view === 'collector') collector.leave();
-  if (view === 'samples') samples.leave();
-  if (view === 'functionTree') functionTree.leave();
+  if (view === 'collector') lazyMods.collector?.leave();
+  if (view === 'samples') lazyMods.samples?.leave();
+  if (view === 'functionTree') lazyMods.functionTree?.leave();
   if (view === 'home') dashboard.leave();   // 离开首页时收掉专注模式、退出布局编辑
   view = next;
   for (const k of VIEWS) {
@@ -472,15 +538,12 @@ function go(next) {
 
   if (next === 'stats') { stats.reset(); stats.render(); }
   if (next === 'home') dashboard.render();
-  if (next === 'functionTree') functionTree.render();
   if (next === 'formal') formal.render();
   if (next === 'pool') pool.render();
   if (BOARD_ORDER.includes(next)) board.render(next);
   if (next === 'funnel') funnel.render();
   if (next === 'tagadmin') tagadmin.render();
-  if (next === 'learning') learning.render();
-  if (next === 'collector') collector.render();
-  if (next === 'samples') samples.render();
+  if (next in LAZY) showLazy(next);
   if (next === 'expenses') expenses.render();
   if (next === 'purchases') purchases.render();
 }
@@ -538,8 +601,7 @@ function bind() {
     const study = e.target.closest('[data-dash-learning]');
     if (study) {
       e.preventDefault();
-      learning.setSection(study.dataset.dashLearning);
-      go('learning');
+      openLearning(study.dataset.dashLearning);
       return;
     }
     const create = e.target.closest('[data-dash-create]');
@@ -554,17 +616,10 @@ function bind() {
       importer.open();
     }
   });
-  learning.events.addEventListener('back', () => go('home'));
-  functionTree.events.addEventListener('navigate', event => {
-    const { action, target, section } = event.detail;
-    if (action === 'search') { focusGlobalSearch(); return; }
-    if (action === 'import') { importer.open(); return; }
-    if (target === 'learning') learning.setSection(section || 'framework');
-    if (target) go(target);
-  });
-  collector.events.addEventListener('open-sample', event => {
-    samples.openSample(event.detail.sampleId);
-    go('samples');
+  // 按需加载的页面下载失败时的「重试」
+  document.addEventListener('click', e => {
+    const retry = e.target.closest('[data-lazy-retry]');
+    if (retry && retry.dataset.lazyRetry === view) { $('#v-' + view).innerHTML = ''; showLazy(view); }
   });
 
   // 客户档案的行点击进详情页，不是直接弹编辑框 —— 
@@ -741,6 +796,7 @@ function bind() {
         run: () => { go('home'); setTimeout(() => dashboard.command('focus'), 60); } },
       ...(innerWidth > 1180 ? [{ group: '首页', label: '编辑首页布局', keywords: '布局 排版 拖动', hint: 'E', icon: ICON.layers,
         run: () => { go('home'); setTimeout(() => dashboard.command('edit'), 60); } }] : []),
+      { group: '帮助', label: '快捷键一览', keywords: '快捷键 键盘 按键 帮助', hint: '?', icon: ICON.sparkle, run: openShortcuts },
       { group: '首页', label: '新功能介绍', keywords: '引导 教程 帮助 新功能 介绍', icon: ICON.sparkle, run: () => { go('home'); startTour(); } },
       { group: '外观', label: '配色与外观…', keywords: '主题 颜色 配色 圆角 密度 动效', icon: ICON.sparkle, featured: true, run: openLook },
       { group: '外观', label: '切换到深色', keywords: '深色 暗色 夜间 主题', icon: ICON.eye, run: () => setTheme('dark') },
@@ -810,6 +866,12 @@ function bind() {
         !e.target.closest('input,textarea,select,[contenteditable]')) {
       e.preventDefault();
       focusGlobalSearch();
+    }
+    // 「?」打开快捷键一览（09-26）；打字时不触发
+    if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey &&
+        !e.target.closest('input,textarea,select,[contenteditable]')) {
+      e.preventDefault();
+      openShortcuts();
     }
   });
 

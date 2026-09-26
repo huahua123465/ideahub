@@ -22,7 +22,8 @@ import {
   buildWebBundle,
   makeDevelopmentHtml,
   makeProductionHtml,
-  versionStylesheets,
+  buildStylesheets,
+  staticChunkImports,
 } from './lib/web-build.mjs';
 const dev = process.argv.includes('--dev');
 
@@ -45,7 +46,11 @@ const { size } = await import('node:fs').then(m => m.promises.stat(WEB_BUNDLE));
 const stamp = Date.now().toString(36);
 
 // HTML 入口切换与测试使用同一组解析规则，避免测试能识别而生产脚本识别失败。
-await writeFile(html, await versionStylesheets(makeProductionHtml(s, stamp)));
+// 样式表压缩到 web/dist/css/ 并带内容指纹（09-26）：源文件不动，线上发压缩版
+const preloads = staticChunkImports(await readFile(WEB_BUNDLE));
+const { html: productionHtml, files: cssFiles } = await buildStylesheets(makeProductionHtml(s, stamp, preloads));
+await writeFile(html, productionHtml);
+const cssKB = Object.values(cssFiles).reduce((n, code) => n + code.length, 0) / 1024;
 
 // 顺手把对接方要用的推送脚本复制进 web/，让它有一个可下载的地址。
 // 源文件只有 scripts/ 下那一份 —— 在这里复制而不是手工放两份，
@@ -155,6 +160,7 @@ const 已同步 = (await Promise.all([
 ])).filter(Boolean);
 
 console.log(`打包完成：web/dist/app.js  ${Math.round(size / 1024)} KB  版本 ${stamp}`);
+console.log(`样式表已压缩到 web/dist/css/：${Object.keys(cssFiles).join('、')}，共 ${Math.round(cssKB)} KB`);
 console.log('PDF.js 浏览器运行文件已同步到 web/vendor/pdfjs/');
 if (sheetSynced) console.log('SheetJS 浏览器运行文件已同步到 web/vendor/sheetjs/');
 if (mdSynced) console.log('marked / DOMPurify 浏览器运行文件已同步到 web/vendor/markdown/');

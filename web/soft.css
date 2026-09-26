@@ -147,7 +147,6 @@ html[data-ui="soft"] .dash-action-icon{width:32px;height:32px;border-radius:var(
 html[data-ui="soft"] .dash-action-grid b{font-size:var(--fs-6xl);letter-spacing:-.03em}
 html[data-ui="soft"] .dash-action-grid em{color:var(--muted)}
 
-html[data-ui="soft"] .dash-layout{grid-template-columns:minmax(0,1.25fr) minmax(330px,.75fr);gap:var(--sp-2xl);margin-bottom:var(--sp-2xl)}
 html[data-ui="soft"] .dash-panel{border:1px solid var(--card-line);border-radius:var(--rd-3xl);background:light-dark(rgba(255,253,250,.84),rgba(34,32,29,0.84));box-shadow:var(--card-shadow)}
 html[data-ui="soft"] .dash-panel>header{padding:var(--sp-3xl) var(--sp-4xl) var(--sp-xl);border-bottom:1px solid var(--line-soft)}
 html[data-ui="soft"] .dash-panel>header h2{font-size:var(--fs-xl)}
@@ -311,7 +310,7 @@ html[data-ui="soft"] #v-home .dash-quick button:hover .ic{transform:rotate(-10de
 html[data-ui="soft"] #v-home .dash-action-grid>button:hover .dash-action-icon{transform:translateY(-2px) scale(1.08)}
 html[data-ui="soft"] #v-home .dash-action-grid b{font-variant-numeric:tabular-nums}
 html[data-ui="soft"] #v-home .rip{position:relative;overflow:hidden;isolation:isolate}
-html[data-ui="soft"] #v-home .dash-ripple{position:absolute;z-index:-1;border-radius:50%;background:currentColor;opacity:.16;transform:scale(0);animation:dash-ripple .6s var(--ease-smooth-out) forwards;pointer-events:none}
+
 @keyframes dash-ripple{to{opacity:0;transform:scale(1)}}
 html[data-ui="soft"] .dash-confetti{position:fixed;z-index:90;width:8px;height:12px;border-radius:var(--rd-2xs);pointer-events:none}
 
@@ -320,7 +319,7 @@ html[data-ui="soft"] .dash-confetti{position:fixed;z-index:90;width:8px;height:1
   html[data-ui="soft"] #v-home .dash-bento{grid-template-columns:repeat(2,minmax(0,1fr))}
   html[data-ui="soft"] #v-home .dash-bento>*{grid-column:span 1}
   html[data-ui="soft"] #v-home .dash-bento>:is([data-wide="1"],.dash-today,.dash-action-grid,.dash-hero,.dash-focus){grid-column:1/-1}
-  html[data-ui="soft"] #v-home .dash-edit-btn{display:none}
+
 }
 
 /* ---------- 摘要数字与资料卡 ---------- */
@@ -355,7 +354,7 @@ html[data-ui="soft"] .content-cover{min-height:240px;border-right:1px solid var(
 html[data-ui="soft"] .content-cover::after{display:none}
 html[data-ui="soft"] .content-cover h3{font-size:var(--fs-4xl)}
 html[data-ui="soft"] .cover-top,html[data-ui="soft"] .cover-account{color:var(--muted)}
-html[data-ui="soft"] .content-metrics>span{border:0;border-radius:var(--rd-base);background:light-dark(#f3efec,#181411)}
+
 html[data-ui="soft"] .metric-cell{background:light-dark(#f3efec,#181411)}
 
 html[data-ui="soft"] .board-sales,html[data-ui="soft"] .board-delivery{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -393,7 +392,7 @@ html[data-ui="soft"] #poolGrid .idea-card{position:relative;isolation:isolate;di
   border:1px solid var(--card-line);border-radius:var(--rd-4xl);background:linear-gradient(155deg,light-dark(rgba(255,253,250,.98),rgba(34,32,29,0.98)),light-dark(rgba(250,247,244,.88),rgba(30,27,24,0.88)));
   box-shadow:var(--card-shadow);overflow:hidden;
   opacity:0;transform:translateY(12px) scale(.992);transition:opacity .4s ease,transform .42s var(--ease),
-  border-color .22s ease,box-shadow .22s ease;background-color .22s ease;transition-delay:calc(var(--i) * 45ms)}
+  border-color .22s ease,box-shadow .22s ease,background-color .22s ease;transition-delay:calc(var(--i) * 45ms)}
 html[data-ui="soft"] #poolGrid.pool-ready .idea-card{opacity:1;transform:translateY(0) scale(1)}
 html[data-ui="soft"] #poolGrid .idea-card>*{position:relative;z-index:1}
 html[data-ui="soft"] #poolGrid.pool-ready .idea-card:hover{transform:none;transition-delay:0s;
@@ -558,7 +557,7 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .topbar #btnNew{background:light-dark(#bf7b77,#985956)}
   html[data-ui="soft"] .dash-hero{grid-template-columns:minmax(0,1fr);align-items:start}
   html[data-ui="soft"] .dash-quick{width:100%}
-  html[data-ui="soft"] .dash-layout{grid-template-columns:1fr}
+
 }
 
 @media (max-width:980px){
@@ -683,7 +682,6 @@ html[data-ui="soft"] .authfoot{position:absolute;left:42px;bottom:32px;margin:0;
   html[data-ui="soft"] .dash-quick button{padding:var(--sp-lg) var(--sp-2xs)}
   html[data-ui="soft"] .dash-quick b{white-space:nowrap}
 }
-
 
 @media (prefers-reduced-motion:reduce){
   html[data-ui="soft"]:where(:not([data-motion="always"])) *,html[data-ui="soft"]:where(:not([data-motion="always"])) *::before,html[data-ui="soft"]:where(:not([data-motion="always"])) *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
@@ -995,3 +993,49 @@ html[data-ui="soft"] .cmdk-note{padding:var(--sp-md) var(--sp-lg);color:var(--mu
 html[data-ui="soft"] .cmdk-foot{display:flex;flex-wrap:wrap;gap:var(--sp-xl);flex:none;padding:var(--sp-md) var(--sp-3xl);border-top:1px solid var(--line-soft);color:var(--muted);font-size:var(--fs-xs)}
 html[data-ui="soft"] .cmdk-foot kbd{margin-right:var(--sp-2xs)}
 @media (pointer:coarse){html[data-ui="soft"] .cmdk-item{min-height:44px}}
+
+/* 按需加载的页面（09-26，main.js showLazy）：第一次打开时代码还在下载，先放骨架；下载失败给「重试」 */
+html[data-ui="soft"] .lazy-wait{display:grid;gap:var(--sp-md);padding:var(--sp-xl) 0}
+html[data-ui="soft"] .lazy-fail{display:flex;flex-direction:column;align-items:center;gap:var(--sp-md);margin:var(--sp-7xl) auto;padding:var(--sp-5xl) var(--sp-3xl);max-width:420px;border:1px solid var(--card-line);border-radius:var(--rd-3xl);background:var(--surface);box-shadow:var(--card-shadow);text-align:center}
+html[data-ui="soft"] .lazy-fail b{font-size:var(--fs-lg);color:var(--ink)}
+html[data-ui="soft"] .lazy-fail span{color:var(--muted);font-size:var(--fs-sm)}
+
+/* 手机首页问候卡（09-26）：底部那段桌面样式把进度环放到 140px 且没限定屏宽，手机上把问候和说明挤成一窄条。
+   手机上进度环缩到 68px 挂在右上角（只留数字，完整说法在 aria-label 里），问候和说明占满整行 */
+@media (max-width:700px){
+  html[data-ui="soft"] #v-home .dash-hero{grid-template-columns:minmax(0,1fr);grid-template-areas:"main" "quick"}
+  html[data-ui="soft"] #v-home .dash-ring{position:absolute;top:var(--sp-3xl);right:var(--sp-3xl);width:68px;height:68px}
+  html[data-ui="soft"] #v-home .dash-ring b{font-size:var(--fs-2xl)}
+  html[data-ui="soft"] #v-home .dash-ring small{display:none}
+  html[data-ui="soft"] #v-home .dash-hero-main>.page-kicker,
+  html[data-ui="soft"] #v-home .dash-hero h1{padding-right:80px}
+}
+
+/* 看板只有一两条时，末尾那块虚线「新增」卡（09-26，board.js paintRows） */
+html[data-ui="soft"] .board-add-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-sm);min-height:180px;padding:var(--sp-3xl);border:1.5px dashed var(--card-line-hover);border-radius:var(--rd-3xl);background:transparent;color:var(--muted);text-align:center;transition:border-color .2s,background-color .2s,color .2s,transform .3s var(--spring)}
+html[data-ui="soft"] .board-add-tile .ic{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--blue-100);color:var(--blue)}
+html[data-ui="soft"] .board-add-tile .ic svg{width:20px;height:20px}
+html[data-ui="soft"] .board-add-tile b{color:var(--ink);font-size:var(--fs-md)}
+html[data-ui="soft"] .board-add-tile small{font-size:var(--fs-xs)}
+html[data-ui="soft"] .board-add-tile:hover{border-color:var(--blue);background:var(--surface);color:var(--ink2);transform:translateY(-2px)}
+html[data-ui="soft"] .board-add-tile:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media (max-width:700px){html[data-ui="soft"] .board-add-tile{min-height:120px}}
+
+/* 快捷键一览（09-26，views/shortcuts.js）：屏幕中间一张卡，样子跟命令面板一家 */
+.kbd-layer{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:var(--sp-xl)}
+.kbd-scrim{position:absolute;inset:0;background:light-dark(rgba(30,26,30,.32),rgba(0,0,0,.55));backdrop-filter:blur(6px)}
+.kbd-dialog{position:relative;width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:var(--sp-4xl);border:1px solid var(--card-line);border-radius:var(--rd-4xl);background:var(--surface);box-shadow:var(--shadow-lg);animation:kbd-in .28s var(--spring)}
+@keyframes kbd-in{from{opacity:0;transform:translateY(10px) scale(.98)}}
+.kbd-dialog header{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-md);margin-bottom:var(--sp-xl)}
+.kbd-dialog h2{font-size:var(--fs-3xl);color:var(--ink)}
+.kbd-dialog header small{color:var(--muted);font-size:var(--fs-xs)}
+.kbd-dialog section+section{margin-top:var(--sp-2xl)}
+.kbd-dialog h3{margin-bottom:var(--sp-sm);color:var(--muted);font-size:var(--fs-xs);font-weight:700;letter-spacing:.06em}
+.kbd-dialog dl>div{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:var(--sp-lg);padding:var(--sp-sm) 0;border-top:1px solid var(--line-soft)}
+.kbd-dialog dt{display:flex;align-items:center;gap:var(--sp-xs);color:var(--muted);font-size:var(--fs-xs)}
+.kbd-dialog dd{color:var(--ink2);font-size:var(--fs-sm)}
+.kbd-dialog kbd,.menukbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 var(--sp-sm);border:1px solid var(--card-line);border-bottom-width:2px;border-radius:var(--rd-sm);background:var(--surface-2);color:var(--ink);font-family:var(--num-font);font-size:var(--fs-xs);font-weight:600;line-height:1}
+.kbd-dialog footer{display:flex;justify-content:flex-end;margin-top:var(--sp-3xl)}
+.menukbd{min-width:20px;height:20px;margin-left:auto}
+#miKeys{display:flex;align-items:center}
+@media (max-width:560px){.kbd-dialog{padding:var(--sp-3xl)}.kbd-dialog dl>div{grid-template-columns:88px minmax(0,1fr)}}

@@ -9,6 +9,7 @@ import {
   WEB_ROOT,
   buildWebBundle,
   makeQaHtml,
+  minifyStylesheet,
   readBundleOutput,
   readChunkOutputs,
   validateWebBuildInputs,
@@ -23,6 +24,7 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
@@ -235,6 +237,7 @@ function isAllowedRequest(url, origin) {
 }
 
 function createQaServer({ bundle, chunks = {}, marker, qaHtml, fixtures = {} }) {
+  const cssCache = new Map();
   return createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url || '/', 'http://127.0.0.1').pathname);
@@ -294,6 +297,12 @@ function createQaServer({ bundle, chunks = {}, marker, qaHtml, fixtures = {} }) 
         return;
       }
       if ((await stat(file)).isDirectory()) throw new Error('directory');
+      // 样式表发压缩版，和生产构建（buildStylesheets）同一份结果：测的就是线上那一份
+      if (extname(file).toLowerCase() === '.css' && !rel.includes('/') && !rel.includes('\\')) {
+        if (!cssCache.has(rel)) cssCache.set(rel, Buffer.from(await minifyStylesheet(rel)));
+        respond(res, 200, cssCache.get(rel), MIME['.css']);
+        return;
+      }
       respond(
         res,
         200,

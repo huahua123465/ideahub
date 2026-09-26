@@ -46,7 +46,6 @@ body.authpage{
 [hidden]{display:none !important}
 
 .authform{display:flex;flex-direction:column;gap:var(--sp-xl)}
-.authhint{font-size:var(--fs-xs);color:var(--muted);margin-top:var(--sp-xs);line-height:1.5}
 
 .authsubmit{width:100%;justify-content:center;height:40px;font-size:var(--fs-base);margin-top:var(--sp-2xs)}
 .authsubmit[disabled]{opacity:.6;cursor:progress}

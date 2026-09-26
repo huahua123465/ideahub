@@ -28,6 +28,7 @@ export function setTheme(theme) {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem(KEY, t); } catch { /* 隐私模式下只是记不住，这一次仍然生效 */ }
   paint();
+  window.dispatchEvent(new Event('ideahub:prefs'));   // 界面偏好跟着账号走（prefs-sync.js）
 }
 
 export function bindThemeMenu() {

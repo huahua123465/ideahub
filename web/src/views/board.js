@@ -213,6 +213,9 @@ function build(key, root) {
     render(key);
   });
   root.querySelector('.bd-add').addEventListener('click', () => openEdit(key, null));
+  root.querySelector('.bd-body').addEventListener('click', e => {
+    if (e.target.closest('[data-board-add]')) openEdit(key, null);
+  });
   root.querySelector('.board-context-filter button').addEventListener('click', () => {
     const s = stateOf(key);
     s.contextQuery = {};
@@ -445,7 +448,11 @@ function paintRows(key, root) {
   };
   const renderer = renderers[key] || genericCard;
   renderKey = key;
-  body.innerHTML = s.items.map((row, i) => renderer(row, i, key, s.tab)).join('');
+  // 只有一两条时，网格右边空一大片（09-26）：末尾补一块虚线「新增」卡，和顶部「＋ 新增」同一个动作
+  const addTile = s.items.length < 3
+    ? `<button type="button" class="board-add-tile" data-board-add><span class="ic">${ICON.plus}</span>
+        <b>新增一条</b><small>添加到「${esc(BOARDS[key]?.title || '')}」</small></button>` : '';
+  body.innerHTML = s.items.map((row, i) => renderer(row, i, key, s.tab)).join('') + addTile;
 }
 
 const compact = n => {

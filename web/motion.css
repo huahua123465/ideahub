@@ -199,7 +199,7 @@
   from { opacity: 0; transform: translateX(var(--distance-base)); filter: blur(var(--blur-medium)); }
   to { opacity: 1; transform: translateX(0); filter: blur(0); }
 }
-.navitem.on .ic, .navmenu button.on .ic { animation: t-active-icon var(--duration-fast) var(--ease-in-out); }
+.navmenu button.on .ic { animation: t-active-icon var(--duration-fast) var(--ease-in-out); }
 @keyframes t-active-icon {
   0% { opacity: .45; transform: scale(.84); filter: blur(var(--blur-small)); }
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
@@ -215,7 +215,6 @@
   :where(html:not([data-motion="always"])) .modal.t-modal.is-open > .form,
   :where(html:not([data-motion="always"])) .modal.t-modal.is-open > footer,
   :where(html:not([data-motion="always"])) .view.t-view-motion.on,
-  :where(html:not([data-motion="always"])) .navitem.on .ic,
   :where(html:not([data-motion="always"])) .navmenu button.on .ic { animation: none !important; }
 }
 

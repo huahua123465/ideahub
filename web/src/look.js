@@ -48,7 +48,11 @@ export function savedLooks() {
   } catch { return []; }
 }
 function storeMine(list) {
-  try { localStorage.setItem(MINE_KEY, JSON.stringify(list)); return true; } catch {
+  try {
+    localStorage.setItem(MINE_KEY, JSON.stringify(list));
+    window.dispatchEvent(new Event('ideahub:prefs'));   // 我的配色跟着账号走（prefs-sync.js）
+    return true;
+  } catch {
     toast('info', '这台设备存不下了（可能是隐私模式），这次的配色只在当前页面生效');
     return false;
   }
@@ -450,6 +454,8 @@ function build() {
   });
   // 系统明暗变了，色板预览跟着换
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint);
+  // 从服务器拿到了另一台电脑上的设置（prefs-sync.js）：面板开着就重画
+  window.addEventListener('ideahub:prefs-applied', () => { naming = null; paint(); });
 }
 
 export function openLook() {

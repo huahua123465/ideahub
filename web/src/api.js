@@ -49,6 +49,21 @@ export async function probe() {
   return state.mode;
 }
 
+/**
+ * 浏览器报错上报（09-26，errlog.js）。不走 call()：401 不需要跳登录页，失败了也不再抛错（免得报错循环）；
+ * keepalive 让页面关掉的那一刻也能发出去。
+ */
+export function sendClientErrors(items) {
+  if (state.mode === 'mock' || !items?.length) return;
+  fetch(BASE + '/api/client-errors', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ items }),
+    credentials: 'include',
+    keepalive: true,
+  }).catch(() => {});
+}
+
 async function call(method, path, body, extraHeaders = {}) {
   if (state.mode === 'mock') return (await mock()).handle(method, path, body);
 
@@ -145,6 +160,9 @@ export const api = {
   me:        ()            => call('GET',   '/api/me'),
   /** 个人偏好。目前只有 reportVisibilityDefault（新日报默认给谁看）。 */
   prefsPatch: (payload)    => call('PATCH', '/api/auth/me/prefs', payload),
+  /** 界面偏好（配色与外观、我的配色、明暗）跟着账号走（09-26，prefs-sync.js）。保存是整份覆盖 */
+  uiPrefs:     ()          => call('GET',   '/api/auth/me/ui-prefs'),
+  uiPrefsSave: (prefs)     => call('PATCH', '/api/auth/me/ui-prefs', { prefs }),
   logout:    ()            => call('POST',  '/api/auth/logout'),
   users:     ()            => call('GET',   '/api/admin/users'),
   /** 可被指派为负责人的人。和上面那个 admin 接口不是一回事 ——

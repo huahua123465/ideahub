@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IdeaHub · 内部灵感库</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><rect width='20' height='20' rx='4' fill='%2368455f'/><g fill='none' stroke='%23fffaf4' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10 4a4 4 0 0 0-2.5 7.1c.4.4.7.9.7 1.4h3.6c0-.5.3-1 .7-1.4A4 4 0 0 0 10 4Z'/><path d='M8.6 14.6h2.8M9 16.2h2'/></g></svg>">
+<!-- 手机「添加到主屏幕」（09-26）：有正式图标，打开时像 App 一样全屏、不带浏览器地址栏。图标由 scripts/make-app-icons.mjs 生成 -->
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="IdeaHub">
+<meta name="theme-color" content="#f7f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1a1d" media="(prefers-color-scheme: dark)">
 <!-- 外观（跟随系统 / 浅色 / 深色）要在样式生效前设好，否则深色用户打开时会先闪一下浅色。说明见 src/theme.js -->
 <script>try{var t=localStorage.getItem('ideahub.theme');document.documentElement.dataset.theme=t==='light'||t==='dark'?t:'auto'}catch(e){document.documentElement.dataset.theme='auto'}</script>
 <link rel="stylesheet" href="./styles.css">
@@ -246,13 +254,15 @@
     if (s.motion === 'auto') delete root.dataset.motion; else root.dataset.motion = s.motion;
   }
   function load() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+  /* 设置变了：通知 prefs-sync.js 推到账号上（09-26 外观跟着账号走） */
+  function changed() { try { window.dispatchEvent(new Event('ideahub:prefs')); } catch (e) { /* 老浏览器没有 Event 构造器，只是不同步 */ } }
   function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* 存不下只是记不住，这一次仍然生效 */ } }
 
   window.IdeaHubLook = {
     FAMILIES: FAMILIES, DEFAULTS: DEFAULTS,
     get: function () { return norm(current); },
-    set: function (patch) { var next = norm(current), k; for (k in patch) next[k] = patch[k]; next = apply(next); save(next); return next; },
-    reset: function () { var s = apply(null); try { localStorage.removeItem(KEY); } catch (e) {} return s; },
+    set: function (patch) { var next = norm(current), k; for (k in patch) next[k] = patch[k]; next = apply(next); save(next); changed(); return next; },
+    reset: function () { var s = apply(null); try { localStorage.removeItem(KEY); } catch (e) {} changed(); return s; },
     /* 给面板上的色板用：某套配色的底色 / 主色 / 点缀色（--hot）长什么样。dark 不传就按这套配色自己的明暗 */
     swatch: function (family, dark) {
       var t = family && family.id !== 'default' ? family : null;
@@ -285,6 +295,7 @@
 <link rel="modulepreload" href="./src/boards.js">
 <link rel="modulepreload" href="./src/confirm.js">
 <link rel="modulepreload" href="./src/doc-preview.js">
+<link rel="modulepreload" href="./src/errlog.js">
 <link rel="modulepreload" href="./src/icons.js">
 <link rel="modulepreload" href="./src/lightbox.js">
 <link rel="modulepreload" href="./src/live.js">
@@ -293,6 +304,7 @@
 <link rel="modulepreload" href="./src/main.js">
 <link rel="modulepreload" href="./src/motion.js">
 <link rel="modulepreload" href="./src/pdf-reader.js">
+<link rel="modulepreload" href="./src/prefs-sync.js">
 <link rel="modulepreload" href="./src/sheet-preview.js">
 <link rel="modulepreload" href="./src/tagstore.js">
 <link rel="modulepreload" href="./src/theme.js">
@@ -331,6 +343,7 @@
 <link rel="modulepreload" href="./src/views/sample-research.js">
 <link rel="modulepreload" href="./src/views/samples.js">
 <link rel="modulepreload" href="./src/views/search.js">
+<link rel="modulepreload" href="./src/views/shortcuts.js">
 <link rel="modulepreload" href="./src/views/stats.js">
 <link rel="modulepreload" href="./src/views/tagadmin.js">
 <link rel="modulepreload" href="./src/views/tagfilter.js">
@@ -473,6 +486,7 @@
         </div>
       </div>
       <button class="menuitem" id="miLook">配色与外观…</button>
+      <button class="menuitem" id="miKeys" aria-keyshortcuts="?">快捷键<kbd class="menukbd">?</kbd></button>
       <button class="menuitem" id="miTour">新功能介绍</button>
       <div class="menusep"></div>
       <button class="menuitem danger" id="miLogout">退出登录</button>

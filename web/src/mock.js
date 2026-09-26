@@ -511,6 +511,18 @@ export async function handle(method, path, body) {
   }
 
   if (p === '/api/me') return ME;
+  // 界面偏好跟着账号走（09-26）：演示模式下用 localStorage 假装服务器，刷新后还在，方便 UI 测试验同步
+  if (p === '/api/auth/me/ui-prefs') {
+    const KEY = 'ideahub.mock.uiPrefs';
+    if (method === 'GET') {
+      try { return JSON.parse(localStorage.getItem(KEY)) || { prefs: {}, updatedAt: null }; } catch { return { prefs: {}, updatedAt: null }; }
+    }
+    if (method === 'PATCH') {
+      const out = { prefs: body?.prefs || {}, updatedAt: new Date().toISOString() };
+      localStorage.setItem(KEY, JSON.stringify(out));
+      return out;
+    }
+  }
 
   /* ---------- 账户研究 v3 ---------- */
   if(p.startsWith('/api/research-accounts')){
