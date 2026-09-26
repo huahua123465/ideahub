@@ -47,7 +47,12 @@ let currentMe = null;
  * 按需加载的页面（2026-09-26）：样本库那一组（对比 / 研究 / 洞察 / 组件 / 账号研究）、内容采集、学习、项目功能树
  * 只有少数人、少数时候用，代码不进首屏的 app.js（约占一半体积），第一次打开时才下载。
  * 下载期间页面上先放骨架；下载失败（比如断网）给出「重试」。首屏空闲后在后台悄悄预取，真点进去时基本不用等。
+ *
+ * 「重试」是刷新整页：浏览器会记住某个 import() 失败过，同一个页面里再 import 直接返回那次失败、
+ * 根本不重新下载（Chrome 152 实测）；后台预取碰上断网也一样会把它记成失败。只有刷新能清掉。
+ * 刷新前把要去的页面记在 sessionStorage，启动完直接回到那一页。
  */
+const LAZY_RETRY_KEY = 'ideahub.lazyRetry';
 const LAZY = {
   samples: () => import('./views/samples.js'),
   collector: () => import('./views/collector.js'),
@@ -420,6 +425,10 @@ async function boot() {
 
   bindLive();
   live.start();
+  // 按需加载页面点了「重试」刷新过来的：回到那一页
+  let retryView = '';
+  try { retryView = sessionStorage.getItem(LAZY_RETRY_KEY) || ''; sessionStorage.removeItem(LAZY_RETRY_KEY); } catch { /* 存储不可用就留在首页 */ }
+  if (retryView in LAZY) go(retryView);
   // 首屏稳定之后，在浏览器空闲时把按需加载的页面预取下来：不跟首屏抢带宽，真点进去时基本不用等
   const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
   setTimeout(() => idle(() => Object.keys(LAZY).forEach(name => page(name).catch(() => {}))), 5000);
@@ -619,7 +628,9 @@ function bind() {
   // 按需加载的页面下载失败时的「重试」
   document.addEventListener('click', e => {
     const retry = e.target.closest('[data-lazy-retry]');
-    if (retry && retry.dataset.lazyRetry === view) { $('#v-' + view).innerHTML = ''; showLazy(view); }
+    if (!retry || retry.dataset.lazyRetry !== view) return;
+    try { sessionStorage.setItem(LAZY_RETRY_KEY, view); } catch { /* 记不住就回首页，至少页面能用 */ }
+    location.reload();
   });
 
   // 客户档案的行点击进详情页，不是直接弹编辑框 —— 

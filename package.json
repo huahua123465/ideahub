@@ -36,6 +36,7 @@
     "test:palette:ui": "node scripts/test-palette-ui.mjs",
     "test:prefs-sync:ui": "node scripts/test-prefs-sync-ui.mjs",
     "test:ux-extras:ui": "node scripts/test-ux-extras-ui.mjs",
+    "test:lazy-retry:ui": "node scripts/test-lazy-retry-ui.mjs",
     "test:samples": "node scripts/build-web.mjs && node --test scripts/test-samples-stage1.mjs scripts/test-sample-research-stage2.mjs scripts/test-sample-library-stage3.mjs scripts/test-sample-library-stage4.mjs && node scripts/test-sample-research-ui.mjs && node scripts/test-sample-library-stage3-ui.mjs && node scripts/test-sample-library-stage4-ui.mjs",
     "test:samples:stage3": "node scripts/build-web.mjs && node --test scripts/test-sample-library-stage3.mjs && node scripts/test-sample-library-stage3-ui.mjs",
     "test:samples:db": "node scripts/test-sample-library-stage3-db.mjs",
