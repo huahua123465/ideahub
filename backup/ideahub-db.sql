@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict G55YYHYteECG6Po7jRoh4UZW1dc8OQeCbIeeQcViLTjZAzuhXUccEaho2VnRMKU
+\restrict jyS6dDkWataWRoXWqaRA3MDP48QbJbciJduZf2AqMWElCxEmhbhkefzHScbpywh
 
 -- Dumped from database version 16.15
 -- Dumped by pg_dump version 16.15
@@ -7048,12 +7048,12 @@ COPY public.idea_votes (idea_id, user_id, created_at) FROM stdin;
 
 COPY public.ideas (id, code, title, content, category, tags, status, author_id, is_anonymous, vote_count, comment_count, view_count, hot_score, owner_id, adopted_at, adopted_by, progress, doc_url, created_at, updated_at, source_type, source_url, source_ref, deleted_at, promoted_at) FROM stdin;
 2	IDEA-2026-0033	测试	测试士大夫地方萨芬啊	其他	{测试}	adopted	1	f	1	1	5	1.4038849	1	2026-08-20 16:44:09.933077+00	1	0	\N	2026-08-20 16:43:48.094505+00	2026-08-20 16:44:23.365851+00	manual	\N	\N	2026-08-24 06:14:44.691725+00	2026-08-20 16:44:09.933077+00
+28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.0015447689	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
 21	IDEA-2026-0039	厕所	厕所	产品	{}	adopted	7	f	0	0	164	0.35355338	7	2026-08-21 06:11:26.233451+00	7	0	\N	2026-08-21 06:11:11.527978+00	2026-08-21 14:22:55.070242+00	manual	\N	\N	\N	2026-08-21 06:11:26.233451+00
+17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.0043536285	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
+9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.020161174	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
 11	IDEA-2026-0035	茶水间换一台好点的咖啡机	现在这台每天要坏一次，排队的时间比喝的时间长。	其他	{福利}	adopted	1	f	2	0	7	1.3445208	1	2026-08-20 17:13:03.236155+00	1	35	\N	2026-08-20 17:10:31.233387+00	2026-08-21 02:47:00.787142+00	manual	\N	\N	\N	2026-08-20 17:13:03.236155+00
-28	\N	智能导入接口自测（可删除）	验证统一写入与幂等处理。	技术	{自动化}	pending	1	f	0	0	0	0.0015762592	\N	\N	\N	0	\N	2026-08-24 07:11:28.935267+00	2026-08-24 07:11:28.935267+00	manual		smart:a31f5c8ddac7f8e1ea83:0	2026-08-24 07:11:28.994108+00	\N
-17	\N	xx	xx	其他	{}	pending	3	f	1	0	7	0.004438698	\N	\N	\N	0	\N	2026-08-21 02:48:23.667519+00	2026-08-21 08:29:27.240106+00	manual	\N	\N	2026-08-24 08:59:31.341837+00	\N
-9	\N	客户案例做成短视频	文字案例没人看完。同样的内容剪成 90 秒的短视频，销售拿去发朋友圈的转化会高得多。	运营	{内容}	pending	1	f	6	1	4	0.020553071	\N	\N	\N	0	\N	2026-08-20 17:10:31.205796+00	2026-09-01 04:10:51.498177+00	manual	\N	\N	\N	\N
-30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.009478165	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
+30	\N	测试企业微信线索通知	通过企业微信向客服发送直播线索通知，验证能否提升线索跟进及时性。计划下周先进行测试。	产品	{企业微信,通知机制,方案测试}	pending	10	f	2	1	7	0.009288542	\N	\N	\N	0	\N	2026-08-24 09:45:39.775253+00	2026-09-01 04:11:17.773339+00	manual		smart:77b523d91b3a9553dc11:1	\N	\N
 19	IDEA-2026-0038	分割成	法国很多方面	产品	{}	adopted	7	f	0	0	7	0.35355338	7	2026-08-21 05:10:35.270938+00	7	0	\N	2026-08-21 05:10:20.129387+00	2026-08-21 06:26:33.940792+00	manual	\N	\N	\N	2026-08-21 05:10:35.270938+00
 13	IDEA-2026-0036	aaaa	a	技术	{}	adopted	3	f	2	3	17	2.739506	3	2026-08-21 01:47:10.83503+00	3	60	\N	2026-08-21 01:10:27.355954+00	2026-08-21 02:41:11.02019+00	manual	\N	\N	\N	2026-08-21 01:47:10.83503+00
 12	\N	搜索支持拼音首字母	找同事和找文档都得打全名，打 zwj 就能出「张伟杰」会快很多。	产品	{搜索,体验}	rejected	1	f	1	0	1	0.058042575	\N	\N	\N	0	\N	2026-08-20 17:10:31.248907+00	2026-08-21 01:46:07.398936+00	manual	\N	\N	\N	\N
@@ -7061,10 +7061,10 @@ COPY public.ideas (id, code, title, content, category, tags, status, author_id, 
 10	IDEA-2026-0045	新人入职清单线上化	现在靠老员工口口相传，每个人漏的东西都不一样。做成一张能勾选的清单，第一天该干什么一目了然。	流程	{入职}	adopted	1	f	5	1	11	0.24303955	1	2026-09-01 04:11:52.695841+00	4	0	\N	2026-08-20 17:10:31.219804+00	2026-09-01 04:11:52.695841+00	manual	\N	\N	\N	2026-09-01 04:11:52.695841+00
 14	\N	a	a	产品	{}	rejected	3	t	0	0	5	0.2414722	\N	\N	\N	0	\N	2026-08-21 01:10:34.03293+00	2026-08-21 01:45:17.803511+00	manual	\N	\N	\N	\N
 8	IDEA-2026-0046	给构建加个缓存层	CI 每次都从零装依赖，一次要六分多钟。加一层缓存能压到一分半以内，改一行代码的验证成本会低很多。	技术	{CI,构建}	adopted	1	f	7	5	11	0.4050778	1	2026-09-01 04:12:20.48938+00	4	0	\N	2026-08-20 17:10:31.191758+00	2026-09-01 04:12:20.48938+00	manual	\N	\N	\N	2026-09-01 04:12:20.48938+00
-7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	13	6	54	0.048446525	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-24 05:53:15.593868+00	manual	\N	\N	\N	\N
-29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.0015762696	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
-31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.0018329273	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
-18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.004438907	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
+7	\N	把周报改成自动生成	从任务系统里抓本周动态，自动拼一份初稿，人只需要改两句就能发。现在每周五下午全公司都在写周报，这段时间加起来不少。	产品	{效率,自动化}	pending	1	f	13	6	54	0.04752277	\N	\N	\N	0	\N	2026-08-20 17:10:31.139742+00	2026-09-24 05:53:15.593868+00	manual	\N	\N	\N	\N
+29	\N	智能导入全路径自测-1787555517124-灵感	测试	技术	{}	pending	1	f	0	0	0	0.0015447792	\N	\N	\N	0	\N	2026-08-24 07:11:57.1553+00	2026-08-24 07:11:57.1553+00	manual		smart:615027849b8c2336e311:0	2026-08-24 07:11:57.231381+00	\N
+31	\N	小红书文案生图skill	小红书文案生图skill	技术	{}	pending	3	f	0	0	1	0.0017925067	\N	\N	\N	0	\N	2026-08-31 08:44:12.396527+00	2026-08-31 08:44:12.396527+00	manual	\N	\N	2026-08-31 08:44:43.655422+00	\N
+18	\N	1	1	产品	{}	pending	3	t	1	0	2	0.0043538315	\N	\N	\N	0	\N	2026-08-21 02:51:52.707932+00	2026-08-21 08:29:28.905559+00	manual	\N	\N	2026-08-24 08:59:34.167813+00	\N
 20	\N	重返香港v范德萨	第三方	产品	{}	rejected	7	f	0	0	2	0.3203421	\N	\N	\N	0	\N	2026-08-21 05:12:10.583512+00	2026-08-21 08:29:43.932296+00	manual	\N	\N	\N	\N
 \.
 
@@ -9156,7 +9156,6 @@ f94df4246b55053fd5fffc02623f95400a63a41a708dc8052e6721e57c3779a3	30	2026-09-14 0
 7cea7e68072d2b1015bbd9ad17af4bf4c864dae457db3ba18a0f9df8079e6f11	4	2026-09-16 07:20:36.983764+00	2026-10-16 07:20:36.983764+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 247dd2c4d21ff52ffacc1f62bddbbac9e467ff8db43cf24df518f646ca3a868b	32	2026-09-16 07:41:10.036181+00	2026-10-16 07:41:10.036181+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d41) XWEB/25560 NT/6.1 Flue
 25f58c9e91760056fbe7b119edcbd6784ccf62a0b928c091613265cc7cc28fda	3	2026-08-21 01:09:55.492798+00	2026-09-20 01:09:55.492798+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
-5817952f843fe7a151a837e1f93ff8d86b7773034a3bc2ba16d1ed5b1ea64908	1	2026-08-22 01:57:29.848889+00	2026-09-21 01:57:29.848889+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 7657f87b6ab7c6c8e0af982b6bab2029df951ec3feec42cce6e3a2331030c44c	3	2026-08-24 02:17:02.741483+00	2026-09-23 02:17:02.741483+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 89a169ddcd5753978e52cfa92cdc74d255f9c3729fe443c42c66338c48bfa4d1	8	2026-08-24 02:19:59.365008+00	2026-09-23 02:19:59.365008+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36
 f7fc32f152d018eae3ebb873700b3dbe3f555a6fe1c8a1cacbfa990fee560e9b	10	2026-08-24 02:28:03.97465+00	2026-09-23 02:28:03.97465+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
@@ -9170,27 +9169,23 @@ d634e5de751a0724fc96eb23b3bfa3c7f696ae6069df854be9ba62c30b093b12	4	2026-08-25 07
 e1692cf1a064282b0a96422d7dc47958817858e0edafd639afbd7b59a5ef6429	3	2026-08-25 08:05:07.157223+00	2026-09-24 08:05:07.157223+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36
 37a3e716279e23bd271105174435ceb6123061d9c75d5cb14a4cc064e1fe2034	8	2026-08-25 08:42:01.634599+00	2026-09-24 08:42:01.634599+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 096cbdb57940320b506c98a0ac6de18703d7450b3fe25637e10e55076ecccd86	10	2026-08-26 03:26:51.207066+00	2026-09-25 03:26:51.207066+00	Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.69(0x18004539) NetType/WIFI Language/zh_CN
-0aa74116bc33e74098a7efd77fd2a2de70a1df917feeefa974271c999668b5f7	1	2026-08-26 03:39:29.196865+00	2026-09-25 03:39:29.196865+00	Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.75(0x18004b62) NetType/WIFI Language/zh_CN
-a56a0ffe9a859925df9a342d97a1bc11e225a40121d0ae8b98f20916755e1535	1	2026-08-26 04:59:55.257048+00	2026-09-25 04:59:55.257048+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0
 135b5f4f6b8644865efe2aac7f9f6304149f44d2274075f1c75bc9bffaefacfb	28	2026-09-01 08:51:14.06036+00	2026-10-01 08:51:14.06036+00	Mozilla/5.0 (Phone; OpenHarmony 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 ArkWeb/6.0.0.46SP3 Mobile MicroMessenger/8.0.19.35(0xf3801323) Weixin NetType/4G Language/zh_CN MMWEBID/1327 MMWEBSDK/202606050006 XWEB/1320225
-eb99728b19ee1cf1693b176bec24135c292a238966abeea076fbbf6d30ff8ec1	1	2026-09-01 09:46:10.484263+00	2026-10-01 09:46:10.484263+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
 63fd73a5057ce4560182f2e5fb46a9a241b8623c907b83692392a8faef61161b	30	2026-09-11 03:48:25.52883+00	2026-10-11 03:48:25.52883+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
 59e89ba23a484cb8bf96589f5eaa5c724628828155af5ed447822dfefac07529	32	2026-09-15 03:31:48.240323+00	2026-10-15 03:31:48.240323+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 b84618db1db376272c8335e17d7eb744f83de038447060d21de0970d8aad6570	31	2026-09-14 08:45:31.629865+00	2026-10-14 08:45:31.629865+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 e1e54f1f2342391c7f079bfbfeb85d2d69431e3a2a8d134b6b4f02ae1dff1f5b	11	2026-09-14 08:48:25.35803+00	2026-10-14 08:48:25.35803+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 NetType/WIFI MicroMessenger/7.0.20.1781(0x6700143B) WindowsWechat(0x63090a13) UnifiedPCWindowsWechat(0xf2541d0c) XWEB/25510 Flue
 0a21acca0cb2928909f88e59f749a7d7175c8b09ed3f1c5e79e2babb00328e34	28	2026-09-16 07:22:48.272532+00	2026-10-16 07:22:48.272532+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
-d72bc86a3bcaa5c310882aaf2bc19e43a964e4e040a4f12c891f3922d4d1d3b0	1	2026-09-21 05:01:53.299734+00	2026-10-21 05:01:53.299734+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0
 f82916c4020203258f38bf9edcc8fe25f25ca998c6655cd01eb59224acca4ad2	8	2026-09-23 02:25:44.162952+00	2026-10-23 02:25:44.162952+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36
 aaf5df263502ab62de7a43203418c15e54ce318b8c956231d6e1cae6942ba449	10	2026-09-23 06:47:48.306288+00	2026-10-23 06:47:48.306288+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0
 1322487eb6f510ca04f98d16ca62d2bb26908032f97d020c1c249ac8a8ada413	3	2026-09-23 06:48:38.227073+00	2026-10-23 06:48:38.227073+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0
 4bbc4d5b14a20d7f63c2873640a1b47c7e932c67054796badef2f7def65ed90a	9	2026-09-23 09:04:43.839674+00	2026-10-23 09:04:43.839674+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
-367047561c72c02076ac7ad19140b63fb49ec7191f65a9854284bf9beb7f8ea7	1	2026-09-26 08:07:26.772461+00	2026-10-26 08:07:26.772461+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0
 44b066f000adbb976463a868d5dded0604da09da556903403ab8234e05f04d2f	7	2026-09-29 07:43:00.27279+00	2026-10-29 07:43:00.27279+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36
 38c6624860f0e748c5dceea6e2b6518c2b2e87946b4254b5c79e3d0acfcdaeeb	33	2026-09-30 01:36:56.069041+00	2026-10-30 01:36:56.069041+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15
 c539e9d9076f1af23b8f534ba312ee0ac12bf5b0b9556953ccf2c15b1a808d4d	34	2026-09-30 01:38:12.585036+00	2026-10-30 01:38:12.585036+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/134.0
 93e9f59e6837d0fe90cfbb0fd33b22e9ec215274afa807a86f22b07cc5116744	34	2026-09-30 01:38:13.089939+00	2026-10-30 01:38:13.089939+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/134.0
-321eb2f783bf2d49b37f981f6c9d36672ff137165cae112118c7b9be92eb9b82	1	2026-10-21 09:27:04.197336+00	2026-11-20 09:27:04.197336+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0
 de751f83195f58107a8377af07eb02888ac88ec9f5ecbdf5cce467a4bd5a4e01	3	2026-11-03 06:56:56.772874+00	2026-12-03 06:56:56.772874+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0
+91acda1fd37ae799c9b0672bfac7c3be64d3a76a5bd329cde553933f345c9be9	1	2026-11-05 01:33:11.03319+00	2026-12-05 01:33:11.03319+00	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15
+0c512d030d199abcbe464fddd6592b91f37d5bb988b4b127c6a1010bc5a6fc95	1	2026-11-05 01:33:38.299585+00	2026-12-05 01:33:38.299585+00	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0
 \.
 
 
@@ -9291,8 +9286,8 @@ COPY public.user_ui_prefs (user_id, prefs, updated_at) FROM stdin;
 
 COPY public.users (id, name, dept, role, avatar_hue, created_at, username, password_hash, last_login_at, report_visibility_default) FROM stdin;
 34	scp276b	security	member	\N	2026-09-30 01:38:12.579771+00	scp276b	scrypt$16384$8$1$8c58f350052e992b0fa6703761fd038f$9fc9b6efd8f204b8ccf50df7fbca00248008387ebcec157e6c066f6d67eaa28d	2026-09-30 01:38:13.08376+00	private
-1	华俊杰	运营部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$b29352dac5f39aa4f878bb80304d4b18$8aa290fb2b067c09c463d7e39d4c98bdf48c21c6479ce572b74f3c7b0f0b4d03	2026-10-21 09:27:04.189903+00	private
 3	李鑫	运营部	reviewer	\N	2026-08-21 01:09:55.486818+00	lixin	scrypt$16384$8$1$c70b42bdb7afb7f63c05e30a5fa1d102$623f0903627b08318dcbfd32893d49c4580700e518f81a31924f5a449a024941	2026-11-03 06:56:56.76558+00	private
+1	华俊杰	运营部	admin	\N	2026-08-20 16:20:58.388805+00	fafa	scrypt$16384$8$1$85e87912ae3effd28f8ed8364e79b00a$25d2d34053f782135c6df221f15a298424cbfed0b5769cd30b37cb7eb856eb28	2026-11-05 01:33:38.294289+00	private
 31	3321489624li@gmail.com	\N	reviewer	\N	2026-09-14 08:45:31.620964+00	3321489624li@gmail.com	scrypt$16384$8$1$ee198851f4506c14e5f5737e4196e723$cd8693bd3ba870f558eed348cbfc5c6168f8298cce3bc3c11c5982eacfda236e	\N	private
 30	温欣颖	财务部	reviewer	\N	2026-09-11 03:48:25.517755+00	温欣颖	scrypt$16384$8$1$02eb5ec63fff3f206b1fff373a2b77fd$60a2201d145d0fea2f15e953c968c9f9837df69c9159c215f6774df039335c9b	2026-09-14 09:24:21.424828+00	private
 29	花花	\N	reviewer	\N	2026-09-03 08:35:49.21917+00	花花	scrypt$16384$8$1$87721f59891bd9d9f584a1e1aa1b93bb$7393411cd5550787bf4d0c852eedacc76ce83cb5b33dabd4ae150bf63f767a66	\N	private
@@ -15401,5 +15396,5 @@ ALTER TABLE ONLY public.works
 -- PostgreSQL database dump complete
 --
 
-\unrestrict G55YYHYteECG6Po7jRoh4UZW1dc8OQeCbIeeQcViLTjZAzuhXUccEaho2VnRMKU
+\unrestrict jyS6dDkWataWRoXWqaRA3MDP48QbJbciJduZf2AqMWElCxEmhbhkefzHScbpywh
 
